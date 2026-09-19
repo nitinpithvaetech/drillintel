@@ -1,0 +1,74 @@
+<Application x:Class="DrillIntel.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DrillIntel"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
+             xmlns:views="clr-namespace:DrillIntel.Views"
+             xmlns:conv="clr-namespace:DrillIntel.Converters"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Material Design Themes -->
+                <materialDesign:BundledTheme BaseTheme="Light" PrimaryColor="DeepPurple" SecondaryColor="Lime" />
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign3.Defaults.xaml" />
+                
+                <!-- Fluent Ribbon Themes (using Generic) -->
+                <ResourceDictionary Source="pack://application:,,,/Fluent;Component/Themes/Generic.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Wizard Converters -->
+            <conv:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+            <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
+
+            <!-- Wizard Shared Styles -->
+            <Style x:Key="CardBox" TargetType="Border">
+                <Setter Property="BorderBrush" Value="#DDDDDD" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="12" />
+                <Setter Property="Margin" Value="0,0,0,16" />
+            </Style>
+
+            <Style x:Key="SectionHeader" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="Medium" />
+                <Setter Property="Margin" Value="0,0,0,8" />
+            </Style>
+
+            <Style x:Key="FieldLabel" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Margin" Value="0,4,8,4" />
+            </Style>
+
+            <Style x:Key="NavButton" TargetType="Button">
+                <Setter Property="MinWidth" Value="100" />
+                <Setter Property="Margin" Value="8,0,0,0" />
+                <Setter Property="Padding" Value="10,4" />
+            </Style>
+
+            <Style TargetType="RadioButton">
+                <Setter Property="Margin" Value="0,4,0,4" />
+            </Style>
+
+            <Style x:Key="FieldRow" TargetType="StackPanel">
+                <Setter Property="Orientation" Value="Horizontal" />
+                <Setter Property="Margin" Value="0,4,0,4" />
+            </Style>
+
+            <!-- MVVM View/ViewModel Mappings -->
+            <DataTemplate DataType="{x:Type viewmodels:DashboardViewModel}">
+                <views:DashboardView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:ImportDataViewModel}">
+                <views:ImportDataView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:NoProjectViewModel}">
+                <views:NoProjectView />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

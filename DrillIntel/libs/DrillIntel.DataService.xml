@@ -1,0 +1,319 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>DrillIntel.DataService</name>
+    </assembly>
+    <members>
+        <member name="T:DrillIntel.Data.DrintProcessorContext">
+             <summary>
+             The isolated execution context provided to each calculation processor
+             (e.g. ProcessDrillingConn, ProcessRigState, ProcessTripConnection).
+            
+             Directly routes reads to the processor's own dedicated DataServiceDIntel connection (WAL),
+             while strictly forcing all writes through the shared IDrintWriteCoordinator.
+             Exposes no direct write methods on the reader connection, eliminating write lock collisions.
+             </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDrintProcessorContext">
+            <summary>
+            Contract for calculation processors.
+            Strictly isolates concurrent direct reads on a dedicated connection while forcing
+            all writes through the shared coordinator to eliminate SQLite write collisions.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DrintWriteCoordinator">
+            <summary>
+            Serializes ALL writes to a .drint / .dintel file through a single dedicated DataServiceDIntel
+            connection running on a background loop with bounded channel backpressure, resilient error
+            isolation, and guarded WAL checkpointing.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.Start">
+            <summary>
+            Opens the dedicated writer connection and starts the background pump and checkpoint timer.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.EnqueueWriteAsync(System.Action{DrillIntel.Data.DataServiceDIntel},System.Threading.CancellationToken)">
+            <summary>
+            Enqueues a write action. Awaits asynchronously if the bounded channel is full,
+            providing non-blocking backpressure to the calling processor.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.EnqueueWriteAsync``1(System.Func{DrillIntel.Data.DataServiceDIntel,``0},System.Threading.CancellationToken)">
+            <summary>
+            Enqueues a write func that returns a result (e.g. generated ID or row count).
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.EnqueueTransactionAsync(System.Action{DrillIntel.Data.DataServiceDIntel},System.Threading.CancellationToken)">
+            <summary>
+            Enqueues an atomic transaction batch as a single unit in the write queue.
+            Retries the entire transaction as a single unit on transient SQLITE_BUSY / LOCKED errors.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.EnqueueTransactionAsync``1(System.Func{DrillIntel.Data.DataServiceDIntel,``0},System.Threading.CancellationToken)">
+            <summary>
+            Enqueues an atomic transaction batch returning a value.
+            Retries the entire transaction as a single unit on transient SQLITE_BUSY / LOCKED errors.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.CheckpointAsync(DrillIntel.Data.WalCheckpointMode,System.Threading.CancellationToken)">
+            <summary>
+            Manually triggers a WAL checkpoint operation, protected by the checkpoint concurrency gate.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintWriteCoordinator.StopAsync(System.Threading.CancellationToken)">
+            <summary>
+            Gracefully stops the coordinator: completes the queue, awaits draining of all queued writes,
+            runs a TRUNCATE checkpoint, and closes the writer connection.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDrintWriteCoordinator">
+            <summary>
+            Contract for the coordinator that serializes all SQLite write operations to a .drint / .dintel file.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DataServiceDIntel">
+             <summary> test1
+             Low-level SQLite infrastructure class for the DrillIntel .drint / .dintel project database.
+            
+             RESPONSIBILITY BOUNDARY:
+               - Owns ONE SQLite connection for the lifetime of the instance.
+               - Provides connection lifecycle, transactions, parameterized execution,
+                 scalar/reader/DataTable queries, WAL + busy_timeout configuration, and
+                 retry handling for transient SQLITE_BUSY / SQLITE_LOCKED errors.
+               - Domain-agnostic: knows nothing about wells, logs, channels, or calculation logic.
+            
+             CONCURRENCY MODEL:
+               Each simultaneous processor creates its OWN DataServiceDIntel instance for READS,
+               enabling concurrent reads in WAL mode without contention. WRITES are serialized
+               through DrintWriteCoordinator.
+             </summary>
+        </member>
+        <member name="P:DrillIntel.Data.DataServiceDIntel.CommandTimeoutSeconds">
+            <summary>Default command timeout in seconds.</summary>
+        </member>
+        <member name="P:DrillIntel.Data.DataServiceDIntel.BusyTimeoutMilliseconds">
+            <summary>SQLite busy_timeout (ms) before returning SQLITE_BUSY.</summary>
+        </member>
+        <member name="P:DrillIntel.Data.DataServiceDIntel.MaxRetryAttempts">
+            <summary>How many times transient SQLITE_BUSY/LOCKED errors are retried.</summary>
+        </member>
+        <member name="F:DrillIntel.Data.DataServiceDIntel.NULL_NUMERIC_VALUE">
+            <summary>Industry (LAS/WITS) convention for a missing/null numeric reading.</summary>
+        </member>
+        <member name="M:DrillIntel.Data.DataServiceDIntel.OpenConnection(System.String)">
+            <summary>
+            Opens and configures a dedicated SQLite connection with WAL mode and performance PRAGMAs.
+            Re-applies all PRAGMAs upon every open to guarantee settings across connection pooling.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.ServiceCollectionExtensions">
+            <summary>
+            Extension methods for registering DrillIntel DataService infrastructure in IServiceCollection.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.ServiceCollectionExtensions.AddDrillIntelDataService(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+            Registers the DrintProjectScopeManager as a singleton and provides dynamic access
+            to the current project's scope, write coordinator, and processor contexts.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDataServiceDIntel">
+            <summary>
+            Contract for low-level SQLite infrastructure operations against a DrillIntel database.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.CalculationProgress">
+            <summary>
+            Represents progress information reported by asynchronous calculations and imports.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.CalculationProgress.#ctor(System.Double,System.String,System.Int32,System.Int32)">
+            <summary>
+            Represents progress information reported by asynchronous calculations and imports.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.TimeRange">
+            <summary>
+            Represents an inclusive time range for time-based log analysis.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.TimeRange.#ctor(System.DateTime,System.DateTime)">
+            <summary>
+            Represents an inclusive time range for time-based log analysis.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DepthRange">
+            <summary>
+            Represents an inclusive depth range for depth-based log analysis.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DepthRange.#ctor(System.Double,System.Double)">
+            <summary>
+            Represents an inclusive depth range for depth-based log analysis.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.CalculationResult">
+            <summary>
+            Result payload returned from an independent calculation processor.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.CalculationResult.#ctor(System.Boolean,System.String,System.Int32,System.TimeSpan,System.String)">
+            <summary>
+            Result payload returned from an independent calculation processor.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.ImportResult">
+            <summary>
+            Result payload returned from chunked log imports.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.ImportResult.#ctor(System.Boolean,System.String,System.String,System.Int32,System.Int32,System.TimeSpan,System.String)">
+            <summary>
+            Result payload returned from chunked log imports.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.PrerequisiteMissingException">
+            <summary>
+            Exception thrown when a calculation requires prerequisites that have not been computed.
+            Provides clear user-facing feedback for WPF UI error dialogues.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.WalCheckpointMode">
+            <summary>
+            SQLite WAL checkpoint modes corresponding to PRAGMA wal_checkpoint(...).
+            </summary>
+        </member>
+        <member name="F:DrillIntel.Data.WalCheckpointMode.Passive">
+            <summary>
+            Checkpoints as many frames as possible without blocking any reader or writer.
+            Ideal for background periodic checkpoints during active calculation runs.
+            </summary>
+        </member>
+        <member name="F:DrillIntel.Data.WalCheckpointMode.Full">
+            <summary>
+            Waits for readers to release locks, then checkpoints all frames back to the database.
+            </summary>
+        </member>
+        <member name="F:DrillIntel.Data.WalCheckpointMode.Restart">
+            <summary>
+            Like Full, but also waits until the log file can be restarted from the beginning.
+            </summary>
+        </member>
+        <member name="F:DrillIntel.Data.WalCheckpointMode.Truncate">
+            <summary>
+            Like Restart, but additionally truncates the WAL file to zero bytes.
+            Used on project shutdown to leave no bloated -wal files on disk.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.WalCheckpointResult">
+            <summary>
+            Encapsulates the diagnostic result of a SQLite WAL checkpoint operation.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.WalCheckpointResult.#ctor(System.Boolean,System.Int32,System.Int32,System.Int32,System.String)">
+            <summary>
+            Encapsulates the diagnostic result of a SQLite WAL checkpoint operation.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.WriteErrorEventArgs">
+            <summary>
+            Event arguments passed when an error occurs during an enqueued write execution.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DrintProjectScope">
+            <summary>
+            Manages the lifecycle of an open project file (.dintel / .drint).
+            Tracks all active processor contexts and reader connections, guaranteeing that
+            all readers are closed before executing the final TRUNCATE checkpoint on shutdown.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintProjectScope.CreateProcessorContext">
+            <summary>
+            Creates an isolated processor context for a background calculation processor.
+            Tracks the context so it can be gracefully closed and disposed on project shutdown.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintProjectScope.CreateReadConnection">
+            <summary>
+            Creates a standalone reader connection for queries that do not require processor wrapping.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintProjectScope.CloseAsync(System.Threading.CancellationToken)">
+            <summary>
+            Closes the project in strict sequence:
+            1. Signals cancellation to all in-flight operations.
+            2. Disposes and closes all active reader contexts and connections.
+            3. Executes coordinator shutdown and PRAGMA wal_checkpoint(TRUNCATE) with zero live readers.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DrintProjectScope.TrackedProcessorContext">
+            <summary>
+            Internal wrapper that unregisters itself from the parent scope upon disposal.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DrintProjectScopeManager">
+            <summary>
+            Thread-safe singleton manager governing the active project scope for the desktop application.
+            Handles opening, closing, and switching .dintel / .drint files without lock leaks.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintProjectScopeManager.OpenProjectAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            Opens a project file. If another project is currently open, it is cleanly closed first,
+            ensuring all readers are disposed and the WAL file is truncated before opening the new file.
+            </summary>
+        </member>
+        <member name="M:DrillIntel.Data.DrintProjectScopeManager.CloseProjectAsync(System.Threading.CancellationToken)">
+            <summary>
+            Closes the currently active project scope.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDrintProjectScope">
+            <summary>
+            Encapsulates the lifecycle of an open project file (.dintel / .drint),
+            managing its write coordinator, reader connections, and processor contexts.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.ProjectScopeChangedEventArgs">
+            <summary>
+            Event arguments for project scope lifecycle changes.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDrintProjectScopeManager">
+            <summary>
+            Application-wide manager that governs the currently open project scope,
+            guaranteeing clean shutdown of writers and readers during project switches.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.DrintCalculationService">
+            <summary>
+            Implements calculation workflows as independent, decoupled operations.
+            Does not enforce a DAG or pipeline — calculations can be executed in any order from the UI.
+            Automatically performs runtime prerequisite checks and fails fast with clear exceptions if dependencies are missing.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IDrintCalculationService">
+            <summary>
+            Contract for calculation processors.
+            Exposes calculations as completely independent methods callable in ANY order from the WPF UI.
+            Performs runtime prerequisite checks to fail fast if prior dependencies are missing.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.BulkLogImportService">
+            <summary>
+            Implements chunked bulk import of TimeLog and DepthLog data.
+            Breaks large datasets into discrete transactions (~5,000 rows each),
+            yielding write locks between chunks to avoid thread stalls.
+            Supports resumability and progress reporting for WPF UI cancellation.
+            </summary>
+        </member>
+        <member name="T:DrillIntel.Data.IBulkLogImportService">
+            <summary>
+            Service for high-volume chunked bulk log data ingestion (DepthLog and TimeLog).
+            Commits data in configurable chunks (default ~5,000 rows) via EnqueueTransactionAsync,
+            releasing the write lock between chunks to prevent blocking concurrent readers and processors.
+            </summary>
+        </member>
+    </members>
+</doc>

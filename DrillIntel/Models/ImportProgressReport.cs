@@ -1,0 +1,19 @@
+using System;
+
+namespace DrillIntel.Models;
+
+public class ImportProgressReport
+{
+    public int RowsProcessed { get; set; }
+    public double PercentCompleted { get; set; }
+    public bool IsIndeterminate { get; set; } = true;
+    public string StatusMessage { get; set; } = string.Empty;
+}
+
+public class StreamImportResult
+{
+    public int TotalRows { get; set; }
+    public double QcScore { get; set; }
+    public string TableName { get; set; } = string.Empty;
+}
+
