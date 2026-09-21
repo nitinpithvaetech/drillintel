@@ -13,6 +13,8 @@ using Dapper;
 using System.Data.Common;
 using DrillIntel.Models;
 using DrillIntel.Projects;
+using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 
 namespace DrillIntel.Data;
 
@@ -204,35 +206,34 @@ public class WellDataRepository : IWellDataRepository
         return list;
     }
 
-    public async Task<WellInfo?> GetProjectWellAsync()
+    public async Task<Well?> GetProjectWellAsync()
     {
         if (!_session.IsProjectOpen) return null;
-        var connection = _session.GetConnection();
 
-        var createWellTable = @"
-            CREATE TABLE IF NOT EXISTS VMX_WELL (
-                WELL_ID TEXT NOT NULL PRIMARY KEY,
-                WELL_NAME TEXT,
-                FIELD TEXT,
-                OPERATOR TEXT,
-                SPUD_DATE TEXT
-            );";
-        await connection.ExecuteAsync(createWellTable);
-
-        var dbWell = await connection.QueryFirstOrDefaultAsync<dynamic>(
+        var dbWell = await _session.GetConnection().QueryFirstOrDefaultAsync<dynamic>(
             "SELECT WELL_ID, WELL_NAME, FIELD FROM VMX_WELL LIMIT 1;");
 
         if (dbWell != null)
         {
+            string? wellId = dbWell.WELL_ID?.ToString();
+            if (!string.IsNullOrWhiteSpace(wellId))
+            {
+                string lastError = string.Empty;
+                var loadedWell = WellService.LoadObject(_session.GetDataService(), wellId, ref lastError);
+                if (loadedWell != null)
+                {
+                    return loadedWell;
+                }
+            }
+
             string? wellName = dbWell.WELL_NAME?.ToString();
             if (!string.IsNullOrWhiteSpace(wellName))
             {
-                int.TryParse(dbWell.WELL_ID?.ToString(), out int parsedId);
-                return new WellInfo
+                return new Well
                 {
-                    WellID = parsedId > 0 ? parsedId : 1,
-                    WellName = wellName,
-                    FieldName = dbWell.FIELD?.ToString() ?? "General Field"
+                    ObjectID = wellId ?? Guid.NewGuid().ToString(),
+                    name = wellName,
+                    field = dbWell.FIELD?.ToString() ?? "General Field"
                 };
             }
         }
@@ -240,46 +241,40 @@ public class WellDataRepository : IWellDataRepository
         return null;
     }
 
-    public async Task SaveProjectWellAsync(WellInfo well)
+    public async Task SaveProjectWellAsync(Well well)
     {
-        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(well.WellName)) return;
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(well.name)) return;
         var connection = _session.GetConnection();
 
-        var createWellTable = @"
-            CREATE TABLE IF NOT EXISTS VMX_WELL (
-                WELL_ID TEXT NOT NULL PRIMARY KEY,
-                WELL_NAME TEXT,
-                FIELD TEXT,
-                OPERATOR TEXT,
-                SPUD_DATE TEXT
-            );";
-        await connection.ExecuteAsync(createWellTable);
+        if (string.IsNullOrWhiteSpace(well.ObjectID))
+        {
+            well.ObjectID = Guid.NewGuid().ToString();
+        }
 
-        // Since each project has only one well, replace existing well records
-        await connection.ExecuteAsync("DELETE FROM VMX_WELL;");
+        if (string.IsNullOrWhiteSpace(well.field))
+        {
+            well.field = "General Field";
+        }
 
-        var insertSql = @"
-            INSERT INTO VMX_WELL (WELL_ID, WELL_NAME, FIELD)
-            VALUES (@WellName, @WellName, @Field);";
-        await connection.ExecuteAsync(insertSql, new 
-        { 
-            WellName = well.WellName.Trim(), 
-            Field = string.IsNullOrWhiteSpace(well.FieldName) ? "General Field" : well.FieldName.Trim() 
-        });
+        string lastError = string.Empty;
+        if (!WellService.AddWell(_session.GetDataService(), well, ref lastError))
+        {
+            throw new InvalidOperationException($"Failed to save well record: {lastError}");
+        }
 
         // Normalize any existing logs in this project to this single well name
         var hasTimeTable = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
         if (hasTimeTable > 0)
         {
-            await connection.ExecuteAsync("UPDATE VMX_TIME_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.WellName.Trim() });
+            await connection.ExecuteAsync("UPDATE VMX_TIME_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.name.Trim() });
         }
 
         var hasDepthTable = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
         if (hasDepthTable > 0)
         {
-            await connection.ExecuteAsync("UPDATE VMX_DEPTH_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.WellName.Trim() });
+            await connection.ExecuteAsync("UPDATE VMX_DEPTH_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.name.Trim() });
         }
     }
 
@@ -288,21 +283,23 @@ public class WellDataRepository : IWellDataRepository
         var existing = await GetProjectWellAsync();
         if (existing == null)
         {
-            await SaveProjectWellAsync(new WellInfo
+            await SaveProjectWellAsync(new Well
             {
-                WellName = wellName,
-                FieldName = fieldName ?? "General Field"
+                ObjectID = Guid.NewGuid().ToString(),
+                name = wellName,
+                field = fieldName ?? "General Field",
+                dTimSpud = DateTime.Now.ToString("o")
             });
         }
     }
 
-    public async Task<List<WellInfo>> GetWellsAsync()
+    public async Task<List<Well>> GetWellsAsync()
     {
         var projectWell = await GetProjectWellAsync();
         if (projectWell != null)
-            return new List<WellInfo> { projectWell };
+            return new List<Well> { projectWell };
 
-        return new List<WellInfo>();
+        return new List<Well>();
     }
 
     private static string SanitizeIdentifier(string name, int index)

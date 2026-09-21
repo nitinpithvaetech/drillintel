@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using DrillIntel.Models;
+using DrillIntel.Data.Objects.DataObjects.Models;
 
 namespace DrillIntel.Data;
 
@@ -19,9 +20,9 @@ public interface IWellDataRepository
     Task LogVmxDepthLogAsync(VmxDepthLog log);
     Task<List<VmxTimeLog>> GetTimeLogsAsync();
     Task<List<VmxDepthLog>> GetDepthLogsAsync();
-    Task<WellInfo?> GetProjectWellAsync();
-    Task SaveProjectWellAsync(WellInfo well);
-    Task<List<WellInfo>> GetWellsAsync();
+    Task<Well?> GetProjectWellAsync();
+    Task SaveProjectWellAsync(Well well);
+    Task<List<Well>> GetWellsAsync();
     Task EnsureWellAsync(string wellName, string? fieldName = null);
     Task CreateDynamicTimelogTableAsync(string tableName, List<ChannelMapping> mappings);
     Task BulkInsertTimelogAsync(string tableName, DataTable data);

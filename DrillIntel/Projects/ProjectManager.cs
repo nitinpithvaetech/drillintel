@@ -9,6 +9,8 @@ using System.Windows.Input;
 using DrillIntel.Data;
 using System.Data.Common;
 using Microsoft.Win32;
+using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 
 namespace DrillIntel.Projects
 {
@@ -747,6 +749,7 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
     public interface IProjectService
     {
         bool CreateNewProject();
+        Task<bool> CreateNewProjectAsync();
         bool OpenProject();
         bool OpenProject(string filePath);
     }
@@ -762,7 +765,9 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
             _recentProjectsService = recentProjectsService;
         }
 
-        public bool CreateNewProject()
+        public bool CreateNewProject() => CreateNewProjectAsync().GetAwaiter().GetResult();
+
+        public async Task<bool> CreateNewProjectAsync()
         {
             var dialog = new SaveFileDialog
             {
@@ -808,36 +813,31 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                 string chosenWellName = !string.IsNullOrWhiteSpace(vm.WellName) ? vm.WellName.Trim() : defaultWellName;
                 string chosenField = !string.IsNullOrWhiteSpace(vm.FieldName) ? vm.FieldName.Trim() : "General Field";
 
-                // Save well information directly to VMX_WELL table using DataServiceDIntel
-                using (var ds = new DataServiceDIntel(dintelFilePath))
-                {
-                    ds.ExecuteNonQuery(@"
-                        CREATE TABLE IF NOT EXISTS VMX_WELL (
-                            WELL_ID TEXT PRIMARY KEY,
-                            WELL_NAME TEXT NOT NULL,
-                            FIELD TEXT,
-                            TIME_ZONE_OFFSET REAL,
-                            WELL_DATUM TEXT,
-                            ELEVATION_VALUE REAL,
-                            ELEVATION_TYPE TEXT,
-                            CREATED_BY TEXT,
-                            CREATED_DATE TEXT,
-                            MODIFIED_BY TEXT,
-                            MODIFIED_DATE TEXT
-                        );
-                        DELETE FROM VMX_WELL;
-                        INSERT INTO VMX_WELL (WELL_ID, WELL_NAME, FIELD)
-                        VALUES (@wellId, @wellName, @field);",
-                        new Dictionary<string, object?>
-                        {
-                            ["@wellId"] = Guid.NewGuid().ToString(),
-                            ["@wellName"] = chosenWellName,
-                            ["@field"] = chosenField
-                        });
-                }
-
+                // Load project into session first (opens database connection)
                 _session.Load(dintelFilePath);
                 _recentProjectsService?.AddOrUpdate(dintelFilePath, chosenWellName, chosenField);
+
+                // Save well information through the repository using the full Data.Objects.Well model
+                var repo = new DrillIntel.Data.WellDataRepository(_session);
+                var well = new Well
+                {
+                    ObjectID = Guid.NewGuid().ToString(),
+                    name = chosenWellName,
+                    field = chosenField,
+                    dTimSpud = DateTime.Now.ToString("o")
+                };
+                await repo.SaveProjectWellAsync(well);
+
+                // Flush WAL changes so external tools (DB Browser, etc.) immediately see all tables and rows on disk
+                _session.GetDataService().ExecuteNonQuery("PRAGMA wal_checkpoint(FULL);");
+
+                // Ensure Dashboard reflects the newly created well
+                if (Application.Current?.MainWindow?.DataContext is DrillIntel.ViewModels.MainViewModel mainVm &&
+                    mainVm.CurrentViewModel is DrillIntel.ViewModels.DashboardViewModel dash)
+                {
+                    await dash.RefreshAsync();
+                }
+
                 return true;
             }
             catch (Exception ex)
@@ -848,6 +848,7 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
 
+                _session.Close();
                 TryDeleteFile(dintelFilePath);
                 return false;
             }

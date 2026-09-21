@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
 using DrillIntel.Models;
 using DrillIntel.Projects;
+using DrillIntel.Data.Objects.DataObjects.Models;
 
 namespace DrillIntel.ViewModels;
 
@@ -26,7 +27,7 @@ public partial class DashboardViewModel : ObservableObject
     private string _recentImports = "No imports yet";
 
     [ObservableProperty]
-    private WellInfo? _selectedWell;
+    private Well? _selectedWell;
 
     [ObservableProperty]
     private WellTreeNode? _selectedNode;
@@ -37,7 +38,7 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
-    public ObservableCollection<WellInfo> AvailableWells { get; } = new();
+    public ObservableCollection<Well> AvailableWells { get; } = new();
 
     public ObservableCollection<WellTreeNode> WellTree { get; } = new();
 
@@ -216,7 +217,7 @@ public partial class DashboardViewModel : ObservableObject
         SelectedNode = node;
         if (node == null) return;
 
-        if (node.Tag is WellInfo well)
+        if (node.Tag is Well well)
         {
             SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(well.WellName, StringComparison.OrdinalIgnoreCase)) ?? well;
         }
@@ -243,11 +244,14 @@ public partial class DashboardViewModel : ObservableObject
         };
         if (window.ShowDialog() == true)
         {
-            await _repository.SaveProjectWellAsync(new WellInfo
+            var wellToSave = currentWell ?? new Well();
+            wellToSave.name = vm.WellName.Trim();
+            wellToSave.field = vm.FieldName.Trim();
+            if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
             {
-                WellName = vm.WellName.Trim(),
-                FieldName = vm.FieldName.Trim()
-            });
+                wellToSave.ObjectID = Guid.NewGuid().ToString();
+            }
+            await _repository.SaveProjectWellAsync(wellToSave);
             await RefreshAsync();
         }
     }

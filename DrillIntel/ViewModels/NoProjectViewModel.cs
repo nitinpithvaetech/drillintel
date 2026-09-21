@@ -98,9 +98,9 @@ public partial class NoProjectViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void NewProject()
+    private async Task NewProject()
     {
-        _projectService.CreateNewProject();
+        await _projectService.CreateNewProjectAsync();
     }
 
     [RelayCommand]

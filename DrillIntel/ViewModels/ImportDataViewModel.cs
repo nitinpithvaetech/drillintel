@@ -12,6 +12,7 @@ using DrillIntel.Data;
 using System.Data;
 
 using DrillIntel.Projects;
+using DrillIntel.Data.Objects.DataObjects.Models;
 
 namespace DrillIntel.ViewModels;
 
@@ -29,8 +30,8 @@ public partial class ImportDataViewModel : ObservableObject
         _importService = new CsvImportService();
         _repository = new WellDataRepository(_session);
 
-        ExistingWellList = new ObservableCollection<WellInfo>();
-        UpdateWellList = new ObservableCollection<WellInfo>();
+        ExistingWellList = new ObservableCollection<Well>();
+        UpdateWellList = new ObservableCollection<Well>();
 
         InitializeCommands();
         LoadExistingWells();
@@ -296,7 +297,7 @@ public partial class ImportDataViewModel : ObservableObject
         set { Settings.NewWellName = value; OnPropertyChanged(); }
     }
 
-    public ObservableCollection<WellInfo> ExistingWellList { get; }
+    public ObservableCollection<Well> ExistingWellList { get; }
     public ObservableCollection<WellboreInfo> ExistingWellboreList { get; } = new();
 
     public string? ExistingWellID
@@ -319,7 +320,7 @@ public partial class ImportDataViewModel : ObservableObject
 
     public bool ShowDataAssociationUpdateTab => OperationType == OperationType.UpdateData;
 
-    public ObservableCollection<WellInfo> UpdateWellList { get; }
+    public ObservableCollection<Well> UpdateWellList { get; }
     public ObservableCollection<TimeLogInfo> TimeLogList { get; } = new();
     public ObservableCollection<RowMappingUpdate> RowsMappingUpdate { get; } = new();
 
