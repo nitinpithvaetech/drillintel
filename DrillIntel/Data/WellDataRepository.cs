@@ -257,9 +257,42 @@ public class WellDataRepository : IWellDataRepository
         }
 
         string lastError = string.Empty;
-        if (!WellService.AddWell(_session.GetDataService(), well, ref lastError))
+        bool isExisting = Well.IsWellExist(_session.GetDataService(), well.ObjectID);
+        bool success = isExisting
+            ? WellService.UpdateWell(_session.GetDataService(), well, ref lastError)
+            : WellService.AddWell(_session.GetDataService(), well, ref lastError);
+
+        if (!success)
         {
             throw new InvalidOperationException($"Failed to save well record: {lastError}");
+        }
+
+        // Automatically ensure corresponding record in VMX_WELLBORE
+        if (well.wellbores == null || well.wellbores.Count == 0)
+        {
+            var defaultWellbore = new Wellbore
+            {
+                ObjectID = Guid.NewGuid().ToString(),
+                WellID = well.ObjectID,
+                nameWell = well.name,
+                name = well.name
+            };
+            well.wellbores = new Dictionary<string, Wellbore> { { defaultWellbore.ObjectID, defaultWellbore } };
+            well.__timeLogWellboreID = defaultWellbore.ObjectID;
+        }
+
+        foreach (var wb in well.wellbores.Values)
+        {
+            if (string.IsNullOrWhiteSpace(wb.WellID))
+                wb.WellID = well.ObjectID;
+            if (string.IsNullOrWhiteSpace(wb.nameWell))
+                wb.nameWell = well.name;
+            if (string.IsNullOrWhiteSpace(wb.name))
+                wb.name = well.name;
+            if (string.IsNullOrWhiteSpace(wb.ObjectID))
+                wb.ObjectID = Guid.NewGuid().ToString();
+
+            await SaveProjectWellboreAsync(wb);
         }
 
         // Normalize any existing logs in this project to this single well name
@@ -278,18 +311,58 @@ public class WellDataRepository : IWellDataRepository
         }
     }
 
+    public async Task<List<Wellbore>> GetWellboresAsync(string wellId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(wellId)) return new List<Wellbore>();
+        string lastError = string.Empty;
+        return await Task.Run(() => WellboreService.LoadWellbores(_session.GetDataService(), wellId, ref lastError));
+    }
+
+    public async Task SaveProjectWellboreAsync(Wellbore wellbore)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(wellbore.WellID)) return;
+        if (string.IsNullOrWhiteSpace(wellbore.ObjectID))
+        {
+            wellbore.ObjectID = Guid.NewGuid().ToString();
+        }
+
+        string lastError = string.Empty;
+        bool exists = WellboreService.IsWellboreExist(_session.GetDataService(), wellbore.WellID, wellbore.ObjectID);
+        bool success = exists
+            ? WellboreService.UpdateWellbore(_session.GetDataService(), wellbore, ref lastError)
+            : WellboreService.AddWellbore(_session.GetDataService(), wellbore, ref lastError);
+
+        if (!success)
+        {
+            throw new InvalidOperationException($"Failed to save wellbore record: {lastError}");
+        }
+    }
+
     public async Task EnsureWellAsync(string wellName, string? fieldName = null)
     {
         var existing = await GetProjectWellAsync();
         if (existing == null)
         {
-            await SaveProjectWellAsync(new Well
+            var wellId = Guid.NewGuid().ToString();
+            var wellboreId = Guid.NewGuid().ToString();
+            var well = new Well
             {
-                ObjectID = Guid.NewGuid().ToString(),
+                ObjectID = wellId,
                 name = wellName,
                 field = fieldName ?? "General Field",
                 dTimSpud = DateTime.Now.ToString("o")
-            });
+            };
+            var wellbore = new Wellbore
+            {
+                ObjectID = wellboreId,
+                WellID = wellId,
+                nameWell = wellName,
+                name = wellName
+            };
+            well.wellbores[wellboreId] = wellbore;
+            well.__timeLogWellboreID = wellboreId;
+
+            await SaveProjectWellAsync(well);
         }
     }
 

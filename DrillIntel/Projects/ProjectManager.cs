@@ -817,15 +817,29 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                 _session.Load(dintelFilePath);
                 _recentProjectsService?.AddOrUpdate(dintelFilePath, chosenWellName, chosenField);
 
-                // Save well information through the repository using the full Data.Objects.Well model
+                // Save well and linked wellbore information through the repository
                 var repo = new DrillIntel.Data.WellDataRepository(_session);
+                var wellId = Guid.NewGuid().ToString();
+                var wellboreId = Guid.NewGuid().ToString();
+
                 var well = new Well
                 {
-                    ObjectID = Guid.NewGuid().ToString(),
+                    ObjectID = wellId,
                     name = chosenWellName,
                     field = chosenField,
                     dTimSpud = DateTime.Now.ToString("o")
                 };
+
+                var wellbore = new Wellbore
+                {
+                    ObjectID = wellboreId,
+                    WellID = wellId,
+                    nameWell = chosenWellName,
+                    name = chosenWellName
+                };
+                well.wellbores[wellboreId] = wellbore;
+                well.__timeLogWellboreID = wellboreId;
+
                 await repo.SaveProjectWellAsync(well);
 
                 // Flush WAL changes so external tools (DB Browser, etc.) immediately see all tables and rows on disk

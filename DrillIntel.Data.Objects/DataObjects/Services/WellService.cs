@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using DrillIntel.Data;
@@ -168,6 +169,38 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         strSQL += "'" + DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss") + "')";
 
                         objDataService.ExecuteNonQuery(strSQL);
+                    }
+
+                    // Add wellbores (automatically ensure corresponding record in VMX_WELLBORE)
+                    if (objWell.wellbores == null || objWell.wellbores.Count == 0)
+                    {
+                        var defaultWellbore = new Wellbore
+                        {
+                            ObjectID = Guid.NewGuid().ToString(),
+                            WellID = objWell.ObjectID,
+                            nameWell = objWell.name,
+                            name = objWell.name
+                        };
+                        objWell.wellbores = new Dictionary<string, Wellbore> { { defaultWellbore.ObjectID, defaultWellbore } };
+                        objWell.__timeLogWellboreID = defaultWellbore.ObjectID;
+                    }
+
+                    foreach (Wellbore objWb in objWell.wellbores.Values)
+                    {
+                        if (string.IsNullOrWhiteSpace(objWb.WellID))
+                            objWb.WellID = objWell.ObjectID;
+                        if (string.IsNullOrWhiteSpace(objWb.nameWell))
+                            objWb.nameWell = objWell.name;
+                        if (string.IsNullOrWhiteSpace(objWb.name))
+                            objWb.name = objWell.name;
+                        if (string.IsNullOrWhiteSpace(objWb.ObjectID))
+                            objWb.ObjectID = Guid.NewGuid().ToString();
+
+                        string wbErr = string.Empty;
+                        if (!WellboreService.IsWellboreExist(objDataService, objWb.WellID, objWb.ObjectID))
+                        {
+                            WellboreService.AddWellbore(objDataService, objWb, ref wbErr);
+                        }
                     }
 
                     return true;
@@ -595,6 +628,17 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         }
 
                         objOffsetData.Dispose();
+                    }
+
+                    string wbErr = string.Empty;
+                    var loadedWellbores = WellboreService.LoadWellbores(objDataService, wellID, ref wbErr);
+                    foreach (var wb in loadedWellbores)
+                    {
+                        objWell.wellbores[wb.ObjectID] = wb;
+                    }
+                    if (loadedWellbores.Count > 0 && string.IsNullOrWhiteSpace(objWell.__timeLogWellboreID))
+                    {
+                        objWell.__timeLogWellboreID = loadedWellbores[0].ObjectID;
                     }
 
                     return objWell;

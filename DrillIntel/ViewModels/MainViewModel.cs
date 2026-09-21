@@ -209,13 +209,25 @@ public partial class MainViewModel : ObservableObject
 
         if (window.ShowDialog() == true)
         {
+            var wellId = Guid.NewGuid().ToString();
+            var wellboreId = Guid.NewGuid().ToString();
             var well = new DrillIntel.Data.Objects.DataObjects.Models.Well
             {
-                ObjectID = Guid.NewGuid().ToString(),
+                ObjectID = wellId,
                 name = vm.WellName.Trim(),
                 field = vm.FieldName.Trim(),
                 dTimSpud = DateTime.Now.ToString("o")
             };
+            var wellbore = new DrillIntel.Data.Objects.DataObjects.Models.Wellbore
+            {
+                ObjectID = wellboreId,
+                WellID = wellId,
+                nameWell = vm.WellName.Trim(),
+                name = vm.WellName.Trim()
+            };
+            well.wellbores[wellboreId] = wellbore;
+            well.__timeLogWellboreID = wellboreId;
+
             await repo.SaveProjectWellAsync(well);
 
             if (CurrentViewModel is DashboardViewModel dashboard)

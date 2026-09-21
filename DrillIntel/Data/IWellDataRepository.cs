@@ -22,6 +22,8 @@ public interface IWellDataRepository
     Task<List<VmxDepthLog>> GetDepthLogsAsync();
     Task<Well?> GetProjectWellAsync();
     Task SaveProjectWellAsync(Well well);
+    Task<List<Wellbore>> GetWellboresAsync(string wellId);
+    Task SaveProjectWellboreAsync(Wellbore wellbore);
     Task<List<Well>> GetWellsAsync();
     Task EnsureWellAsync(string wellName, string? fieldName = null);
     Task CreateDynamicTimelogTableAsync(string tableName, List<ChannelMapping> mappings);

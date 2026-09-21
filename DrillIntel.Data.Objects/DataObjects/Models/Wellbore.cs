@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DrillIntel.Data;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models
 {
@@ -9,6 +10,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         public string WellID { get; set; } = ""; // Reference to the well object
         public string nameWell { get; set; } = "";
         public string name { get; set; } = "";
+        public string WellboreName { get => name; set => name = value; }
         public string number { get; set; } = "";
         public string numGovt { get; set; } = "";
         public string statusWellbore { get; set; } = "";
@@ -176,6 +178,23 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             catch (Exception)
             {
                 return new Wellbore();
+            }
+        }
+
+        public static bool IsWellboreExist(IDataServiceDIntel objDataService, string wellID, string wellboreID)
+        {
+            try
+            {
+                if (objDataService == null || string.IsNullOrWhiteSpace(wellID) || string.IsNullOrWhiteSpace(wellboreID))
+                    return false;
+
+                return objDataService.IsRecordExist("SELECT WELLBORE_ID FROM VMX_WELLBORE WHERE WELL_ID='"
+                    + wellID.Replace("'", "''") + "' AND WELLBORE_ID='"
+                    + wellboreID.Replace("'", "''") + "'");
+            }
+            catch
+            {
+                return false;
             }
         }
     }
