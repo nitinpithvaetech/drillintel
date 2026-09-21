@@ -13,6 +13,8 @@ using Dapper;
 using System.Data.Common;
 using DrillIntel.Models;
 using DrillIntel.Projects;
+using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 
 namespace DrillIntel.Data;
 
@@ -100,48 +102,13 @@ public class WellDataRepository : IWellDataRepository
         });
     }
 
-    public async Task LogDepthLogAsync(DepthLog log)
+    public async Task LogVmxDepthLogAsync(VmxDepthLog log)
     {
-        if (log == null) throw new ArgumentNullException(nameof(log));
-
-        if (string.IsNullOrWhiteSpace(log.ObjectID))
-        {
-            log.ObjectID = Guid.NewGuid().ToString();
-        }
-
-        var dataService = _session.GetDataService();
         var connection = _session.GetConnection();
 
-        // Ensure WellID is set
-        if (string.IsNullOrWhiteSpace(log.WellID))
-        {
-            var wellIdObj = dataService.GetValue("SELECT WELL_ID FROM VMX_WELL LIMIT 1;");
-            if (wellIdObj != null)
-            {
-                log.WellID = Convert.ToString(wellIdObj) ?? string.Empty;
-            }
-        }
-
-        // Ensure WellboreID is set
-        if (string.IsNullOrWhiteSpace(log.WellboreID) && !string.IsNullOrWhiteSpace(log.WellID))
-        {
-            var wbIdObj = dataService.GetValue("SELECT WELLBORE_ID FROM VMX_WELLBORE WHERE WELL_ID='" 
-                + log.WellID.Replace("'", "''") + "' LIMIT 1;");
-            if (wbIdObj != null)
-            {
-                log.WellboreID = Convert.ToString(wbIdObj) ?? string.Empty;
-            }
-        }
-
-        // 1. Persist to official VMX_DEPTH_LOG table via DepthLogService
-        string lastError = string.Empty;
-        DepthLogService.AddDepthLog(dataService, log, ref lastError);
-
-        // 2. Also record in separate summary table VMX_DEPTH_LOG_SUMMARY for metadata and fast access
         var createMaster = @"
             CREATE TABLE IF NOT EXISTS VMX_DEPTH_LOG_SUMMARY (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                LogId TEXT,
                 LogName TEXT,
                 WellName TEXT,
                 DataTableName TEXT,
@@ -151,63 +118,26 @@ public class WellDataRepository : IWellDataRepository
             );";
         await connection.ExecuteAsync(createMaster);
 
-        // Ensure backward compatibility if table existed previously without LogId or LogName
+        // Ensure backward compatibility if table existed previously without LogName
         var existingCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_DEPTH_LOG_SUMMARY');")).ToList();
-        if (!existingCols.Contains("LogId", StringComparer.OrdinalIgnoreCase))
-        {
-            await connection.ExecuteAsync("ALTER TABLE VMX_DEPTH_LOG_SUMMARY ADD COLUMN LogId TEXT;");
-        }
         if (!existingCols.Contains("LogName", StringComparer.OrdinalIgnoreCase))
         {
             await connection.ExecuteAsync("ALTER TABLE VMX_DEPTH_LOG_SUMMARY ADD COLUMN LogName TEXT;");
         }
 
-        string wellName = !string.IsNullOrWhiteSpace(log.nameWell) ? log.nameWell : log.__WellName;
-        double qcScore = 0;
-        if (!string.IsNullOrWhiteSpace(log.description) && log.description.Contains("QC:"))
-        {
-            var match = System.Text.RegularExpressions.Regex.Match(log.description, @"QC:\s*([0-9.]+)\s*%");
-            if (match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedQc))
-            {
-                qcScore = parsedQc;
-            }
-        }
-
         var insertSql = @"
-            INSERT INTO VMX_DEPTH_LOG_SUMMARY (LogId, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
-            VALUES (@LogId, @LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
+            INSERT INTO VMX_DEPTH_LOG_SUMMARY (LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
+            VALUES (@LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
 
         await connection.ExecuteAsync(insertSql, new
         {
-            LogId = log.ObjectID,
-            LogName = log.nameLog,
-            WellName = wellName,
-            DataTableName = log.__dataTableName,
-            ImportStatus = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
-            QcScore = qcScore,
-            ImportDate = DateTime.Now.ToString("o")
+            log.LogName,
+            log.WellName,
+            log.DataTableName,
+            log.ImportStatus,
+            log.QcScore,
+            ImportDate = log.ImportDate.ToString("o")
         });
-
-        // Flush SQLite WAL to disk
-        try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
-    }
-
-    public async Task LogVmxDepthLogAsync(DepthLog log) => await LogDepthLogAsync(log);
-
-    public async Task LogVmxDepthLogAsync(VmxDepthLog log)
-    {
-        var depthLog = new DepthLog
-        {
-            ObjectID = Guid.NewGuid().ToString(),
-            nameLog = log.LogName,
-            nameWell = log.WellName,
-            __WellName = log.WellName,
-            __dataTableName = log.DataTableName,
-            comments = log.ImportStatus,
-            description = $"QC: {log.QcScore:F1}% • {log.ImportDate:dd-MM-yyyy hh:mm tt}",
-            creationDate = log.ImportDate.ToString("dd-MMM-yyyy HH:mm:ss")
-        };
-        await LogDepthLogAsync(depthLog);
     }
 
     public async Task<List<VmxTimeLog>> GetTimeLogsAsync()
@@ -243,109 +173,67 @@ public class WellDataRepository : IWellDataRepository
         return list;
     }
 
-    public async Task<List<DepthLog>> GetDepthLogsAsync()
+    public async Task<List<VmxDepthLog>> GetDepthLogsAsync()
     {
-        if (!_session.IsProjectOpen) return new List<DepthLog>();
+        if (!_session.IsProjectOpen) return new List<VmxDepthLog>();
         var connection = _session.GetConnection();
-        var dataService = _session.GetDataService();
 
-        string lastError = string.Empty;
-        var list = DepthLogService.LoadDepthLogs(dataService, "", ref lastError);
-
-        var hasSummary = await connection.ExecuteScalarAsync<int>(
+        var hasTable = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+        if (hasTable == 0) return new List<VmxDepthLog>();
 
-        if (list.Count > 0)
+        var rows = await connection.QueryAsync<dynamic>(
+            "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_DEPTH_LOG_SUMMARY ORDER BY Id DESC;");
+
+        var list = new List<VmxDepthLog>();
+        foreach (var r in rows)
         {
-            if (hasSummary > 0)
+            DateTime dt = DateTime.Now;
+            if (r.ImportDate != null)
+                DateTime.TryParse((string)r.ImportDate, out dt);
+
+            list.Add(new VmxDepthLog
             {
-                var summaries = (await connection.QueryAsync<dynamic>(
-                    "SELECT LogId, LogName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_DEPTH_LOG_SUMMARY;")).ToList();
-
-                foreach (var dl in list)
-                {
-                    var match = summaries.FirstOrDefault(s => 
-                        (!string.IsNullOrWhiteSpace((string)s.LogId) && (string)s.LogId == dl.ObjectID) ||
-                        (!string.IsNullOrWhiteSpace((string)s.DataTableName) && (string)s.DataTableName == dl.__dataTableName) || 
-                        (!string.IsNullOrWhiteSpace((string)s.LogName) && (string)s.LogName == dl.nameLog));
-
-                    if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(dl.description))
-                    {
-                        if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
-                        {
-                            DateTime dt = DateTime.Now;
-                            if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
-                            {
-                                DateTime.TryParse(Convert.ToString(dateObj), out dt);
-                            }
-                            dl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
-                        }
-                    }
-                }
-            }
-            return list;
+                Id = (int)r.Id,
+                LogName = (string)(r.LogName ?? string.Empty),
+                WellName = (string)(r.WellName ?? string.Empty),
+                DataTableName = (string)(r.DataTableName ?? string.Empty),
+                ImportStatus = (string)(r.ImportStatus ?? string.Empty),
+                QcScore = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0,
+                ImportDate = dt
+            });
         }
-
-        // Fallback: If VMX_DEPTH_LOG is empty but VMX_DEPTH_LOG_SUMMARY has records from previous imports
-        if (hasSummary > 0)
-        {
-            var rows = await connection.QueryAsync<dynamic>(
-                "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_DEPTH_LOG_SUMMARY ORDER BY Id DESC;");
-
-            foreach (var r in rows)
-            {
-                DateTime dt = DateTime.Now;
-                if (r.ImportDate != null)
-                    DateTime.TryParse((string)r.ImportDate, out dt);
-
-                double qc = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0;
-
-                list.Add(new DepthLog
-                {
-                    ObjectID = Guid.NewGuid().ToString(),
-                    nameLog = (string)(r.LogName ?? string.Empty),
-                    nameWell = (string)(r.WellName ?? string.Empty),
-                    __WellName = (string)(r.WellName ?? string.Empty),
-                    __dataTableName = (string)(r.DataTableName ?? string.Empty),
-                    comments = (string)(r.ImportStatus ?? string.Empty),
-                    description = $"QC: {qc:F1}% • {dt:dd-MM-yyyy hh:mm tt}",
-                    creationDate = dt.ToString("dd-MMM-yyyy HH:mm:ss")
-                });
-            }
-        }
-
         return list;
     }
 
-    public async Task<WellInfo?> GetProjectWellAsync()
+    public async Task<Well?> GetProjectWellAsync()
     {
         if (!_session.IsProjectOpen) return null;
-        var connection = _session.GetConnection();
 
-        var createWellTable = @"
-            CREATE TABLE IF NOT EXISTS VMX_WELL (
-                WELL_ID TEXT NOT NULL PRIMARY KEY,
-                WELL_NAME TEXT,
-                FIELD TEXT,
-                OPERATOR TEXT,
-                SPUD_DATE TEXT
-            );";
-        await connection.ExecuteAsync(createWellTable);
-
-        var dbWell = await connection.QueryFirstOrDefaultAsync<dynamic>(
+        var dbWell = await _session.GetConnection().QueryFirstOrDefaultAsync<dynamic>(
             "SELECT WELL_ID, WELL_NAME, FIELD FROM VMX_WELL LIMIT 1;");
 
         if (dbWell != null)
         {
+            string? wellId = dbWell.WELL_ID?.ToString();
+            if (!string.IsNullOrWhiteSpace(wellId))
+            {
+                string lastError = string.Empty;
+                var loadedWell = WellService.LoadObject(_session.GetDataService(), wellId, ref lastError);
+                if (loadedWell != null)
+                {
+                    return loadedWell;
+                }
+            }
+
             string? wellName = dbWell.WELL_NAME?.ToString();
             if (!string.IsNullOrWhiteSpace(wellName))
             {
-                int.TryParse(dbWell.WELL_ID?.ToString(), out int parsedId);
-                return new WellInfo
+                return new Well
                 {
-                    WellID = parsedId > 0 ? parsedId : 1,
-                    WellName = wellName,
-                    FieldName = dbWell.FIELD?.ToString() ?? "General Field"
+                    ObjectID = wellId ?? Guid.NewGuid().ToString(),
+                    name = wellName,
+                    field = dbWell.FIELD?.ToString() ?? "General Field"
                 };
             }
         }
@@ -353,47 +241,53 @@ public class WellDataRepository : IWellDataRepository
         return null;
     }
 
-    public async Task SaveProjectWellAsync(WellInfo well)
+    public async Task SaveProjectWellAsync(Well well)
     {
-        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(well.WellName)) return;
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(well.name)) return;
         var connection = _session.GetConnection();
 
-        var createWellTable = @"
-            CREATE TABLE IF NOT EXISTS VMX_WELL (
-                WELL_ID TEXT NOT NULL PRIMARY KEY,
-                WELL_NAME TEXT,
-                FIELD TEXT,
-                OPERATOR TEXT,
-                SPUD_DATE TEXT
-            );";
-        await connection.ExecuteAsync(createWellTable);
+        if (string.IsNullOrWhiteSpace(well.ObjectID))
+        {
+            well.ObjectID = Guid.NewGuid().ToString();
+        }
 
-        // Since each project has only one well, replace existing well records
-        await connection.ExecuteAsync("DELETE FROM VMX_WELL;");
+        if (string.IsNullOrWhiteSpace(well.field))
+        {
+            well.field = "General Field";
+        }
 
-        var insertSql = @"
-            INSERT INTO VMX_WELL (WELL_ID, WELL_NAME, FIELD)
-            VALUES (@WellName, @WellName, @Field);";
-        await connection.ExecuteAsync(insertSql, new 
-        { 
-            WellName = well.WellName.Trim(), 
-            Field = string.IsNullOrWhiteSpace(well.FieldName) ? "General Field" : well.FieldName.Trim() 
-        });
+        string lastError = string.Empty;
+        bool isExisting = Well.IsWellExist(_session.GetDataService(), well.ObjectID);
+        bool success = isExisting
+            ? WellService.UpdateWell(_session.GetDataService(), well, ref lastError)
+            : WellService.AddWell(_session.GetDataService(), well, ref lastError);
+
+        if (!success)
+        {
+            throw new InvalidOperationException($"Failed to save well record: {lastError}");
+        }
 
         // Normalize any existing logs in this project to this single well name
         var hasTimeTable = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
         if (hasTimeTable > 0)
         {
-            await connection.ExecuteAsync("UPDATE VMX_TIME_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.WellName.Trim() });
+            await connection.ExecuteAsync("UPDATE VMX_TIME_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.name.Trim() });
         }
 
         var hasDepthTable = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
         if (hasDepthTable > 0)
         {
-            await connection.ExecuteAsync("UPDATE VMX_DEPTH_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.WellName.Trim() });
+            await connection.ExecuteAsync("UPDATE VMX_DEPTH_LOG_SUMMARY SET WellName = @WellName;", new { WellName = well.name.Trim() });
         }
+    }
+
+    public async Task<List<Wellbore>> GetWellboresAsync(string wellId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(wellId)) return new List<Wellbore>();
+        string lastError = string.Empty;
+        return await Task.Run(() => WellboreService.LoadWellbores(_session.GetDataService(), wellId, ref lastError));
     }
 
     public async Task EnsureWellAsync(string wellName, string? fieldName = null)
@@ -401,21 +295,36 @@ public class WellDataRepository : IWellDataRepository
         var existing = await GetProjectWellAsync();
         if (existing == null)
         {
-            await SaveProjectWellAsync(new WellInfo
+            var wellId = Guid.NewGuid().ToString();
+            var wellboreId = Guid.NewGuid().ToString();
+            var well = new Well
             {
-                WellName = wellName,
-                FieldName = fieldName ?? "General Field"
-            });
+                ObjectID = wellId,
+                name = wellName,
+                field = fieldName ?? "General Field",
+                dTimSpud = DateTime.Now.ToString("o")
+            };
+            var wellbore = new Wellbore
+            {
+                ObjectID = wellboreId,
+                WellID = wellId,
+                nameWell = wellName,
+                name = wellName
+            };
+            well.wellbores[wellboreId] = wellbore;
+            well.__timeLogWellboreID = wellboreId;
+
+            await SaveProjectWellAsync(well);
         }
     }
 
-    public async Task<List<WellInfo>> GetWellsAsync()
+    public async Task<List<Well>> GetWellsAsync()
     {
         var projectWell = await GetProjectWellAsync();
         if (projectWell != null)
-            return new List<WellInfo> { projectWell };
+            return new List<Well> { projectWell };
 
-        return new List<WellInfo>();
+        return new List<Well>();
     }
 
     private static string SanitizeIdentifier(string name, int index)

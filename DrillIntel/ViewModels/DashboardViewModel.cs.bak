@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
 using DrillIntel.Models;
 using DrillIntel.Projects;
+using DrillIntel.Data.Objects.DataObjects.Models;
 
 namespace DrillIntel.ViewModels;
 
@@ -26,7 +27,7 @@ public partial class DashboardViewModel : ObservableObject
     private string _recentImports = "No imports yet";
 
     [ObservableProperty]
-    private WellInfo? _selectedWell;
+    private Well? _selectedWell;
 
     [ObservableProperty]
     private WellTreeNode? _selectedNode;
@@ -37,7 +38,7 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private bool _isLoading;
 
-    public ObservableCollection<WellInfo> AvailableWells { get; } = new();
+    public ObservableCollection<Well> AvailableWells { get; } = new();
 
     public ObservableCollection<WellTreeNode> WellTree { get; } = new();
 
@@ -143,11 +144,11 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     depthFolder.Children.Add(new WellTreeNode
                     {
-                        Name = !string.IsNullOrWhiteSpace(dl.nameLog) ? dl.nameLog : dl.ObjectID,
+                        Name = dl.LogName,
                         Type = WellTreeNodeType.DepthLog,
                         IconKind = "FileDocumentOutline",
                         IconColor = "#9C27B0",
-                        Subtitle = !string.IsNullOrWhiteSpace(dl.description) ? dl.description : dl.creationDate,
+                        Subtitle = $"QC: {dl.QcScore:F1}% • {dl.ImportDate:dd-MM-yyyy hh:mm tt}",
                         Tag = dl,
                         IsExpanded = false
                     });
@@ -168,25 +169,7 @@ public partial class DashboardViewModel : ObservableObject
                 ? $"{totalLogs} log{(totalLogs > 1 ? "s" : "")} in project" 
                 : "No logs imported yet";
 
-            double GetDepthLogQc(DepthLog d)
-            {
-                if (!string.IsNullOrWhiteSpace(d.description))
-                {
-                    var m = System.Text.RegularExpressions.Regex.Match(d.description, @"QC:\s*([0-9.]+)\s*%");
-                    if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double score))
-                        return score;
-                }
-                return 100.0;
-            }
-
-            DateTime GetDepthLogDate(DepthLog d)
-            {
-                if (!string.IsNullOrWhiteSpace(d.creationDate) && DateTime.TryParse(d.creationDate, out DateTime dt))
-                    return dt;
-                return DateTime.Now;
-            }
-
-            var allQc = timeLogs.Select(t => t.QcScore).Concat(depthLogs.Select(d => GetDepthLogQc(d))).ToList();
+            var allQc = timeLogs.Select(t => t.QcScore).Concat(depthLogs.Select(d => d.QcScore)).ToList();
             if (allQc.Count > 0)
             {
                 double avgQc = allQc.Average();
@@ -203,14 +186,7 @@ public partial class DashboardViewModel : ObservableObject
             ActivityLog.Clear();
             var combinedActivities = timeLogs
                 .Select(t => new { Text = $"{t.ImportDate:HH:mm} - Imported Timelog '{t.LogName}' for {t.WellName} (QC: {t.QcScore:F1}%)", Date = t.ImportDate })
-                .Concat(depthLogs.Select(d =>
-                {
-                    var dDate = GetDepthLogDate(d);
-                    var dQc = GetDepthLogQc(d);
-                    var dName = !string.IsNullOrWhiteSpace(d.nameLog) ? d.nameLog : d.ObjectID;
-                    var wName = !string.IsNullOrWhiteSpace(d.nameWell) ? d.nameWell : d.__WellName;
-                    return new { Text = $"{dDate:HH:mm} - Imported Depthlog '{dName}' for {wName} (QC: {dQc:F1}%)", Date = dDate };
-                }))
+                .Concat(depthLogs.Select(d => new { Text = $"{d.ImportDate:HH:mm} - Imported Depthlog '{d.LogName}' for {d.WellName} (QC: {d.QcScore:F1}%)", Date = d.ImportDate }))
                 .OrderByDescending(x => x.Date)
                 .Take(10);
 
@@ -241,7 +217,7 @@ public partial class DashboardViewModel : ObservableObject
         SelectedNode = node;
         if (node == null) return;
 
-        if (node.Tag is WellInfo well)
+        if (node.Tag is Well well)
         {
             SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(well.WellName, StringComparison.OrdinalIgnoreCase)) ?? well;
         }
@@ -249,10 +225,9 @@ public partial class DashboardViewModel : ObservableObject
         {
             SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(timeLog.WellName, StringComparison.OrdinalIgnoreCase));
         }
-        else if (node.Tag is DepthLog depthLog)
+        else if (node.Tag is VmxDepthLog depthLog)
         {
-            var wellName = !string.IsNullOrWhiteSpace(depthLog.nameWell) ? depthLog.nameWell : depthLog.__WellName;
-            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(wellName, StringComparison.OrdinalIgnoreCase));
+            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(depthLog.WellName, StringComparison.OrdinalIgnoreCase));
         }
     }
 
@@ -269,11 +244,14 @@ public partial class DashboardViewModel : ObservableObject
         };
         if (window.ShowDialog() == true)
         {
-            await _repository.SaveProjectWellAsync(new WellInfo
+            var wellToSave = currentWell ?? new Well();
+            wellToSave.name = vm.WellName.Trim();
+            wellToSave.field = vm.FieldName.Trim();
+            if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
             {
-                WellName = vm.WellName.Trim(),
-                FieldName = vm.FieldName.Trim()
-            });
+                wellToSave.ObjectID = Guid.NewGuid().ToString();
+            }
+            await _repository.SaveProjectWellAsync(wellToSave);
             await RefreshAsync();
         }
     }
