@@ -4,6 +4,7 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using DrillIntel.Models;
+using DrillIntel.Data.Objects.DataObjects.Models;
 
 namespace DrillIntel.Data;
 
@@ -20,18 +21,11 @@ public interface IWellDataRepository
     Task LogVmxDepthLogAsync(DepthLog log);
     Task LogVmxDepthLogAsync(VmxDepthLog log);
     Task<List<VmxTimeLog>> GetTimeLogsAsync();
-<<<<<<< Updated upstream
-    Task<List<VmxDepthLog>> GetDepthLogsAsync();
-    Task<WellInfo?> GetProjectWellAsync();
-    Task SaveProjectWellAsync(WellInfo well);
-    Task<List<WellInfo>> GetWellsAsync();
-=======
     Task<List<DepthLog>> GetDepthLogsAsync();
     Task<Well?> GetProjectWellAsync();
     Task SaveProjectWellAsync(Well well);
     Task<List<Wellbore>> GetWellboresAsync(string wellId);
     Task<List<Well>> GetWellsAsync();
->>>>>>> Stashed changes
     Task EnsureWellAsync(string wellName, string? fieldName = null);
     Task CreateDynamicTimelogTableAsync(string tableName, List<ChannelMapping> mappings);
     Task BulkInsertTimelogAsync(string tableName, DataTable data);
@@ -42,4 +36,3 @@ public interface IWellDataRepository
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
 }
-

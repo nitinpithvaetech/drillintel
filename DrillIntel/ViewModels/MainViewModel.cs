@@ -163,9 +163,15 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void NewProject()
+    private async Task NewProject()
     {
-        _projectService.CreateNewProject();
+        if (await _projectService.CreateNewProjectAsync())
+        {
+            if (CurrentViewModel is DashboardViewModel dashboard)
+            {
+                await dashboard.RefreshAsync();
+            }
+        }
     }
 
     [RelayCommand]
@@ -174,7 +180,7 @@ public partial class MainViewModel : ObservableObject
         _projectService.OpenProject();
     }
 
-    public async Task<DrillIntel.Models.WellInfo?> EnsureProjectWellAsync()
+    public async Task<DrillIntel.Data.Objects.DataObjects.Models.Well?> EnsureProjectWellAsync()
     {
         if (!_session.IsProjectOpen) return null;
 
@@ -203,11 +209,25 @@ public partial class MainViewModel : ObservableObject
 
         if (window.ShowDialog() == true)
         {
-            var well = new DrillIntel.Models.WellInfo
+            var wellId = Guid.NewGuid().ToString();
+            var wellboreId = Guid.NewGuid().ToString();
+            var well = new DrillIntel.Data.Objects.DataObjects.Models.Well
             {
-                WellName = vm.WellName.Trim(),
-                FieldName = vm.FieldName.Trim()
+                ObjectID = wellId,
+                name = vm.WellName.Trim(),
+                field = vm.FieldName.Trim(),
+                dTimSpud = DateTime.Now.ToString("o")
             };
+            var wellbore = new DrillIntel.Data.Objects.DataObjects.Models.Wellbore
+            {
+                ObjectID = wellboreId,
+                WellID = wellId,
+                nameWell = vm.WellName.Trim(),
+                name = vm.WellName.Trim()
+            };
+            well.wellbores[wellboreId] = wellbore;
+            well.__timeLogWellboreID = wellboreId;
+
             await repo.SaveProjectWellAsync(well);
 
             if (CurrentViewModel is DashboardViewModel dashboard)
