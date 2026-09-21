@@ -14,6 +14,11 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(objWell.ObjectID))
+                {
+                    objWell.ObjectID = Guid.NewGuid().ToString();
+                }
+
                 if (Well.IsWellExist(objDataService, objWell.ObjectID))
                 {
                     LastError = "Well already exist";
@@ -199,7 +204,10 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         string wbErr = string.Empty;
                         if (!WellboreService.IsWellboreExist(objDataService, objWb.WellID, objWb.ObjectID))
                         {
-                            WellboreService.AddWellbore(objDataService, objWb, ref wbErr);
+                            if (!WellboreService.AddWellbore(objDataService, objWb, ref wbErr))
+                            {
+                                LastError = wbErr;
+                            }
                         }
                     }
 

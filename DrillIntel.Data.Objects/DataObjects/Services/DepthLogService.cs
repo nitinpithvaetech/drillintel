@@ -138,6 +138,36 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
         {
             try
             {
+                if (objDataService == null)
+                {
+                    LastError = "Data service is not initialized.";
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(objDepthLog.ObjectID))
+                {
+                    objDepthLog.ObjectID = Guid.NewGuid().ToString();
+                }
+
+                if (string.IsNullOrWhiteSpace(objDepthLog.WellID))
+                {
+                    var wellIdObj = objDataService.GetValue("SELECT WELL_ID FROM VMX_WELL LIMIT 1;");
+                    if (wellIdObj != null)
+                    {
+                        objDepthLog.WellID = Convert.ToString(wellIdObj) ?? string.Empty;
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(objDepthLog.WellboreID) && !string.IsNullOrWhiteSpace(objDepthLog.WellID))
+                {
+                    var wbIdObj = objDataService.GetValue("SELECT WELLBORE_ID FROM VMX_WELLBORE WHERE WELL_ID='" 
+                        + objDepthLog.WellID.Replace("'", "''") + "' LIMIT 1;");
+                    if (wbIdObj != null)
+                    {
+                        objDepthLog.WellboreID = Convert.ToString(wbIdObj) ?? string.Empty;
+                    }
+                }
+
                 if (IsDepthLogExist(objDataService, objDepthLog.WellID, objDepthLog.WellboreID, objDepthLog.ObjectID))
                 {
                     LastError = "The depth log already exist";
@@ -145,14 +175,13 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                 }
 
                 // (1) Create a data table ==================================================================
-                // string dataTableName = DepthLog.getDataTableNameLegacy(objDepthLog.WellID, objDepthLog.WellboreID, objDepthLog.ObjectID);
-
                 string dataTableName = ObjectIDFactory.generateDepthLogTableName();
+                objDepthLog.__dataTableName = dataTableName;
 
                 // Remove the table, if it exists ...
-                objDataService.ExecuteNonQuery("DROP TABLE " + dataTableName);
+                objDataService.ExecuteNonQuery("DROP TABLE IF EXISTS [" + dataTableName + "];");
 
-                string strSQL = "CREATE TABLE " + dataTableName + " (";
+                string strSQL = "CREATE TABLE [" + dataTableName + "] (";
 
                 string strFields = "DATA_INDEX DECIMAL(8) ";
 
@@ -250,41 +279,18 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     return false;
                 }
 
-                strSQL = "CREATE UNIQUE INDEX " + dataTableName + "_PK ON " + dataTableName + "(DEPTH)";
+                strSQL = "CREATE UNIQUE INDEX IF NOT EXISTS [" + dataTableName + "_PK] ON [" + dataTableName + "](DEPTH);";
                 if (!objDataService.ExecuteNonQuery(strSQL))
                 {
                     LastError = objDataService.LastError;
                     return false;
                 }
 
-                strSQL = "CREATE INDEX " + dataTableName + "_DATAINDEX ON " + dataTableName + "(DATA_INDEX)";
+                strSQL = "CREATE INDEX IF NOT EXISTS [" + dataTableName + "_DATAINDEX] ON [" + dataTableName + "](DATA_INDEX);";
                 if (!objDataService.ExecuteNonQuery(strSQL))
                 {
                     LastError = objDataService.LastError;
                     return false;
-                }
-
-                strSQL = "CREATE INDEX IDX1_" + dataTableName + " ON " + dataTableName + "(DEPTH)";
-                objDataService.ExecuteNonQuery(strSQL);
-
-                strSQL = "ALTER TABLE " + dataTableName + " ADD CONSTRAINT PK_" + dataTableName + " PRIMARY KEY (DEPTH)";
-                if (!objDataService.ExecuteNonQuery(strSQL))
-                {
-                    LastError = objDataService.LastError;
-                    return false;
-                }
-
-                // Grant access of this table to all the users
-                DataTable objUsers = objDataService.GetTable("SELECT USER_NAME FROM VMX_USER");
-                if (objUsers != null)
-                {
-                    foreach (DataRow objRow in objUsers.Rows)
-                    {
-                        string strUserName = Convert.ToString(objRow["USER_NAME"]) ?? string.Empty;
-                        strSQL = " GRANT SELECT,INSERT,UPDATE,DELETE ON OBJECT::dbo." + dataTableName + " TO [VMX_" + strUserName + "]";
-                        objDataService.ExecuteNonQuery(strSQL);
-                    }
-                    objUsers.Dispose();
                 }
                 // =========================================================================================
 
@@ -416,10 +422,9 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                 }
                 // =========================================================================================
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Original VB code only did "Dim halt As Boolean = True" (a debugger breakpoint spot)
-                // and then fell off the end, which returns False. Consider: LastError = ex.Message;
+                LastError = ex.Message;
                 return false;
             }
         }
@@ -449,11 +454,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
         {
             try
             {
+                if (objDataService == null || string.IsNullOrWhiteSpace(WellID) || string.IsNullOrWhiteSpace(WellboreID) || string.IsNullOrWhiteSpace(LogID))
+                    return false;
+
                 return objDataService.IsRecordExist(
                     "SELECT LOG_ID FROM VMX_DEPTH_LOG " +
-                    "WHERE WELL_ID='" + WellID + "' " +
-                    "AND WELLBORE_ID='" + WellboreID + "' " +
-                    "AND LOG_ID='" + LogID + "'"
+                    "WHERE WELL_ID='" + WellID.Replace("'", "''") + "' " +
+                    "AND WELLBORE_ID='" + WellboreID.Replace("'", "''") + "' " +
+                    "AND LOG_ID='" + LogID.Replace("'", "''") + "'"
                 );
             }
             catch (Exception)
