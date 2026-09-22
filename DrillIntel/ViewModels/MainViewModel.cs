@@ -196,8 +196,10 @@ public partial class MainViewModel : ObservableObject
         string suggestedWellName = _session.ProjectName ?? "New Well";
         var timeLogs = await repo.GetTimeLogsAsync();
         var depthLogs = await repo.GetDepthLogsAsync();
-        suggestedWellName = timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.WellName))?.WellName
+        suggestedWellName = timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.nameWell))?.nameWell
+                         ?? timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.__WellName))?.__WellName
                          ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.nameWell))?.nameWell
+                         ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.__WellName))?.__WellName
                          ?? suggestedWellName;
 
         var vm = new WellInformationViewModel(suggestedWellName, "General Field");

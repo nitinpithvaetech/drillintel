@@ -63,14 +63,63 @@ public class WellDataRepository : IWellDataRepository
         return result.ToList();
     }
 
-    public async Task LogVmxTimeLogAsync(VmxTimeLog log)
+    public async Task LogTimeLogAsync(TimeLog log)
     {
+        if (log == null) throw new ArgumentNullException(nameof(log));
+
+        if (string.IsNullOrWhiteSpace(log.ObjectID))
+        {
+            log.ObjectID = Guid.NewGuid().ToString();
+        }
+
+        var dataService = _session.GetDataService();
         var connection = _session.GetConnection();
 
-        // Ensure Master Table exists
+        // Ensure WellID is set
+        if (string.IsNullOrWhiteSpace(log.WellID))
+        {
+            var wellIdObj = dataService.GetValue("SELECT WELL_ID FROM VMX_WELL LIMIT 1;");
+            if (wellIdObj != null)
+            {
+                log.WellID = Convert.ToString(wellIdObj) ?? string.Empty;
+            }
+        }
+
+        // Ensure WellboreID is set
+        if (string.IsNullOrWhiteSpace(log.WellboreID) && !string.IsNullOrWhiteSpace(log.WellID))
+        {
+            var wbIdObj = dataService.GetValue("SELECT WELLBORE_ID FROM VMX_WELLBORE WHERE WELL_ID='" 
+                + log.WellID.Replace("'", "''") + "' LIMIT 1;");
+            if (wbIdObj != null)
+            {
+                log.WellboreID = Convert.ToString(wbIdObj) ?? string.Empty;
+            }
+        }
+
+        // 1. Persist to official VMX_TIME_LOG table via TimeLogService
+        string lastError = string.Empty;
+        bool addSuccess = TimeLogService.addTimeLog(dataService, log, ref lastError);
+        if (!addSuccess)
+        {
+            throw new InvalidOperationException($"TimeLogService.addTimeLog failed: {lastError}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(log.startIndex) || !string.IsNullOrWhiteSpace(log.endIndex))
+        {
+            try
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE VMX_TIME_LOG SET MIN_DATE = @minDate, MAX_DATE = @maxDate WHERE LOG_ID = @logId;",
+                    new { minDate = log.startIndex, maxDate = log.endIndex, logId = log.ObjectID });
+            }
+            catch { }
+        }
+
+        // 2. Also record in separate summary table VMX_TIME_LOG_SUMMARY for metadata and fast access
         var createMaster = @"
             CREATE TABLE IF NOT EXISTS VMX_TIME_LOG_SUMMARY (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                LogId TEXT,
                 LogName TEXT,
                 WellName TEXT,
                 DataTableName TEXT,
@@ -80,26 +129,63 @@ public class WellDataRepository : IWellDataRepository
             );";
         await connection.ExecuteAsync(createMaster);
 
-        // Ensure backward compatibility if table existed previously without LogName
+        // Ensure backward compatibility if table existed previously without LogId or LogName
         var existingCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_TIME_LOG_SUMMARY');")).ToList();
+        if (!existingCols.Contains("LogId", StringComparer.OrdinalIgnoreCase))
+        {
+            await connection.ExecuteAsync("ALTER TABLE VMX_TIME_LOG_SUMMARY ADD COLUMN LogId TEXT;");
+        }
         if (!existingCols.Contains("LogName", StringComparer.OrdinalIgnoreCase))
         {
             await connection.ExecuteAsync("ALTER TABLE VMX_TIME_LOG_SUMMARY ADD COLUMN LogName TEXT;");
         }
 
+        string wellName = !string.IsNullOrWhiteSpace(log.nameWell) ? log.nameWell : log.__WellName;
+        double qcScore = 0;
+        if (!string.IsNullOrWhiteSpace(log.description) && log.description.Contains("QC:"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(log.description, @"QC:\s*([0-9.]+)\s*%");
+            if (match.Success && double.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double parsedQc))
+            {
+                qcScore = parsedQc;
+            }
+        }
+
         var insertSql = @"
-            INSERT INTO VMX_TIME_LOG_SUMMARY (LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
-            VALUES (@LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
-            
+            INSERT INTO VMX_TIME_LOG_SUMMARY (LogId, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
+            VALUES (@LogId, @LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
+
         await connection.ExecuteAsync(insertSql, new
         {
-            log.LogName,
-            log.WellName,
-            log.DataTableName,
-            log.ImportStatus,
-            log.QcScore,
-            ImportDate = log.ImportDate.ToString("o")
+            LogId = log.ObjectID,
+            LogName = log.nameLog,
+            WellName = wellName,
+            DataTableName = log.__dataTableName,
+            ImportStatus = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
+            QcScore = qcScore,
+            ImportDate = DateTime.Now.ToString("o")
         });
+
+        // Flush SQLite WAL to disk
+        try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
+    }
+
+    public async Task LogVmxTimeLogAsync(TimeLog log) => await LogTimeLogAsync(log);
+
+    public async Task LogVmxTimeLogAsync(VmxTimeLog log)
+    {
+        var timeLog = new TimeLog
+        {
+            ObjectID = Guid.NewGuid().ToString(),
+            nameLog = log.LogName,
+            nameWell = log.WellName,
+            __WellName = log.WellName,
+            __dataTableName = log.DataTableName,
+            comments = log.ImportStatus,
+            description = $"QC: {log.QcScore:F1}% • {log.ImportDate:dd-MM-yyyy hh:mm tt}",
+            creationDate = log.ImportDate.ToString("dd-MMM-yyyy HH:mm:ss")
+        };
+        await LogTimeLogAsync(timeLog);
     }
 
     public async Task LogDepthLogAsync(DepthLog log)
@@ -228,36 +314,77 @@ public class WellDataRepository : IWellDataRepository
         await LogDepthLogAsync(depthLog);
     }
 
-    public async Task<List<VmxTimeLog>> GetTimeLogsAsync()
+    public async Task<List<TimeLog>> GetTimeLogsAsync()
     {
-        if (!_session.IsProjectOpen) return new List<VmxTimeLog>();
+        if (!_session.IsProjectOpen) return new List<TimeLog>();
         var connection = _session.GetConnection();
+        var dataService = _session.GetDataService();
 
-        var hasTable = await connection.ExecuteScalarAsync<int>(
+        string lastError = string.Empty;
+        var list = TimeLogService.LoadTimeLogs(dataService, "", ref lastError);
+
+        var hasSummary = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
-        if (hasTable == 0) return new List<VmxTimeLog>();
 
-        var rows = await connection.QueryAsync<dynamic>(
-            "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_TIME_LOG_SUMMARY ORDER BY Id DESC;");
-
-        var list = new List<VmxTimeLog>();
-        foreach (var r in rows)
+        if (list.Count > 0)
         {
-            DateTime dt = DateTime.Now;
-            if (r.ImportDate != null)
-                DateTime.TryParse((string)r.ImportDate, out dt);
-
-            list.Add(new VmxTimeLog
+            if (hasSummary > 0)
             {
-                Id = (int)r.Id,
-                LogName = (string)(r.LogName ?? string.Empty),
-                WellName = (string)(r.WellName ?? string.Empty),
-                DataTableName = (string)(r.DataTableName ?? string.Empty),
-                ImportStatus = (string)(r.ImportStatus ?? string.Empty),
-                QcScore = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0,
-                ImportDate = dt
-            });
+                var summaries = (await connection.QueryAsync<dynamic>(
+                    "SELECT LogId, LogName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_TIME_LOG_SUMMARY;")).ToList();
+
+                foreach (var tl in list)
+                {
+                    var match = summaries.FirstOrDefault(s => 
+                        (!string.IsNullOrWhiteSpace((string)s.LogId) && (string)s.LogId == tl.ObjectID) ||
+                        (!string.IsNullOrWhiteSpace((string)s.DataTableName) && (string)s.DataTableName == tl.__dataTableName) || 
+                        (!string.IsNullOrWhiteSpace((string)s.LogName) && (string)s.LogName == tl.nameLog));
+
+                    if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(tl.description))
+                    {
+                        if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
+                        {
+                            DateTime dt = DateTime.Now;
+                            if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
+                            {
+                                DateTime.TryParse(Convert.ToString(dateObj), out dt);
+                            }
+                            tl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
+                        }
+                    }
+                }
+            }
+            return list;
         }
+
+        // Fallback: If VMX_TIME_LOG is empty but VMX_TIME_LOG_SUMMARY has records from previous imports
+        if (hasSummary > 0)
+        {
+            var rows = await connection.QueryAsync<dynamic>(
+                "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_TIME_LOG_SUMMARY ORDER BY Id DESC;");
+
+            foreach (var r in rows)
+            {
+                DateTime dt = DateTime.Now;
+                if (r.ImportDate != null)
+                    DateTime.TryParse((string)r.ImportDate, out dt);
+
+                double qc = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0;
+
+                list.Add(new TimeLog
+                {
+                    ObjectID = Guid.NewGuid().ToString(),
+                    nameLog = (string)(r.LogName ?? string.Empty),
+                    nameWell = (string)(r.WellName ?? string.Empty),
+                    __WellName = (string)(r.WellName ?? string.Empty),
+                    __dataTableName = (string)(r.DataTableName ?? string.Empty),
+                    comments = (string)(r.ImportStatus ?? string.Empty),
+                    description = $"QC: {qc:F1}% • {dt:dd-MM-yyyy hh:mm tt}",
+                    creationDate = dt.ToString("dd-MMM-yyyy HH:mm:ss")
+                });
+            }
+        }
+
         return list;
     }
 
@@ -483,6 +610,7 @@ public class WellDataRepository : IWellDataRepository
         public int SourceIndex { get; set; } = -1;
         public bool IsDepthColumn { get; set; }
         public bool IsHookloadColumn { get; set; }
+        public bool IsDateTimeColumn { get; set; }
     }
 
     public async Task CreateDynamicTimelogTableAsync(string tableName, List<ChannelMapping> mappings)
@@ -596,7 +724,11 @@ public class WellDataRepository : IWellDataRepository
                 SourceHeader = header,
                 DbColumnName = finalName,
                 IsDepthColumn = targetChannel.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) || targetChannel.Equals("Depth", StringComparison.OrdinalIgnoreCase),
-                IsHookloadColumn = targetChannel.Equals("HKLD", StringComparison.OrdinalIgnoreCase) || targetChannel.Equals("Hookload", StringComparison.OrdinalIgnoreCase)
+                IsHookloadColumn = targetChannel.Equals("HKLD", StringComparison.OrdinalIgnoreCase) || targetChannel.Equals("Hookload", StringComparison.OrdinalIgnoreCase),
+                IsDateTimeColumn = targetChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                                   targetChannel.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                                   targetChannel.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                                   targetChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase)
             });
         }
 
@@ -695,6 +827,8 @@ public class WellDataRepository : IWellDataRepository
         int validRows = 0;
         double? minDepth = null;
         double? maxDepth = null;
+        string? minDate = null;
+        string? maxDate = null;
         const int batchSize = 50000;
 
         DbTransaction? transaction = connection.BeginTransaction();
@@ -781,10 +915,20 @@ public class WellDataRepository : IWellDataRepository
                                         if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
                                         if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
                                     }
+                                    if (columnPlans[i].IsDateTimeColumn)
+                                    {
+                                        if (minDate == null) minDate = raw;
+                                        maxDate = raw;
+                                    }
                                 }
                                 else
                                 {
                                     cmdParams[i].Value = raw;
+                                    if (columnPlans[i].IsDateTimeColumn)
+                                    {
+                                        if (minDate == null) minDate = raw;
+                                        maxDate = raw;
+                                    }
                                 }
                             }
                             else
@@ -880,10 +1024,20 @@ public class WellDataRepository : IWellDataRepository
                                 if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
                                 if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
                             }
+                            if (columnPlans[i].IsDateTimeColumn)
+                            {
+                                if (minDate == null) minDate = raw;
+                                maxDate = raw;
+                            }
                         }
                         else
                         {
                             cmdParams[i].Value = raw.Trim();
+                            if (columnPlans[i].IsDateTimeColumn)
+                            {
+                                if (minDate == null) minDate = raw.Trim();
+                                maxDate = raw.Trim();
+                            }
                         }
                     }
 
@@ -939,7 +1093,9 @@ public class WellDataRepository : IWellDataRepository
             TotalRows = totalRows,
             QcScore = finalQcScore,
             MinDepth = minDepth,
-            MaxDepth = maxDepth
+            MaxDepth = maxDepth,
+            MinDate = minDate,
+            MaxDate = maxDate
         };
     }
 }

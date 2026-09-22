@@ -702,6 +702,7 @@ public partial class ImportDataViewModel : ObservableObject
 
             string targetTableName;
             DepthLog? depthLog = null;
+            TimeLog? timeLog = null;
 
             if (isDepthLog)
             {
@@ -756,7 +757,57 @@ public partial class ImportDataViewModel : ObservableObject
             }
             else
             {
-                targetTableName = $"timelog_{DateTime.UtcNow:yyyyMMddHHmmss}_{new Random().Next(1000, 9999)}";
+                timeLog = new TimeLog
+                {
+                    ObjectID = Guid.NewGuid().ToString(),
+                    nameLog = finalLogName,
+                    nameWell = effectiveWellName,
+                    __WellName = effectiveWellName,
+                    comments = "Success",
+                    creationDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
+                };
+
+                int order = 1;
+                var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var map in activeMappings)
+                {
+                    var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? map.CsvColumnHeader : map.MappedVumaxChannel;
+                    var safeMnemonic = WellDataRepository.SanitizeIdentifier(targetChannel, order - 1);
+                    var finalMnemonic = safeMnemonic;
+                    int suffix = 1;
+                    while (distinctMnemonic.Contains(finalMnemonic))
+                    {
+                        finalMnemonic = $"{safeMnemonic}_{suffix++}";
+                    }
+                    distinctMnemonic.Add(finalMnemonic);
+
+                    bool isDateTime = finalMnemonic.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                                      finalMnemonic.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                                      finalMnemonic.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                                      finalMnemonic.Equals("DATE", StringComparison.OrdinalIgnoreCase);
+
+                    var channel = new LogChannel
+                    {
+                        mnemonic = finalMnemonic,
+                        curveDescription = map.CsvColumnHeader,
+                        typeLogData = isDateTime ? "DateTime" : "Double",
+                        unit = isDateTime ? "" : (finalMnemonic.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : ""),
+                        ColumnOrder = order++,
+                        witsmlMnemonic = finalMnemonic
+                    };
+                    timeLog.logCurves[finalMnemonic] = channel;
+                }
+
+                string lastError = string.Empty;
+                var dataService = _session.GetDataService();
+                bool addSuccess = TimeLogService.addTimeLog(dataService, timeLog, ref lastError);
+                if (!addSuccess)
+                {
+                    MessageBox.Show($"Failed to initialize TimeLog using addTimeLog: {lastError}", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                targetTableName = timeLog.__dataTableName;
             }
 
             var progress = new Progress<ImportProgressReport>(report =>
@@ -782,18 +833,15 @@ public partial class ImportDataViewModel : ObservableObject
 
                 await _repository.LogDepthLogAsync(depthLog);
             }
-            else
+            else if (timeLog != null)
             {
-                var log = new VmxTimeLog
-                {
-                    LogName = finalLogName,
-                    WellName = effectiveWellName,
-                    DataTableName = targetTableName,
-                    ImportStatus = "Success",
-                    QcScore = importResult.QcScore,
-                    ImportDate = DateTime.Now
-                };
-                await _repository.LogVmxTimeLogAsync(log);
+                timeLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                if (!string.IsNullOrEmpty(importResult.MinDate))
+                    timeLog.startIndex = importResult.MinDate;
+                if (!string.IsNullOrEmpty(importResult.MaxDate))
+                    timeLog.endIndex = importResult.MaxDate;
+
+                await _repository.LogTimeLogAsync(timeLog);
             }
 
             MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);

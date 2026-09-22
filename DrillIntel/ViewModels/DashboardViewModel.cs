@@ -118,11 +118,11 @@ public partial class DashboardViewModel : ObservableObject
                 {
                     timeFolder.Children.Add(new WellTreeNode
                     {
-                        Name = tl.LogName,
+                        Name = !string.IsNullOrWhiteSpace(tl.nameLog) ? tl.nameLog : tl.ObjectID,
                         Type = WellTreeNodeType.TimeLog,
                         IconKind = "FileClockOutline",
                         IconColor = "#FF9800",
-                        Subtitle = $"QC: {tl.QcScore:F1}% • {tl.ImportDate:dd-MM-yyyy hh:mm tt}",
+                        Subtitle = !string.IsNullOrWhiteSpace(tl.description) ? tl.description : tl.creationDate,
                         Tag = tl,
                         IsExpanded = false
                     });
@@ -169,6 +169,24 @@ public partial class DashboardViewModel : ObservableObject
                 ? $"{totalLogs} log{(totalLogs > 1 ? "s" : "")} in project" 
                 : "No logs imported yet";
 
+            double GetTimeLogQc(TimeLog t)
+            {
+                if (!string.IsNullOrWhiteSpace(t.description))
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(t.description, @"QC:\s*([0-9.]+)\s*%");
+                    if (m.Success && double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double score))
+                        return score;
+                }
+                return 100.0;
+            }
+
+            DateTime GetTimeLogDate(TimeLog t)
+            {
+                if (!string.IsNullOrWhiteSpace(t.creationDate) && DateTime.TryParse(t.creationDate, out DateTime dt))
+                    return dt;
+                return DateTime.Now;
+            }
+
             double GetDepthLogQc(DepthLog d)
             {
                 if (!string.IsNullOrWhiteSpace(d.description))
@@ -187,7 +205,7 @@ public partial class DashboardViewModel : ObservableObject
                 return DateTime.Now;
             }
 
-            var allQc = timeLogs.Select(t => t.QcScore).Concat(depthLogs.Select(d => GetDepthLogQc(d))).ToList();
+            var allQc = timeLogs.Select(t => GetTimeLogQc(t)).Concat(depthLogs.Select(d => GetDepthLogQc(d))).ToList();
             if (allQc.Count > 0)
             {
                 double avgQc = allQc.Average();
@@ -203,7 +221,14 @@ public partial class DashboardViewModel : ObservableObject
             // Activity Log
             ActivityLog.Clear();
             var combinedActivities = timeLogs
-                .Select(t => new { Text = $"{t.ImportDate:HH:mm} - Imported Timelog '{t.LogName}' for {t.WellName} (QC: {t.QcScore:F1}%)", Date = t.ImportDate })
+                .Select(t =>
+                {
+                    var tDate = GetTimeLogDate(t);
+                    var tQc = GetTimeLogQc(t);
+                    var tName = !string.IsNullOrWhiteSpace(t.nameLog) ? t.nameLog : t.ObjectID;
+                    var wName = !string.IsNullOrWhiteSpace(t.nameWell) ? t.nameWell : t.__WellName;
+                    return new { Text = $"{tDate:HH:mm} - Imported Timelog '{tName}' for {wName} (QC: {tQc:F1}%)", Date = tDate };
+                })
                 .Concat(depthLogs.Select(d =>
                 {
                     var dDate = GetDepthLogDate(d);
@@ -246,9 +271,14 @@ public partial class DashboardViewModel : ObservableObject
         {
             SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(well.WellName, StringComparison.OrdinalIgnoreCase)) ?? well;
         }
-        else if (node.Tag is VmxTimeLog timeLog)
+        else if (node.Tag is TimeLog timeLog)
         {
-            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(timeLog.WellName, StringComparison.OrdinalIgnoreCase));
+            var wellName = !string.IsNullOrWhiteSpace(timeLog.nameWell) ? timeLog.nameWell : timeLog.__WellName;
+            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(wellName, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (node.Tag is VmxTimeLog vmxTimeLog)
+        {
+            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(vmxTimeLog.WellName, StringComparison.OrdinalIgnoreCase));
         }
         else if (node.Tag is DepthLog depthLog)
         {
