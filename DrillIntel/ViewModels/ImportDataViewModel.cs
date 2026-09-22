@@ -11,8 +11,10 @@ using DrillIntel.Services;
 using DrillIntel.Data;
 using System.Data;
 
+using System.Globalization;
 using DrillIntel.Projects;
 using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 
 namespace DrillIntel.ViewModels;
 
@@ -690,9 +692,72 @@ public partial class ImportDataViewModel : ObservableObject
             }
 
             bool isDepthLog = TypeOfDataInput == ImportDataType.DepthLogData;
-            string randomTableName = isDepthLog
-                ? $"depthlog_{DateTime.UtcNow:yyyyMMddHHmmss}_{new Random().Next(1000, 9999)}"
-                : $"timelog_{DateTime.UtcNow:yyyyMMddHHmmss}_{new Random().Next(1000, 9999)}";
+
+            var effectiveWellName = !string.IsNullOrWhiteSpace(ProjectWellName) && ProjectWellName != "Loading Well..."
+                ? ProjectWellName.Trim()
+                : (!string.IsNullOrWhiteSpace(NewWellName) ? NewWellName.Trim() : "Project Well");
+            var finalLogName = string.IsNullOrWhiteSpace(LogName) ? System.IO.Path.GetFileNameWithoutExtension(FileName) : LogName;
+
+            await _repository.EnsureWellAsync(effectiveWellName);
+
+            string targetTableName;
+            DepthLog? depthLog = null;
+
+            if (isDepthLog)
+            {
+                depthLog = new DepthLog
+                {
+                    ObjectID = Guid.NewGuid().ToString(),
+                    nameLog = finalLogName,
+                    nameWell = effectiveWellName,
+                    __WellName = effectiveWellName,
+                    comments = "Success",
+                    creationDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
+                };
+
+                // Populate LogCurves from activeMappings so AddDepthLog creates the schema and VMX_DEPTH_LOG_COLUMNS
+                int order = 1;
+                var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var map in activeMappings)
+                {
+                    var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? map.CsvColumnHeader : map.MappedVumaxChannel;
+                    var safeMnemonic = WellDataRepository.SanitizeIdentifier(targetChannel, order - 1);
+                    var finalMnemonic = safeMnemonic;
+                    int suffix = 1;
+                    while (distinctMnemonic.Contains(finalMnemonic))
+                    {
+                        finalMnemonic = $"{safeMnemonic}_{suffix++}";
+                    }
+                    distinctMnemonic.Add(finalMnemonic);
+
+                    var channel = new LogChannel
+                    {
+                        mnemonic = finalMnemonic,
+                        curveDescription = map.CsvColumnHeader,
+                        typeLogData = "Double",
+                        unit = finalMnemonic.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : "",
+                        ColumnOrder = order++,
+                        witsmlMnemonic = finalMnemonic
+                    };
+                    depthLog.LogCurves[finalMnemonic] = channel;
+                }
+
+                // Call public static bool AddDepthLog(IDataServiceDIntel objDataService, DepthLog objDepthLog, ref string LastError)
+                string lastError = string.Empty;
+                var dataService = _session.GetDataService();
+                bool addSuccess = DepthLogService.AddDepthLog(dataService, depthLog, ref lastError);
+                if (!addSuccess)
+                {
+                    MessageBox.Show($"Failed to initialize DepthLog using AddDepthLog: {lastError}", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    return;
+                }
+
+                targetTableName = depthLog.__dataTableName;
+            }
+            else
+            {
+                targetTableName = $"timelog_{DateTime.UtcNow:yyyyMMddHHmmss}_{new Random().Next(1000, 9999)}";
+            }
 
             var progress = new Progress<ImportProgressReport>(report =>
             {
@@ -704,30 +769,18 @@ public partial class ImportDataViewModel : ObservableObject
             // Execute streaming import directly on background thread to keep UI completely responsive
             var importResult = await Task.Run(async () =>
             {
-                return await _repository.StreamImportDataAsync(randomTableName, FileName, activeMappings, progress);
+                return await _repository.StreamImportDataAsync(targetTableName, FileName, activeMappings, progress);
             });
 
-            var effectiveWellName = !string.IsNullOrWhiteSpace(ProjectWellName) && ProjectWellName != "Loading Well..."
-                ? ProjectWellName.Trim()
-                : (!string.IsNullOrWhiteSpace(NewWellName) ? NewWellName.Trim() : "Project Well");
-            var finalLogName = string.IsNullOrWhiteSpace(LogName) ? System.IO.Path.GetFileNameWithoutExtension(FileName) : LogName;
-
-            await _repository.EnsureWellAsync(effectiveWellName);
-
-            if (isDepthLog)
+            if (isDepthLog && depthLog != null)
             {
-                var log = new DepthLog
-                {
-                    ObjectID = Guid.NewGuid().ToString(),
-                    nameLog = finalLogName,
-                    nameWell = effectiveWellName,
-                    __WellName = effectiveWellName,
-                    __dataTableName = randomTableName,
-                    comments = "Success",
-                    description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}",
-                    creationDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
-                };
-                await _repository.LogDepthLogAsync(log);
+                depthLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                if (importResult.MinDepth.HasValue)
+                    depthLog.startIndex = importResult.MinDepth.Value.ToString(CultureInfo.InvariantCulture);
+                if (importResult.MaxDepth.HasValue)
+                    depthLog.endIndex = importResult.MaxDepth.Value.ToString(CultureInfo.InvariantCulture);
+
+                await _repository.LogDepthLogAsync(depthLog);
             }
             else
             {
@@ -735,7 +788,7 @@ public partial class ImportDataViewModel : ObservableObject
                 {
                     LogName = finalLogName,
                     WellName = effectiveWellName,
-                    DataTableName = randomTableName,
+                    DataTableName = targetTableName,
                     ImportStatus = "Success",
                     QcScore = importResult.QcScore,
                     ImportDate = DateTime.Now
@@ -743,7 +796,7 @@ public partial class ImportDataViewModel : ObservableObject
                 await _repository.LogVmxTimeLogAsync(log);
             }
 
-            MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {randomTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             
             ColumnMappings.Clear();
             FileName = string.Empty;

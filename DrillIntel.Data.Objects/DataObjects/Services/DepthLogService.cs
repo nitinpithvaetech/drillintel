@@ -332,7 +332,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     {
                         foreach (LogChannel objChannel in objDepthLog.LogCurves.Values)
                         {
-                        strSQL = "INSERT INTO VMX_DEPTH_LOG_COLUMNS (WELL_ID,WELLBORE_ID,LOG_ID,MNEMONIC,CHANNEL_NAME,DATA_TYPE,UNIT,UNIT_ID,VUMAX_UNIT_ID,VALUE_TYPE,VALUE_QUERY,WITSML_MNEMONIC,CREATED_BY,CREATED_DATE,MODIFIED_BY,MODIFIED_DATE,WRITE_BACK,PI_MNEMONIC,AXIS_DATA_COUNT,COLUMN_ORDER,PARENT_MNEMONIC) VALUES(";
+                        strSQL = "INSERT OR REPLACE INTO VMX_DEPTH_LOG_COLUMNS (WELL_ID,WELLBORE_ID,LOG_ID,MNEMONIC,CHANNEL_NAME,DATA_TYPE,UNIT,UNIT_ID,VUMAX_UNIT_ID,VALUE_TYPE,VALUE_QUERY,WITSML_MNEMONIC,CREATED_BY,CREATED_DATE,MODIFIED_BY,MODIFIED_DATE,WRITE_BACK,PI_MNEMONIC,AXIS_DATA_COUNT,COLUMN_ORDER,PARENT_MNEMONIC) VALUES(";
                         strSQL += "'" + objDepthLog.WellID + "',";
                         strSQL += "'" + objDepthLog.WellboreID + "',";
                         strSQL += "'" + objDepthLog.ObjectID + "',";
@@ -416,6 +416,15 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     //    }
                     //}
                     // #####################################################################################
+
+                    if (double.TryParse(objDepthLog.startIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double minD) &&
+                        double.TryParse(objDepthLog.endIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double maxD))
+                    {
+                        string updExtentsSql = "UPDATE VMX_DEPTH_LOG SET MIN_DEPTH = " + minD.ToString(CultureInfo.InvariantCulture) +
+                                               ", MAX_DEPTH = " + maxD.ToString(CultureInfo.InvariantCulture) +
+                                               " WHERE LOG_ID = '" + objDepthLog.ObjectID.Replace("'", "''") + "';";
+                        objDataService.ExecuteNonQuery(updExtentsSql);
+                    }
 
                     return true;
                 }

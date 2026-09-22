@@ -137,7 +137,23 @@ public class WellDataRepository : IWellDataRepository
 
         // 1. Persist to official VMX_DEPTH_LOG table via DepthLogService
         string lastError = string.Empty;
-        DepthLogService.AddDepthLog(dataService, log, ref lastError);
+        bool addSuccess = DepthLogService.AddDepthLog(dataService, log, ref lastError);
+        if (!addSuccess)
+        {
+            throw new InvalidOperationException($"DepthLogService.AddDepthLog failed: {lastError}");
+        }
+
+        if (double.TryParse(log.startIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double minD) &&
+            double.TryParse(log.endIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double maxD))
+        {
+            try
+            {
+                await connection.ExecuteAsync(
+                    "UPDATE VMX_DEPTH_LOG SET MIN_DEPTH = @minD, MAX_DEPTH = @maxD WHERE LOG_ID = @logId;",
+                    new { minD, maxD, logId = log.ObjectID });
+            }
+            catch { }
+        }
 
         // 2. Also record in separate summary table VMX_DEPTH_LOG_SUMMARY for metadata and fast access
         var createMaster = @"
@@ -440,7 +456,7 @@ public class WellDataRepository : IWellDataRepository
         return new List<Well>();
     }
 
-    private static string SanitizeIdentifier(string name, int index)
+    public static string SanitizeIdentifier(string name, int index)
     {
         if (string.IsNullOrWhiteSpace(name))
             return $"col_{index + 1}";
@@ -584,29 +600,87 @@ public class WellDataRepository : IWellDataRepository
             });
         }
 
-        // 2. Create Dynamic Table
-        var sb = new StringBuilder();
-        sb.AppendLine($"CREATE TABLE IF NOT EXISTS [{tableName}] (");
-        sb.Append("  [Id] INTEGER PRIMARY KEY AUTOINCREMENT");
-        foreach (var plan in columnPlans)
-        {
-            sb.Append($",\n  [{plan.DbColumnName}] NUMERIC");
-        }
-        sb.AppendLine("\n);");
+        // 2. Check if table already exists (e.g. created by DepthLogService.AddDepthLog)
+        bool tableExists = false;
+        var existingTableCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        using (var createCmd = connection.CreateCommand())
+        using (var checkCmd = connection.CreateCommand())
         {
-            createCmd.CommandText = sb.ToString();
-            createCmd.ExecuteNonQuery();
+            checkCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@tName;";
+            var pName = checkCmd.CreateParameter();
+            pName.ParameterName = "@tName";
+            pName.Value = tableName;
+            checkCmd.Parameters.Add(pName);
+            tableExists = Convert.ToInt32(checkCmd.ExecuteScalar()) > 0;
         }
+
+        if (!tableExists)
+        {
+            // Create Dynamic Table
+            var sb = new StringBuilder();
+            sb.AppendLine($"CREATE TABLE IF NOT EXISTS [{tableName}] (");
+            sb.Append("  [Id] INTEGER PRIMARY KEY AUTOINCREMENT");
+            foreach (var plan in columnPlans)
+            {
+                sb.Append($",\n  [{plan.DbColumnName}] NUMERIC");
+            }
+            sb.AppendLine("\n);");
+
+            using (var createCmd = connection.CreateCommand())
+            {
+                createCmd.CommandText = sb.ToString();
+                createCmd.ExecuteNonQuery();
+            }
+        }
+        else
+        {
+            using (var infoCmd = connection.CreateCommand())
+            {
+                infoCmd.CommandText = $"PRAGMA table_info([{tableName}]);";
+                using var infoReader = infoCmd.ExecuteReader();
+                while (infoReader.Read())
+                {
+                    var cName = infoReader["name"]?.ToString();
+                    if (!string.IsNullOrEmpty(cName))
+                        existingTableCols.Add(cName);
+                }
+            }
+        }
+
+        bool hasDataIndex = existingTableCols.Contains("DATA_INDEX");
 
         // 3. Prepare Parameterized Insert Command
-        var colNames = string.Join(", ", columnPlans.Select(c => $"[{c.DbColumnName}]"));
-        var paramNames = string.Join(", ", Enumerable.Range(0, columnPlans.Count).Select(i => $"@p{i}"));
-        var insertSql = $"INSERT INTO [{tableName}] ({colNames}) VALUES ({paramNames});";
+        var insertCols = new List<string>();
+        var insertParams = new List<string>();
+
+        if (hasDataIndex)
+        {
+            insertCols.Add("[DATA_INDEX]");
+            insertParams.Add("@pDataIndex");
+        }
+
+        for (int i = 0; i < columnPlans.Count; i++)
+        {
+            insertCols.Add($"[{columnPlans[i].DbColumnName}]");
+            insertParams.Add($"@p{i}");
+        }
+
+        var colNames = string.Join(", ", insertCols);
+        var paramNames = string.Join(", ", insertParams);
+        var insertSql = tableExists
+            ? $"INSERT OR REPLACE INTO [{tableName}] ({colNames}) VALUES ({paramNames});"
+            : $"INSERT INTO [{tableName}] ({colNames}) VALUES ({paramNames});";
 
         using var insertCmd = connection.CreateCommand();
         insertCmd.CommandText = insertSql;
+
+        DbParameter? pDataIndex = null;
+        if (hasDataIndex)
+        {
+            pDataIndex = insertCmd.CreateParameter();
+            pDataIndex.ParameterName = "@pDataIndex";
+            insertCmd.Parameters.Add(pDataIndex);
+        }
 
         var cmdParams = new DbParameter[columnPlans.Count];
         for (int i = 0; i < columnPlans.Count; i++)
@@ -619,6 +693,8 @@ public class WellDataRepository : IWellDataRepository
 
         int totalRows = 0;
         int validRows = 0;
+        double? minDepth = null;
+        double? maxDepth = null;
         const int batchSize = 50000;
 
         DbTransaction? transaction = connection.BeginTransaction();
@@ -679,6 +755,10 @@ public class WellDataRepository : IWellDataRepository
                     {
                         var tokens = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                         totalRows++;
+                        if (hasDataIndex && pDataIndex != null)
+                        {
+                            pDataIndex.Value = totalRows;
+                        }
                         bool isRowValid = true;
 
                         for (int i = 0; i < columnPlans.Count; i++)
@@ -696,6 +776,11 @@ public class WellDataRepository : IWellDataRepository
                                 {
                                     cmdParams[i].Value = dblVal;
                                     if (columnPlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
+                                    if (columnPlans[i].IsDepthColumn)
+                                    {
+                                        if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
+                                        if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
+                                    }
                                 }
                                 else
                                 {
@@ -770,6 +855,10 @@ public class WellDataRepository : IWellDataRepository
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     totalRows++;
+                    if (hasDataIndex && pDataIndex != null)
+                    {
+                        pDataIndex.Value = totalRows;
+                    }
                     bool isRowValid = true;
 
                     for (int i = 0; i < columnPlans.Count; i++)
@@ -786,6 +875,11 @@ public class WellDataRepository : IWellDataRepository
                         {
                             cmdParams[i].Value = dblVal;
                             if (columnPlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
+                            if (columnPlans[i].IsDepthColumn)
+                            {
+                                if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
+                                if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
+                            }
                         }
                         else
                         {
@@ -843,7 +937,9 @@ public class WellDataRepository : IWellDataRepository
         {
             TableName = tableName,
             TotalRows = totalRows,
-            QcScore = finalQcScore
+            QcScore = finalQcScore,
+            MinDepth = minDepth,
+            MaxDepth = maxDepth
         };
     }
 }

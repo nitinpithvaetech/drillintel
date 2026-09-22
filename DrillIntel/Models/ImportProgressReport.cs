@@ -15,5 +15,7 @@ public class StreamImportResult
     public int TotalRows { get; set; }
     public double QcScore { get; set; }
     public string TableName { get; set; } = string.Empty;
+    public double? MinDepth { get; set; }
+    public double? MaxDepth { get; set; }
 }
 
