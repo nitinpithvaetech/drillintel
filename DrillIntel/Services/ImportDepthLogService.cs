@@ -393,6 +393,12 @@ public class ImportDepthLogService : IImportDepthLogService
                 }
             }
 
+            // Validation: DEPTH channel mapping is mandatory before update execution
+            if (!activeMappings.Any(m => m.MappedVumaxChannel.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(m.CsvColumnHeader)))
+            {
+                throw new InvalidOperationException("You must map and select DEPTH channel. Please map and select the depth channel to continue");
+            }
+
             // Restrictions:
             // Do not create any new columns.
             // Do not alter existing column names in the target table.

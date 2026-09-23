@@ -201,7 +201,9 @@ public partial class ImportDataViewModel : ObservableObject
     public string StartImportButtonText => OperationType == OperationType.UpdateData ? "UPDATE LOG" : "START IMPORT";
 
     public string MappingSubtitle => OperationType == OperationType.UpdateData
-        ? "Update Mode: Only mapped VuMax channels will be updated. Unmapped existing columns retain current database values. No new columns will be created."
+        ? (TypeOfDataInput == ImportDataType.DepthLogData
+            ? "Update Mode: Only the DEPTH channel mapping is required. Unmapped existing columns retain current database values. No new columns will be created."
+            : "Update Mode: Only mapped VuMax channels will be updated. Unmapped existing columns retain current database values. No new columns will be created.")
         : "We have auto-mapped standard VuMax channels. Unmapped columns will be created as dynamic custom fields.";
 
     public bool ShowDateTimeSettings => TypeOfDataInput == ImportDataType.TimeLogData;
@@ -408,6 +410,26 @@ public partial class ImportDataViewModel : ObservableObject
         set => SetProperty(ref _previewRows, value);
     }
     public ObservableCollection<ColumnMappingRow> ColumnMappings { get; } = new();
+
+    public static List<MappingChannels> GetDefaultMappingChannels(ImportDataType dataType)
+    {
+        return dataType == ImportDataType.DepthLogData
+            ? new List<MappingChannels>
+              {
+                  new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" }
+              }
+            : new List<MappingChannels>
+              {
+                  new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
+                  new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
+                  new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
+                  new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
+                  new MappingChannels { Mnemonic = "BPOS",  ChannelName = "Block Position" },
+                  new MappingChannels { Mnemonic = "CIRC",  ChannelName = "Circulation" },
+                  new MappingChannels { Mnemonic = "STOR",  ChannelName = "Surface Torque" },
+                  new MappingChannels { Mnemonic = "HDTH",  ChannelName = "Hole Depth" },
+              };
+    }
 
     private bool _isDateTimeMappingDone;
     public bool IsDateTimeMappingDone
@@ -687,11 +709,12 @@ public partial class ImportDataViewModel : ObservableObject
                     return;
                 }
 
-                var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+                var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+                var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)) ?? ColumnMappings.FirstOrDefault();
                 if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
                 {
                     MessageBox.Show(
-                        "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                        $"You must map and select {depthMapping?.VuMaxColumnID ?? depthMnemonic} channel. Please map and select the depth channel to continue",
                         "Import Data",
                         MessageBoxButton.OK,
                         MessageBoxImage.Exclamation);
@@ -800,38 +823,37 @@ public partial class ImportDataViewModel : ObservableObject
             var sourceOptions = new List<string> { "" };
             sourceOptions.AddRange(headers);
 
-            if (TypeOfDataInput == ImportDataType.DepthLogData && OperationType == OperationType.UpdateData && SelectedExistingDepthLog != null)
+            var targetOptions = GetDefaultMappingChannels(TypeOfDataInput);
+            var depthMnemonic = targetOptions.FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+
+            bool needsRebuild = ColumnMappings.Count == 0 ||
+                                (TypeOfDataInput == ImportDataType.DepthLogData && (ColumnMappings.Count != targetOptions.Count || !ColumnMappings.Any(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)))) ||
+                                (TypeOfDataInput == ImportDataType.TimeLogData && ColumnMappings.Count != targetOptions.Count);
+
+            if (needsRebuild)
             {
-                var existingCols = await _repository.GetTableColumnsAsync(SelectedExistingDepthLog.__dataTableName);
-                var targetCols = existingCols.Where(c => !c.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase)).ToList();
-
-                if (!targetCols.Any(c => c.Equals("DEPTH", StringComparison.OrdinalIgnoreCase)))
-                {
-                    targetCols.Insert(0, "DEPTH");
-                }
-
                 var previousSelections = ColumnMappings.ToDictionary(m => m.VuMaxColumnID, m => m.SourceColumnName, StringComparer.OrdinalIgnoreCase);
 
                 ColumnMappings.Clear();
-                foreach (var colName in targetCols)
+
+                foreach (var t in targetOptions)
                 {
-                    var row = new ColumnMappingRow { VuMaxColumnID = colName };
+                    var row = new ColumnMappingRow { VuMaxColumnID = t.Mnemonic };
                     foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
 
-                    if (previousSelections.TryGetValue(colName, out var prev) && !string.IsNullOrEmpty(prev) && headers.Contains(prev))
+                    if (previousSelections.TryGetValue(t.Mnemonic, out var prev) && !string.IsNullOrEmpty(prev) && headers.Contains(prev))
                     {
                         row.SourceColumnName = prev;
+                        t.MappedMnemonic = prev;
                     }
                     else
                     {
-                        // Mapping Rules:
-                        // "If the VuMax column name matches the imported file column name, auto-map and update.
-                        // If no match is found, keep current logic as it is."
+                        // Auto-map based on exact match or common naming conventions
                         var dictMatch = headers.FirstOrDefault(h =>
-                            h.Equals(colName, StringComparison.OrdinalIgnoreCase) ||
-                            h.StartsWith(colName + "#", StringComparison.OrdinalIgnoreCase) ||
-                            h.StartsWith(colName + "_", StringComparison.OrdinalIgnoreCase) ||
-                            (colName.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) && (
+                            h.Equals(t.Mnemonic, StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(t.Mnemonic + "#", StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(t.Mnemonic + "_", StringComparison.OrdinalIgnoreCase) ||
+                            (t.Mnemonic.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase) && (
                                 h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) ||
                                 h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
                                 h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
@@ -841,61 +863,10 @@ public partial class ImportDataViewModel : ObservableObject
                         if (dictMatch != null)
                         {
                             row.SourceColumnName = dictMatch;
+                            t.MappedMnemonic = dictMatch;
                         }
                     }
 
-                    ColumnMappings.Add(row);
-                }
-            }
-            else if (ColumnMappings.Count == 0)
-            {
-                var targetOptions = TypeOfDataInput == ImportDataType.DepthLogData
-                    ? new List<MappingChannels>
-                      {
-                          new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
-                          //new MappingChannels { Mnemonic = "GAMMARAY", ChannelName = "Gamma Ray" },
-                          //new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
-                          //new MappingChannels { Mnemonic = "WOB",   ChannelName = "Weight on Bit" },
-                          //new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
-                          //new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
-                          //new MappingChannels { Mnemonic = "TORQ",  ChannelName = "Torque" },
-                          //new MappingChannels { Mnemonic = "ROP",   ChannelName = "Rate of Penetration" },
-                      }
-                    : new List<MappingChannels>
-                      {
-                          new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
-                          new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
-                          new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
-                          new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
-                          new MappingChannels { Mnemonic = "BPOS",  ChannelName = "Block Position" },
-                          new MappingChannels { Mnemonic = "CIRC",  ChannelName = "Circulation" },
-                          new MappingChannels { Mnemonic = "STOR",  ChannelName = "Surface Torque" },
-                          new MappingChannels { Mnemonic = "HDTH",  ChannelName = "Hole Depth" },
-                      };
-
-                foreach (var t in targetOptions)
-                {
-                    var row = new ColumnMappingRow { VuMaxColumnID = t.Mnemonic };
-                    foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
-                    
-                    // Auto-map based on exact match or common naming conventions
-                    var dictMatch = headers.FirstOrDefault(h => 
-                        h.Equals(t.Mnemonic, StringComparison.OrdinalIgnoreCase) ||
-                        h.StartsWith(t.Mnemonic + "#", StringComparison.OrdinalIgnoreCase) ||
-                        h.StartsWith(t.Mnemonic + "_", StringComparison.OrdinalIgnoreCase) ||
-                        (t.Mnemonic == "DEPTH" && (
-                            h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) || 
-                            h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
-                            h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
-                            h.Equals("MeasuredDepth", StringComparison.OrdinalIgnoreCase) ||
-                            h.Equals("Measured Depth", StringComparison.OrdinalIgnoreCase))));
-
-                    if (dictMatch != null)
-                    {
-                        row.SourceColumnName = dictMatch;
-                        t.MappedMnemonic = dictMatch;
-                    }
-                    
                     row.PropertyChanged += (sender, args) =>
                     {
                         if (args.PropertyName == nameof(ColumnMappingRow.SourceColumnName))
@@ -936,7 +907,7 @@ public partial class ImportDataViewModel : ObservableObject
                             h.Equals(row.VuMaxColumnID, StringComparison.OrdinalIgnoreCase) ||
                             h.StartsWith(row.VuMaxColumnID + "#", StringComparison.OrdinalIgnoreCase) ||
                             h.StartsWith(row.VuMaxColumnID + "_", StringComparison.OrdinalIgnoreCase) ||
-                            (row.VuMaxColumnID == "DEPTH" && (
+                            (row.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase) && (
                                 h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) || 
                                 h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
                                 h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
@@ -1054,7 +1025,7 @@ public partial class ImportDataViewModel : ObservableObject
                     {
                         existing.SourceColumnName = sourceColName;
                     }
-                    else
+                    else if (TypeOfDataInput != ImportDataType.DepthLogData)
                     {
                         var newRow = new ColumnMappingRow { VuMaxColumnID = targetMnemonic, SourceColumnName = sourceColName };
                         foreach (var s in sourceOptions) newRow.AvailableSourceColumns.Add(s);
@@ -1076,7 +1047,7 @@ public partial class ImportDataViewModel : ObservableObject
                     {
                         existing.SourceColumnName = matchedCol;
                     }
-                    else
+                    else if (TypeOfDataInput != ImportDataType.DepthLogData)
                     {
                         var newRow = new ColumnMappingRow { VuMaxColumnID = targetMnemonic, SourceColumnName = matchedCol };
                         foreach (var s in sourceOptions) newRow.AvailableSourceColumns.Add(s);
@@ -1123,11 +1094,12 @@ public partial class ImportDataViewModel : ObservableObject
                 return;
             }
 
-            var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+            var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+            var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)) ?? ColumnMappings.FirstOrDefault();
             if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
             {
                 MessageBox.Show(
-                    "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                    $"You must map and select {depthMapping?.VuMaxColumnID ?? depthMnemonic} channel. Please map and select the depth channel to continue",
                     "Import Data",
                     MessageBoxButton.OK,
                     MessageBoxImage.Exclamation);
@@ -1143,6 +1115,8 @@ public partial class ImportDataViewModel : ObservableObject
         try
         {
             bool isDepthLog = TypeOfDataInput == ImportDataType.DepthLogData;
+            var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+            var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)) ?? ColumnMappings.FirstOrDefault();
 
             if (isDepthLog && OperationType == OperationType.UpdateData)
             {
@@ -1155,25 +1129,53 @@ public partial class ImportDataViewModel : ObservableObject
                 string updateTargetTableName = SelectedExistingDepthLog.__dataTableName;
                 var existingCols = new HashSet<string>(await _repository.GetTableColumnsAsync(updateTargetTableName), StringComparer.OrdinalIgnoreCase);
 
+                if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+                {
+                    MessageBox.Show(
+                        $"You must map and select {depthMapping?.VuMaxColumnID ?? depthMnemonic} channel. Please map and select the depth channel to continue",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+
                 // Update Logic:
-                // For each mapped column:
-                // Take the Source Column value from the uploaded file.
-                // Replace/update the value in the corresponding VuMax mapped column.
-                // Only update VuMax columns when a valid mapping exists.
+                // 1. Mandatory mapped DEPTH channel
+                // Take the Source Column value from the uploaded file and align with existing DEPTH channel.
+                // 2. Auto-align matching channels:
+                // For other existing columns in target table, auto-match against file headers without user prompting.
                 // Restrictions:
                 // Do not create any new columns.
                 // Do not alter existing column names in the target table (e.g., depthLog11026259#41675093).
-                // Only update values in mapped VuMax columns.
-                var updateMappings = new List<ChannelMapping>();
-                foreach (var mapping in ColumnMappings)
+                // Unmapped columns retain their database values.
+                var updateMappings = new List<ChannelMapping>
                 {
-                    if (!string.IsNullOrWhiteSpace(mapping.SourceColumnName) &&
-                        existingCols.Contains(mapping.VuMaxColumnID))
+                    new ChannelMapping
+                    {
+                        CsvColumnHeader = depthMapping.SourceColumnName,
+                        MappedVumaxChannel = depthMapping.VuMaxColumnID
+                    }
+                };
+
+                foreach (var vuCol in existingCols)
+                {
+                    if (vuCol.Equals(depthMapping.VuMaxColumnID, StringComparison.OrdinalIgnoreCase) ||
+                        vuCol.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var matchedHeader = PreviewColumns.FirstOrDefault(h =>
+                        h.Equals(vuCol, StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(vuCol + "#", StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(vuCol + "_", StringComparison.OrdinalIgnoreCase));
+
+                    if (matchedHeader != null)
                     {
                         updateMappings.Add(new ChannelMapping
                         {
-                            CsvColumnHeader = mapping.SourceColumnName,
-                            MappedVumaxChannel = mapping.VuMaxColumnID
+                            CsvColumnHeader = matchedHeader,
+                            MappedVumaxChannel = vuCol
                         });
                     }
                 }
@@ -1237,8 +1239,9 @@ public partial class ImportDataViewModel : ObservableObject
             var mappedVuMaxTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // 1. Process mapped VuMax channels first (prioritizing DEPTH channel)
+            var depthTarget = depthMapping?.VuMaxColumnID ?? depthMnemonic;
             var orderedMappings = ColumnMappings
-                .OrderByDescending(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(m => m.VuMaxColumnID.Equals(depthTarget, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             foreach (var mapping in orderedMappings)
@@ -1322,7 +1325,7 @@ public partial class ImportDataViewModel : ObservableObject
                         mnemonic = finalMnemonic,
                         curveDescription = map.CsvColumnHeader,
                         typeLogData = "Double",
-                        unit = finalMnemonic.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : "",
+                        unit = finalMnemonic.Equals(depthTarget, StringComparison.OrdinalIgnoreCase) ? "m" : "",
                         ColumnOrder = order++,
                         witsmlMnemonic = finalMnemonic
                     };

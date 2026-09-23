@@ -10,6 +10,7 @@ using DrillIntel.Data.Objects.DataObjects.Services;
 using DrillIntel.Models;
 using DrillIntel.Projects;
 using DrillIntel.Services;
+using DrillIntel.ViewModels;
 using Xunit;
 
 namespace DrillIntel.Tests;
@@ -374,5 +375,213 @@ public class DepthLogUpdateTests : IDisposable
 
         File.Delete(initialCsv);
         File.Delete(updateCsv);
+    }
+
+    [Fact]
+    public async Task UpdateExistingLog_MapColumnsScreen_ContainsOnlyDepthChannel()
+    {
+        // 1. Create an existing DepthLog with multiple channels
+        string initialCsv = Path.Combine(Path.GetTempPath(), $"multi_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(initialCsv,
+            "DEPTH,ROP,HKLD,TORQ,SPPA\n" +
+            "100.0,15.0,50.0,2000,1500\n" +
+            "101.0,16.0,52.0,2100,1550\n");
+
+        var initialOptions = new DepthLogImportOptions
+        {
+            LogName = "MultiChannel_DepthLog",
+            WellName = "Well_Multi_Test",
+            ColumnHeadingRow = 1,
+            ImportFromRow = 2
+        };
+
+        var initialLogs = await _depthLogService.ImportFromFileAsync(initialCsv, initialOptions);
+        var initialLog = initialLogs[0];
+
+        // 2. Prepare update file
+        string updateCsv = Path.Combine(Path.GetTempPath(), $"update_multi_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(updateCsv,
+            "DEPTH,ROP,HKLD,TORQ,SPPA\n" +
+            "100.0,25.0,60.0,2200,1600\n");
+
+        try
+        {
+            // 3. Initialize ViewModel in Update Mode
+            var vm = new ImportDataViewModel(_session)
+            {
+                TypeOfDataInput = ImportDataType.DepthLogData,
+                OperationType = OperationType.UpdateData,
+                SelectedExistingDepthLog = initialLog
+            };
+
+            vm.DropFileCommand.Execute(updateCsv);
+
+            int attempts = 0;
+            while (vm.IsLoading && attempts++ < 50)
+            {
+                await Task.Delay(50);
+            }
+
+            // 4. Verify: "Map Columns" screen contains ONLY the DEPTH channel!
+            Assert.Single(vm.ColumnMappings);
+            Assert.Equal("DEPTH", vm.ColumnMappings[0].VuMaxColumnID);
+            Assert.Equal("DEPTH", vm.ColumnMappings[0].SourceColumnName);
+
+            // Verify other channels are NOT in ColumnMappings
+            Assert.DoesNotContain(vm.ColumnMappings, m => m.VuMaxColumnID == "ROP");
+            Assert.DoesNotContain(vm.ColumnMappings, m => m.VuMaxColumnID == "HKLD");
+            Assert.DoesNotContain(vm.ColumnMappings, m => m.VuMaxColumnID == "TORQ");
+            Assert.DoesNotContain(vm.ColumnMappings, m => m.VuMaxColumnID == "SPPA");
+
+            // Verify toggling to NewData and back preserves single DEPTH channel requirement
+            vm.IsNewDataOperation = true;
+            attempts = 0;
+            while (vm.IsLoading && attempts++ < 50)
+            {
+                await Task.Delay(50);
+            }
+            Assert.Single(vm.ColumnMappings);
+            Assert.Equal("DEPTH", vm.ColumnMappings[0].VuMaxColumnID);
+
+            vm.IsUpdateDataOperation = true;
+            attempts = 0;
+            while (vm.IsLoading && attempts++ < 50)
+            {
+                await Task.Delay(50);
+            }
+            Assert.Single(vm.ColumnMappings);
+            Assert.Equal("DEPTH", vm.ColumnMappings[0].VuMaxColumnID);
+        }
+        finally
+        {
+            File.Delete(initialCsv);
+            File.Delete(updateCsv);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateExistingLog_StrictValidation_ThrowsWhenDepthChannelUnmapped()
+    {
+        // 1. Create an existing DepthLog
+        string initialCsv = Path.Combine(Path.GetTempPath(), $"initial_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(initialCsv,
+            "DEPTH,ROP\n" +
+            "100.0,15.0\n");
+
+        var initialOptions = new DepthLogImportOptions
+        {
+            LogName = "DepthValidation_Log",
+            WellName = "Well_DepthVal_Test",
+            ColumnHeadingRow = 1,
+            ImportFromRow = 2
+        };
+
+        var initialLogs = await _depthLogService.ImportFromFileAsync(initialCsv, initialOptions);
+        var initialLog = initialLogs[0];
+
+        // 2. Prepare file where depth column has an unrecognized header
+        string updateCsv = Path.Combine(Path.GetTempPath(), $"update_unrecognized_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(updateCsv,
+            "CUSTOM_POS,ROP\n" +
+            "100.0,99.0\n");
+
+        try
+        {
+            // Update options with no DEPTH mapping provided
+            var updateOptions = new DepthLogImportOptions
+            {
+                OperationType = OperationType.UpdateData,
+                LogName = "DepthValidation_Log",
+                TargetTableName = initialLog.__dataTableName,
+                ColumnHeadingRow = 1,
+                ImportFromRow = 2,
+                ColumnMappings = new Dictionary<string, string>
+                {
+                    ["ROP"] = "ROP"
+                    // DEPTH intentionally omitted and not auto-detectable
+                }
+            };
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await _depthLogService.ImportFromFileAsync(updateCsv, updateOptions);
+            });
+
+            Assert.Contains("You must map and select DEPTH channel. Please map and select the depth channel to continue", ex.Message);
+        }
+        finally
+        {
+            File.Delete(initialCsv);
+            File.Delete(updateCsv);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateExistingLog_OnlyDepthMapped_AutoAlignsCurves_PreservesUnmapped_NoNewColumns()
+    {
+        // 1. Initial DepthLog with DEPTH, ROP, HKLD
+        string initialCsv = Path.Combine(Path.GetTempPath(), $"initial_auto_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(initialCsv,
+            "DEPTH,ROP,HKLD\n" +
+            "300.0,10.0,80.0\n" +
+            "301.0,12.0,85.0\n");
+
+        var initialOptions = new DepthLogImportOptions
+        {
+            LogName = "AutoAlign_Log",
+            WellName = "Well_AutoAlign_Test",
+            ColumnHeadingRow = 1,
+            ImportFromRow = 2
+        };
+
+        var initialLogs = await _depthLogService.ImportFromFileAsync(initialCsv, initialOptions);
+        var initialLog = initialLogs[0];
+        string targetTable = initialLog.__dataTableName;
+
+        // 2. Update file: depth column is named 'MY_CUSTOM_DEPTH', ROP is present, EXTRA_COL is present, HKLD is absent
+        string updateCsv = Path.Combine(Path.GetTempPath(), $"update_auto_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(updateCsv,
+            "MY_CUSTOM_DEPTH,ROP,EXTRA_COL\n" +
+            "300.0,88.0,9999\n" +
+            "301.0,92.0,9999\n");
+
+        try
+        {
+            // Only map DEPTH to MY_CUSTOM_DEPTH - do NOT map ROP or any other channels
+            var updateOptions = new DepthLogImportOptions
+            {
+                OperationType = OperationType.UpdateData,
+                LogName = "AutoAlign_Log",
+                TargetTableName = targetTable,
+                ColumnHeadingRow = 1,
+                ImportFromRow = 2,
+                ManualDepthColumnName = "MY_CUSTOM_DEPTH"
+            };
+
+            await _depthLogService.ImportFromFileAsync(updateCsv, updateOptions);
+
+            // 3. Verify:
+            // a) DEPTH aligned and updated
+            // b) ROP auto-aligned and updated
+            // c) HKLD preserved as-is
+            // d) EXTRA_COL was NOT created
+            var tableCols = await _repo.GetTableColumnsAsync(targetTable);
+            Assert.DoesNotContain("EXTRA_COL", tableCols, StringComparer.OrdinalIgnoreCase);
+
+            var conn = _session.GetConnection();
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT ROP, HKLD FROM [{targetTable}] WHERE DEPTH = 300.0;";
+                using var rdr = cmd.ExecuteReader();
+                Assert.True(rdr.Read());
+                Assert.Equal(88.0, Convert.ToDouble(rdr["ROP"])); // Auto-aligned from file without user mapping prompt
+                Assert.Equal(80.0, Convert.ToDouble(rdr["HKLD"])); // Preserved database value
+            }
+        }
+        finally
+        {
+            File.Delete(initialCsv);
+            File.Delete(updateCsv);
+        }
     }
 }
