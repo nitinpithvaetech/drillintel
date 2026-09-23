@@ -158,8 +158,8 @@ public class ImportSettings
     public string MappingFileName { get; set; } = string.Empty;
 
     // ----- MapColumns tab -----
-    public int ImportFromRow { get; set; } = 1;
-    public int ColumnHeadingRow { get; set; } = 1;
+    public int? ImportFromRow { get; set; } = 2;
+    public int? ColumnHeadingRow { get; set; } = 1;
     public bool IsDatetimeInSeperatorColumn { get; set; }
     public string DatetimeSeparator { get; set; } = string.Empty;
     public int DateColNo { get; set; }

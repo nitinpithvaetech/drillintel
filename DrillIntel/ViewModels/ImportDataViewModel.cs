@@ -204,6 +204,10 @@ public partial class ImportDataViewModel : ObservableObject
         ? "Update Mode: Only mapped VuMax channels will be updated. Unmapped existing columns retain current database values. No new columns will be created."
         : "We have auto-mapped standard VuMax channels. Unmapped columns will be created as dynamic custom fields.";
 
+    public bool ShowDateTimeSettings => TypeOfDataInput == ImportDataType.TimeLogData;
+    public bool IsDepthLog => TypeOfDataInput == ImportDataType.DepthLogData;
+    public bool IsTimeLog => TypeOfDataInput == ImportDataType.TimeLogData;
+
     public ImportDataType TypeOfDataInput
     {
         get => Settings.TypeOfDataInput;
@@ -211,7 +215,19 @@ public partial class ImportDataViewModel : ObservableObject
         {
             if (Settings.TypeOfDataInput == value) return;
             Settings.TypeOfDataInput = value;
+            if (value == ImportDataType.DepthLogData)
+            {
+                if (!Settings.ColumnHeadingRow.HasValue || Settings.ColumnHeadingRow <= 0)
+                    Settings.ColumnHeadingRow = 1;
+                if (!Settings.ImportFromRow.HasValue || Settings.ImportFromRow <= 0)
+                    Settings.ImportFromRow = 2;
+            }
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowDateTimeSettings));
+            OnPropertyChanged(nameof(IsDepthLog));
+            OnPropertyChanged(nameof(IsTimeLog));
+            OnPropertyChanged(nameof(ImportFromRow));
+            OnPropertyChanged(nameof(ColumnHeadingRow));
             OnPropertyChanged(nameof(ShowObjectTab));
             OnPropertyChanged(nameof(ShowLogTab));
             OnPropertyChanged(nameof(IsTrajectoryOrMudlog));
@@ -324,7 +340,7 @@ public partial class ImportDataViewModel : ObservableObject
 
     // ================= MapColumns tab =================
 
-    public int ImportFromRow
+    public int? ImportFromRow
     {
         get => Settings.ImportFromRow;
         set
@@ -332,14 +348,14 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.ImportFromRow == value) return;
             Settings.ImportFromRow = value;
             OnPropertyChanged();
-            if (IsFileUploaded && !IsLoading && value >= 1)
+            if (IsFileUploaded && !IsLoading && value.HasValue && value.Value >= 1)
             {
                 _ = RefreshPreviewAsync(reloadWorksheets: false);
             }
         }
     }
 
-    public int ColumnHeadingRow
+    public int? ColumnHeadingRow
     {
         get => Settings.ColumnHeadingRow;
         set
@@ -347,7 +363,7 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.ColumnHeadingRow == value) return;
             Settings.ColumnHeadingRow = value;
             OnPropertyChanged();
-            if (IsFileUploaded && !IsLoading && value >= 1)
+            if (IsFileUploaded && !IsLoading && value.HasValue && value.Value >= 1)
             {
                 _ = RefreshPreviewAsync(reloadWorksheets: false);
             }
@@ -651,6 +667,26 @@ public partial class ImportDataViewModel : ObservableObject
         {
             if (TypeOfDataInput == ImportDataType.DepthLogData)
             {
+                if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
+                {
+                    MessageBox.Show(
+                        "Please specify 'Column Heading Row'. Column Heading Row is mandatory for Depthlog import.",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+
+                if (!ImportFromRow.HasValue || ImportFromRow.Value <= 0)
+                {
+                    MessageBox.Show(
+                        "Please specify 'Import from Row'. Import from Row is mandatory for Depthlog import.",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+
                 var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
                 if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
                 {
@@ -734,10 +770,13 @@ public partial class ImportDataViewModel : ObservableObject
                 _ => ","
             };
 
+            int headingRowToUse = (ColumnHeadingRow.HasValue && ColumnHeadingRow.Value >= 1) ? ColumnHeadingRow.Value : 1;
+            int importRowToUse = (ImportFromRow.HasValue && ImportFromRow.Value >= 1) ? ImportFromRow.Value : 2;
+
             var (headers, previewRows) = await Task.Run(() =>
             {
-                var h = _depthLogService.GetHeaders(FileName, ColumnHeadingRow, SelectedWorksheet, effectiveDelimiter);
-                var r = _depthLogService.GetPreviewRows(FileName, ImportFromRow, 100, SelectedWorksheet, effectiveDelimiter);
+                var h = _depthLogService.GetHeaders(FileName, headingRowToUse, SelectedWorksheet, effectiveDelimiter);
+                var r = _depthLogService.GetPreviewRows(FileName, importRowToUse, 100, SelectedWorksheet, effectiveDelimiter);
                 return (h, r);
             });
 
@@ -968,26 +1007,30 @@ public partial class ImportDataViewModel : ObservableObject
                 needPreviewRefresh = true;
             }
 
-            if (mappingResult.DatetimeSeparator != null)
-                DatetimeSeparator = mappingResult.DatetimeSeparator;
-
-            if (mappingResult.DateTimeInSeparateCol.HasValue)
-                IsDatetimeInSeperatorColumn = mappingResult.DateTimeInSeparateCol.Value;
-
-            if (mappingResult.DateColNo.HasValue)
-                DateColNo = mappingResult.DateColNo.Value;
-
-            if (mappingResult.TimeColNo.HasValue)
-                TimeColNo = mappingResult.TimeColNo.Value;
-
-            if (!string.IsNullOrEmpty(mappingResult.DateFormat))
+            // For Depthlog imports, DateTime settings must be ignored
+            if (TypeOfDataInput != ImportDataType.DepthLogData)
             {
-                if (mappingResult.DateFormat.Contains("ISO", StringComparison.OrdinalIgnoreCase))
-                    DateFormat = DateFormatType.ISOFormat;
-                else if (mappingResult.DateFormat.Contains("dd", StringComparison.OrdinalIgnoreCase))
-                    DateFormat = DateFormatType.DDMMYYYYFormat;
-                else if (mappingResult.DateFormat.Contains("MM", StringComparison.OrdinalIgnoreCase))
-                    DateFormat = DateFormatType.MMDDYYYYFormat;
+                if (mappingResult.DatetimeSeparator != null)
+                    DatetimeSeparator = mappingResult.DatetimeSeparator;
+
+                if (mappingResult.DateTimeInSeparateCol.HasValue)
+                    IsDatetimeInSeperatorColumn = mappingResult.DateTimeInSeparateCol.Value;
+
+                if (mappingResult.DateColNo.HasValue)
+                    DateColNo = mappingResult.DateColNo.Value;
+
+                if (mappingResult.TimeColNo.HasValue)
+                    TimeColNo = mappingResult.TimeColNo.Value;
+
+                if (!string.IsNullOrEmpty(mappingResult.DateFormat))
+                {
+                    if (mappingResult.DateFormat.Contains("ISO", StringComparison.OrdinalIgnoreCase))
+                        DateFormat = DateFormatType.ISOFormat;
+                    else if (mappingResult.DateFormat.Contains("dd", StringComparison.OrdinalIgnoreCase))
+                        DateFormat = DateFormatType.DDMMYYYYFormat;
+                    else if (mappingResult.DateFormat.Contains("MM", StringComparison.OrdinalIgnoreCase))
+                        DateFormat = DateFormatType.MMDDYYYYFormat;
+                }
             }
 
             if (needPreviewRefresh && !string.IsNullOrEmpty(FileName))
@@ -1060,6 +1103,26 @@ public partial class ImportDataViewModel : ObservableObject
 
         if (TypeOfDataInput == ImportDataType.DepthLogData)
         {
+            if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
+            {
+                MessageBox.Show(
+                    "Please specify 'Column Heading Row'. Column Heading Row is mandatory for Depthlog import.",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+
+            if (!ImportFromRow.HasValue || ImportFromRow.Value <= 0)
+            {
+                MessageBox.Show(
+                    "Please specify 'Import from Row'. Import from Row is mandatory for Depthlog import.",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+
             var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
             if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
             {
@@ -1135,8 +1198,8 @@ public partial class ImportDataViewModel : ObservableObject
                         updateTargetTableName,
                         FileName,
                         updateMappings,
-                        ColumnHeadingRow,
-                        ImportFromRow,
+                        ColumnHeadingRow ?? 1,
+                        ImportFromRow ?? 2,
                         updateDelimiter,
                         SelectedWorksheet,
                         updateProgress);
@@ -1353,8 +1416,8 @@ public partial class ImportDataViewModel : ObservableObject
                     targetTableName,
                     FileName,
                     activeMappings,
-                    ColumnHeadingRow,
-                    ImportFromRow,
+                    ColumnHeadingRow ?? 1,
+                    ImportFromRow ?? 2,
                     effectiveDelimiter,
                     SelectedWorksheet,
                     progress);

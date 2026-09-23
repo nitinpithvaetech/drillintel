@@ -11,8 +11,8 @@ public class DepthLogImportOptions
     public string? WellName { get; set; }
     public string? WellID { get; set; }
     public string? WellboreID { get; set; }
-    public int ColumnHeadingRow { get; set; } = 1;
-    public int ImportFromRow { get; set; } = 2;
+    public int? ColumnHeadingRow { get; set; }
+    public int? ImportFromRow { get; set; }
     public string? WorksheetName { get; set; }
     public string? ManualDepthColumnName { get; set; }
     public Dictionary<string, string>? ColumnMappings { get; set; }

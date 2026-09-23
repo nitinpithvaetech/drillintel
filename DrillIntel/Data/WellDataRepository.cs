@@ -785,6 +785,12 @@ public class WellDataRepository : IWellDataRepository
         if (!_session.IsProjectOpen)
             throw new InvalidOperationException("No project is currently loaded.");
 
+        if (columnHeadingRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(columnHeadingRow), "Column Heading Row is mandatory and must be a positive integer.");
+
+        if (importFromRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(importFromRow), "Import from Row is mandatory and must be a positive integer.");
+
         var connection = _session.GetConnection();
 
         // 1. Determine columns and map to source headers
@@ -1157,6 +1163,12 @@ public class WellDataRepository : IWellDataRepository
     {
         if (!_session.IsProjectOpen)
             throw new InvalidOperationException("No project is currently loaded.");
+
+        if (columnHeadingRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(columnHeadingRow), "Column Heading Row is mandatory and must be a positive integer.");
+
+        if (importFromRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(importFromRow), "Import from Row is mandatory and must be a positive integer.");
 
         if (!File.Exists(filePath))
             throw new FileNotFoundException($"Import file not found: {filePath}", filePath);

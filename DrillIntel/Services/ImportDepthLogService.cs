@@ -86,13 +86,23 @@ public class ImportDepthLogService : IImportDepthLogService
             throw new FileNotFoundException($"Import file not found: {filePath}", filePath);
         }
 
+        if (!options.ColumnHeadingRow.HasValue || options.ColumnHeadingRow.Value <= 0)
+        {
+            throw new InvalidOperationException("Column Heading Row is mandatory and must be specified to import DepthLog.");
+        }
+
+        if (!options.ImportFromRow.HasValue || options.ImportFromRow.Value <= 0)
+        {
+            throw new InvalidOperationException("Import from Row is mandatory and must be specified to import DepthLog.");
+        }
+
         var reader = GetReader(filePath);
         var metadata = reader.ExtractMetadata(filePath);
-        var headers = reader.GetHeaders(filePath, options.ColumnHeadingRow, options.WorksheetName, options.Delimiter);
+        var headers = reader.GetHeaders(filePath, options.ColumnHeadingRow.Value, options.WorksheetName, options.Delimiter);
 
         if (headers.Count == 0)
         {
-            throw new InvalidOperationException($"No headers found in {filePath} at row {options.ColumnHeadingRow}.");
+            throw new InvalidOperationException($"No headers found in {filePath} at row {options.ColumnHeadingRow.Value}.");
         }
 
         // 1. Resolve DEPTH mapping
@@ -291,6 +301,21 @@ public class ImportDepthLogService : IImportDepthLogService
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"Import file not found: {filePath}", filePath);
+        }
+
+        if (!options.ColumnHeadingRow.HasValue || options.ColumnHeadingRow.Value <= 0)
+        {
+            throw new InvalidOperationException("Column Heading Row is mandatory and must be specified to import DepthLog.");
+        }
+
+        if (!options.ImportFromRow.HasValue || options.ImportFromRow.Value <= 0)
+        {
+            throw new InvalidOperationException("Import from Row is mandatory and must be specified to import DepthLog.");
+        }
+
         if (_repository == null || _session == null)
         {
             throw new InvalidOperationException("Repository and session are required for database persistence.");
@@ -313,7 +338,7 @@ public class ImportDepthLogService : IImportDepthLogService
             var existingCols = await _repository.GetTableColumnsAsync(targetTableName);
 
             var reader = GetReader(filePath);
-            var headers = reader.GetHeaders(filePath, options.ColumnHeadingRow, options.WorksheetName, options.Delimiter);
+            var headers = reader.GetHeaders(filePath, options.ColumnHeadingRow.Value, options.WorksheetName, options.Delimiter);
 
             // Auto-mapping:
             // "If the VuMax column name matches the imported file column name, auto-map and update.
@@ -376,8 +401,8 @@ public class ImportDepthLogService : IImportDepthLogService
                 targetTableName,
                 filePath,
                 activeMappings,
-                options.ColumnHeadingRow,
-                options.ImportFromRow,
+                options.ColumnHeadingRow.Value,
+                options.ImportFromRow.Value,
                 options.Delimiter,
                 options.WorksheetName,
                 progress,
@@ -432,8 +457,8 @@ public class ImportDepthLogService : IImportDepthLogService
             depthLog.__dataTableName,
             filePath,
             newMappings,
-            options.ColumnHeadingRow,
-            options.ImportFromRow,
+            options.ColumnHeadingRow.Value,
+            options.ImportFromRow.Value,
             options.Delimiter,
             options.WorksheetName,
             progress,
