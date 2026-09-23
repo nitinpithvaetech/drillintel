@@ -651,6 +651,9 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
 
         public event PropertyChangedEventHandler? PropertyChanged;
         public event EventHandler? ProjectChanged;
+        public event EventHandler? DataChanged;
+
+        public void NotifyDataChanged() => DataChanged?.Invoke(this, EventArgs.Empty);
 
         public bool IsProjectOpen => _dataService != null && _dataService.IsConnectionOpen();
 

@@ -57,7 +57,24 @@ public partial class DashboardViewModel : ObservableObject
         _session = session;
         _repository = repository ?? (_session != null ? new WellDataRepository(_session) : null);
 
+        if (_session != null)
+        {
+            _session.DataChanged += OnDataChanged;
+        }
+
         _ = LoadDataAsync();
+    }
+
+    private void OnDataChanged(object? sender, EventArgs e)
+    {
+        if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(RefreshAsync);
+        }
+        else
+        {
+            _ = RefreshAsync();
+        }
     }
 
     [RelayCommand]
@@ -83,6 +100,23 @@ public partial class DashboardViewModel : ObservableObject
             var projectWell = await _repository.GetProjectWellAsync();
             var timeLogs = await _repository.GetTimeLogsAsync();
             var depthLogs = await _repository.GetDepthLogsAsync();
+
+            // Strict separation: prevent any cross-listing between Depthlogs and Timelogs
+            var depthLogIds = new HashSet<string>(depthLogs.Select(dl => dl.ObjectID).Where(id => !string.IsNullOrEmpty(id)), StringComparer.OrdinalIgnoreCase);
+            var depthTables = new HashSet<string>(depthLogs.Select(dl => dl.__dataTableName).Where(t => !string.IsNullOrEmpty(t)), StringComparer.OrdinalIgnoreCase);
+
+            var filteredTimeLogs = timeLogs.Where(tl =>
+                !depthLogIds.Contains(tl.ObjectID) &&
+                (string.IsNullOrEmpty(tl.__dataTableName) || (!depthTables.Contains(tl.__dataTableName) && !tl.__dataTableName.StartsWith("depthLog", StringComparison.OrdinalIgnoreCase)))
+            ).ToList();
+
+            var timeLogIds = new HashSet<string>(filteredTimeLogs.Select(tl => tl.ObjectID).Where(id => !string.IsNullOrEmpty(id)), StringComparer.OrdinalIgnoreCase);
+            var timeTables = new HashSet<string>(filteredTimeLogs.Select(tl => tl.__dataTableName).Where(t => !string.IsNullOrEmpty(t)), StringComparer.OrdinalIgnoreCase);
+
+            var filteredDepthLogs = depthLogs.Where(dl =>
+                !timeLogIds.Contains(dl.ObjectID) &&
+                (string.IsNullOrEmpty(dl.__dataTableName) || (!timeTables.Contains(dl.__dataTableName) && !dl.__dataTableName.StartsWith("timeLog", StringComparison.OrdinalIgnoreCase)))
+            ).ToList();
 
             WellTree.Clear();
             AvailableWells.Clear();
@@ -110,11 +144,11 @@ public partial class DashboardViewModel : ObservableObject
                     Type = WellTreeNodeType.Folder,
                     IconKind = "ClockOutline",
                     IconColor = "#FF9800",
-                    Badge = $"({timeLogs.Count})",
+                    Badge = $"({filteredTimeLogs.Count})",
                     IsExpanded = true
                 };
 
-                foreach (var tl in timeLogs)
+                foreach (var tl in filteredTimeLogs)
                 {
                     timeFolder.Children.Add(new WellTreeNode
                     {
@@ -136,11 +170,11 @@ public partial class DashboardViewModel : ObservableObject
                     Type = WellTreeNodeType.Folder,
                     IconKind = "FormatVerticalAlignBottom",
                     IconColor = "#9C27B0",
-                    Badge = $"({depthLogs.Count})",
+                    Badge = $"({filteredDepthLogs.Count})",
                     IsExpanded = true
                 };
 
-                foreach (var dl in depthLogs)
+                foreach (var dl in filteredDepthLogs)
                 {
                     depthFolder.Children.Add(new WellTreeNode
                     {
@@ -164,7 +198,7 @@ public partial class DashboardViewModel : ObservableObject
             }
 
             // Summary metrics
-            int totalLogs = timeLogs.Count + depthLogs.Count;
+            int totalLogs = filteredTimeLogs.Count + filteredDepthLogs.Count;
             RecentImports = totalLogs > 0 
                 ? $"{totalLogs} log{(totalLogs > 1 ? "s" : "")} in project" 
                 : "No logs imported yet";
@@ -205,7 +239,7 @@ public partial class DashboardViewModel : ObservableObject
                 return DateTime.Now;
             }
 
-            var allQc = timeLogs.Select(t => GetTimeLogQc(t)).Concat(depthLogs.Select(d => GetDepthLogQc(d))).ToList();
+            var allQc = filteredTimeLogs.Select(t => GetTimeLogQc(t)).Concat(filteredDepthLogs.Select(d => GetDepthLogQc(d))).ToList();
             if (allQc.Count > 0)
             {
                 double avgQc = allQc.Average();
@@ -220,7 +254,7 @@ public partial class DashboardViewModel : ObservableObject
 
             // Activity Log
             ActivityLog.Clear();
-            var combinedActivities = timeLogs
+            var combinedActivities = filteredTimeLogs
                 .Select(t =>
                 {
                     var tDate = GetTimeLogDate(t);
@@ -229,7 +263,7 @@ public partial class DashboardViewModel : ObservableObject
                     var wName = !string.IsNullOrWhiteSpace(t.nameWell) ? t.nameWell : t.__WellName;
                     return new { Text = $"{tDate:HH:mm} - Imported Timelog '{tName}' for {wName} (QC: {tQc:F1}%)", Date = tDate };
                 })
-                .Concat(depthLogs.Select(d =>
+                .Concat(filteredDepthLogs.Select(d =>
                 {
                     var dDate = GetDepthLogDate(d);
                     var dQc = GetDepthLogQc(d);

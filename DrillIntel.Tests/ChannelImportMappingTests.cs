@@ -103,20 +103,26 @@ public class ChannelImportMappingTests : IDisposable
             Assert.Equal(2502.5, Convert.ToDouble(dt.Rows[2]["DEPTH"]));
             Assert.Equal(16.8, Convert.ToDouble(dt.Rows[2]["SRVGRA_TF"]));
 
-            // 3. Verify VMX_TIME_LOG logging (Requirement 3)
-            var dtTimeLog = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
-            Assert.NotNull(dtTimeLog);
-            Assert.Equal(1, dtTimeLog.Rows.Count);
-            Assert.Equal("Success", dtTimeLog.Rows[0]["COMMENTS"]?.ToString());
-            Assert.Contains("QC:", dtTimeLog.Rows[0]["DESCRIPTION"]?.ToString() ?? "");
-            Assert.Equal(100.0, Convert.ToDouble(dtTimeLog.Rows[0]["QC_SCORE"]));
+            // 3. Verify VMX_DEPTH_LOG logging and verify NO VMX_TIME_LOG cross-listing
+            var dtDepthLog = dataService.GetTable($"SELECT * FROM VMX_DEPTH_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.NotNull(dtDepthLog);
+            Assert.Equal(1, dtDepthLog.Rows.Count);
+            Assert.Equal("Success", dtDepthLog.Rows[0]["COMMENTS"]?.ToString());
+            Assert.Contains("QC:", dtDepthLog.Rows[0]["DESCRIPTION"]?.ToString() ?? "");
+            Assert.Equal(100.0, Convert.ToDouble(dtDepthLog.Rows[0]["QC_SCORE"]));
 
-            // Also check VMX_TIME_LOG_SUMMARY
+            // Also check VMX_DEPTH_LOG_SUMMARY
+            var dtDepthSummary = dataService.GetTable($"SELECT * FROM VMX_DEPTH_LOG_SUMMARY WHERE LogId = '{log.ObjectID}';");
+            Assert.NotNull(dtDepthSummary);
+            Assert.Equal(1, dtDepthSummary.Rows.Count);
+            Assert.Equal("Success", dtDepthSummary.Rows[0]["ImportStatus"]?.ToString());
+            Assert.Equal(100.0, Convert.ToDouble(dtDepthSummary.Rows[0]["QcScore"]));
+
+            // Verify NOT cross-listed in VMX_TIME_LOG or VMX_TIME_LOG_SUMMARY
+            var dtTimeLog = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.True(dtTimeLog == null || dtTimeLog.Rows.Count == 0);
             var dtTimeSummary = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG_SUMMARY WHERE LogId = '{log.ObjectID}';");
-            Assert.NotNull(dtTimeSummary);
-            Assert.Equal(1, dtTimeSummary.Rows.Count);
-            Assert.Equal("Success", dtTimeSummary.Rows[0]["ImportStatus"]?.ToString());
-            Assert.Equal(100.0, Convert.ToDouble(dtTimeSummary.Rows[0]["QcScore"]));
+            Assert.True(dtTimeSummary == null || dtTimeSummary.Rows.Count == 0);
         }
         finally
         {
@@ -158,12 +164,15 @@ public class ChannelImportMappingTests : IDisposable
 
             // 5 total rows, 2 valid rows -> QC Score = 40.0%
             var dataService = _session.GetDataService();
-            var dtTimeLog = dataService.GetTable($"SELECT COMMENTS, DESCRIPTION, QC_SCORE FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
-            Assert.NotNull(dtTimeLog);
-            Assert.Equal(1, dtTimeLog.Rows.Count);
-            Assert.Equal("Success", dtTimeLog.Rows[0]["COMMENTS"]?.ToString());
-            Assert.Contains("QC: 40.0%", dtTimeLog.Rows[0]["DESCRIPTION"]?.ToString() ?? "");
-            Assert.Equal(40.0, Convert.ToDouble(dtTimeLog.Rows[0]["QC_SCORE"]));
+            var dtDepthLog = dataService.GetTable($"SELECT COMMENTS, DESCRIPTION, QC_SCORE FROM VMX_DEPTH_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.NotNull(dtDepthLog);
+            Assert.Equal(1, dtDepthLog.Rows.Count);
+            Assert.Equal("Success", dtDepthLog.Rows[0]["COMMENTS"]?.ToString());
+            Assert.Contains("QC: 40.0%", dtDepthLog.Rows[0]["DESCRIPTION"]?.ToString() ?? "");
+            Assert.Equal(40.0, Convert.ToDouble(dtDepthLog.Rows[0]["QC_SCORE"]));
+
+            var dtTimeLog = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.True(dtTimeLog == null || dtTimeLog.Rows.Count == 0);
         }
         finally
         {
@@ -263,12 +272,15 @@ public class ChannelImportMappingTests : IDisposable
             Assert.Equal(3000.5, Convert.ToDouble(dt.Rows[0]["DEPTH"]));
             Assert.Equal(55.5, Convert.ToDouble(dt.Rows[0]["SRVGRA_TF"]));
 
-            // Check VMX_TIME_LOG has QC score and status
-            var dtTimeLog = dataService.GetTable($"SELECT COMMENTS, DESCRIPTION, QC_SCORE FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
-            Assert.NotNull(dtTimeLog);
-            Assert.Equal(1, dtTimeLog.Rows.Count);
-            Assert.Equal("Success", dtTimeLog.Rows[0]["COMMENTS"]?.ToString());
-            Assert.Equal(100.0, Convert.ToDouble(dtTimeLog.Rows[0]["QC_SCORE"]));
+            // Check VMX_DEPTH_LOG has QC score and status
+            var dtDepthLog = dataService.GetTable($"SELECT COMMENTS, DESCRIPTION, QC_SCORE FROM VMX_DEPTH_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.NotNull(dtDepthLog);
+            Assert.Equal(1, dtDepthLog.Rows.Count);
+            Assert.Equal("Success", dtDepthLog.Rows[0]["COMMENTS"]?.ToString());
+            Assert.Equal(100.0, Convert.ToDouble(dtDepthLog.Rows[0]["QC_SCORE"]));
+
+            var dtTimeLog = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.True(dtTimeLog == null || dtTimeLog.Rows.Count == 0);
         }
         finally
         {
@@ -330,12 +342,15 @@ public class ChannelImportMappingTests : IDisposable
             Assert.Equal(1.1, Convert.ToDouble(dt.Rows[0]["SENSOR_X"]));
             Assert.Equal(2.2, Convert.ToDouble(dt.Rows[0]["SENSOR_Y"]));
 
-            // Verify VMX_TIME_LOG has been updated
+            // Verify VMX_DEPTH_LOG has been updated
+            var dtDepthLog = dataService.GetTable($"SELECT * FROM VMX_DEPTH_LOG WHERE LOG_ID = '{log.ObjectID}';");
+            Assert.NotNull(dtDepthLog);
+            Assert.Equal(1, dtDepthLog.Rows.Count);
+            Assert.Equal("Success", dtDepthLog.Rows[0]["COMMENTS"]?.ToString());
+            Assert.Equal(100.0, Convert.ToDouble(dtDepthLog.Rows[0]["QC_SCORE"]));
+
             var dtTimeLog = dataService.GetTable($"SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = '{log.ObjectID}';");
-            Assert.NotNull(dtTimeLog);
-            Assert.Equal(1, dtTimeLog.Rows.Count);
-            Assert.Equal("Success", dtTimeLog.Rows[0]["COMMENTS"]?.ToString());
-            Assert.Equal(100.0, Convert.ToDouble(dtTimeLog.Rows[0]["QC_SCORE"]));
+            Assert.True(dtTimeLog == null || dtTimeLog.Rows.Count == 0);
         }
         finally
         {

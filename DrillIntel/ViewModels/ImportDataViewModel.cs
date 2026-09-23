@@ -1218,6 +1218,7 @@ public partial class ImportDataViewModel : ObservableObject
                         SelectedExistingDepthLog.lastDataIndex = updateResult.LastDataIndex;
 
                     await _repository.LogDepthLogAsync(SelectedExistingDepthLog);
+                    _session.NotifyDataChanged();
 
                     MessageBox.Show($"Update successful!\n\nRecords Processed: {updateResult.TotalRows:N0}\nQC Score: {updateResult.QcScore:F1}%\nTarget Table: {updateTargetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -1449,6 +1450,8 @@ public partial class ImportDataViewModel : ObservableObject
 
                     await _repository.LogTimeLogAsync(timeLog);
                 }
+
+                _session.NotifyDataChanged();
 
                 MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }

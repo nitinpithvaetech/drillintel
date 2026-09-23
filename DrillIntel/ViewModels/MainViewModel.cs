@@ -125,12 +125,14 @@ public partial class MainViewModel : ObservableObject
         {
             window.DialogResult = true;
         };
-        if (window.ShowDialog() == true)
+        window.ShowDialog();
+        if (CurrentViewModel is DashboardViewModel dashboard)
         {
-            if (CurrentViewModel is DashboardViewModel dashboard)
-            {
-                await dashboard.RefreshAsync();
-            }
+            await dashboard.RefreshAsync();
+        }
+        else
+        {
+            CurrentViewModel = new DashboardViewModel(_session);
         }
     }
 
@@ -153,12 +155,14 @@ public partial class MainViewModel : ObservableObject
         {
             window.DialogResult = true;
         };
-        if (window.ShowDialog() == true)
+        window.ShowDialog();
+        if (CurrentViewModel is DashboardViewModel depthDashboard)
         {
-            if (CurrentViewModel is DashboardViewModel dashboard)
-            {
-                await dashboard.RefreshAsync();
-            }
+            await depthDashboard.RefreshAsync();
+        }
+        else
+        {
+            CurrentViewModel = new DashboardViewModel(_session);
         }
     }
 

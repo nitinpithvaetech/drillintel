@@ -181,8 +181,32 @@ public class WellDataRepository : IWellDataRepository
         }
         catch { }
 
+        // Ensure no cross-pollution in VMX_DEPTH_LOG / VMX_DEPTH_LOG_SUMMARY for this TimeLog
+        try
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM VMX_DEPTH_LOG WHERE LOG_ID = @LogId OR DATA_TABLE_NAME = @DataTableName;",
+                new { LogId = log.ObjectID, DataTableName = log.__dataTableName });
+        }
+        catch { }
+        try
+        {
+            var hasDepthSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+            if (hasDepthSummary > 0)
+            {
+                await connection.ExecuteAsync(
+                    "DELETE FROM VMX_DEPTH_LOG_SUMMARY WHERE LogId = @LogId OR DataTableName = @DataTableName;",
+                    new { LogId = log.ObjectID, DataTableName = log.__dataTableName });
+            }
+        }
+        catch { }
+
         // Flush SQLite WAL to disk
         try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
+
+        // Notify session that well data has changed
+        _session.NotifyDataChanged();
     }
 
     public async Task LogVmxTimeLogAsync(TimeLog log) => await LogTimeLogAsync(log);
@@ -307,67 +331,46 @@ public class WellDataRepository : IWellDataRepository
             ImportDate = DateTime.Now.ToString("o")
         });
 
-        // 3. Log import status and QC score in VMX_TIME_LOG and VMX_TIME_LOG_SUMMARY (Requirement 3)
+        // 3. Update QC score in VMX_DEPTH_LOG if column exists / add column
         try
         {
-            var vmxTimeCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_TIME_LOG');")).ToList();
-            if (!vmxTimeCols.Contains("QC_SCORE", StringComparer.OrdinalIgnoreCase))
+            var vmxDepthCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_DEPTH_LOG');")).ToList();
+            if (!vmxDepthCols.Contains("QC_SCORE", StringComparer.OrdinalIgnoreCase))
             {
-                try { await connection.ExecuteAsync("ALTER TABLE VMX_TIME_LOG ADD COLUMN QC_SCORE REAL;"); } catch { }
+                try { await connection.ExecuteAsync("ALTER TABLE VMX_DEPTH_LOG ADD COLUMN QC_SCORE REAL;"); } catch { }
             }
+            await connection.ExecuteAsync(
+                "UPDATE VMX_DEPTH_LOG SET QC_SCORE = @QcScore WHERE LOG_ID = @LogId;",
+                new { QcScore = qcScore, LogId = log.ObjectID });
+        }
+        catch { }
 
-            var insertTimeSql = @"
-                INSERT OR REPLACE INTO VMX_TIME_LOG (
-                    WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, COMMENTS, DESCRIPTION, QC_SCORE, CREATED_DATE
-                ) VALUES (
-                    @WellID, @WellboreID, @LogId, @LogName, @DataTableName, @Comments, @Description, @QcScore, @CreatedDate
-                );";
-
-            await connection.ExecuteAsync(insertTimeSql, new
+        // 4. Ensure no cross-pollution in VMX_TIME_LOG / VMX_TIME_LOG_SUMMARY for this DepthLog
+        try
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM VMX_TIME_LOG WHERE LOG_ID = @LogId OR DATA_TABLE_NAME = @DataTableName;",
+                new { LogId = log.ObjectID, DataTableName = log.__dataTableName });
+        }
+        catch { }
+        try
+        {
+            var hasTimeSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+            if (hasTimeSummary > 0)
             {
-                WellID = log.WellID,
-                WellboreID = log.WellboreID,
-                LogId = log.ObjectID,
-                LogName = log.nameLog,
-                DataTableName = log.__dataTableName,
-                Comments = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
-                Description = log.description,
-                QcScore = qcScore,
-                CreatedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
-            });
-
-            var createTimeSummary = @"
-                CREATE TABLE IF NOT EXISTS VMX_TIME_LOG_SUMMARY (
-                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    LogId TEXT,
-                    LogName TEXT,
-                    WellName TEXT,
-                    DataTableName TEXT,
-                    ImportStatus TEXT,
-                    QcScore REAL,
-                    ImportDate TEXT
-                );";
-            await connection.ExecuteAsync(createTimeSummary);
-
-            var insertTimeSummarySql = @"
-                INSERT INTO VMX_TIME_LOG_SUMMARY (LogId, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
-                VALUES (@LogId, @LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
-
-            await connection.ExecuteAsync(insertTimeSummarySql, new
-            {
-                LogId = log.ObjectID,
-                LogName = log.nameLog,
-                WellName = wellName,
-                DataTableName = log.__dataTableName,
-                ImportStatus = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
-                QcScore = qcScore,
-                ImportDate = DateTime.Now.ToString("o")
-            });
+                await connection.ExecuteAsync(
+                    "DELETE FROM VMX_TIME_LOG_SUMMARY WHERE LogId = @LogId OR DataTableName = @DataTableName;",
+                    new { LogId = log.ObjectID, DataTableName = log.__dataTableName });
+            }
         }
         catch { }
 
         // Flush SQLite WAL to disk
         try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
+
+        // Notify session that well data has changed
+        _session.NotifyDataChanged();
     }
 
     public async Task LogVmxDepthLogAsync(DepthLog log) => await LogDepthLogAsync(log);
@@ -394,25 +397,97 @@ public class WellDataRepository : IWellDataRepository
         var connection = _session.GetConnection();
         var dataService = _session.GetDataService();
 
-        string lastError = string.Empty;
-        var list = TimeLogService.LoadTimeLogs(dataService, "", ref lastError);
+        // 1. Gather known DepthLog IDs and tables to enforce strict separation
+        var knownDepthLogIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var knownDepthTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var hasDepthTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG';");
+        if (hasDepthTable > 0)
+        {
+            var depthRows = await connection.QueryAsync<dynamic>("SELECT LOG_ID, DATA_TABLE_NAME FROM VMX_DEPTH_LOG;");
+            foreach (var r in depthRows)
+            {
+                if (r.LOG_ID != null) knownDepthLogIds.Add(Convert.ToString(r.LOG_ID));
+                if (r.DATA_TABLE_NAME != null) knownDepthTables.Add(Convert.ToString(r.DATA_TABLE_NAME));
+            }
+        }
+
+        var hasDepthSummary = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+        if (hasDepthSummary > 0)
+        {
+            var depthSummaryRows = await connection.QueryAsync<dynamic>("SELECT LogId, DataTableName FROM VMX_DEPTH_LOG_SUMMARY;");
+            foreach (var r in depthSummaryRows)
+            {
+                if (r.LogId != null) knownDepthLogIds.Add(Convert.ToString(r.LogId));
+                if (r.DataTableName != null) knownDepthTables.Add(Convert.ToString(r.DataTableName));
+            }
+        }
+
+        bool IsDepthLogEntry(string? id, string? tbl)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && knownDepthLogIds.Contains(id)) return true;
+            if (!string.IsNullOrWhiteSpace(tbl))
+            {
+                if (knownDepthTables.Contains(tbl)) return true;
+                if (tbl.StartsWith("depthLog", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        // 2. Clean up any stale cross-listed depth logs from VMX_TIME_LOG and VMX_TIME_LOG_SUMMARY
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM VMX_TIME_LOG WHERE DATA_TABLE_NAME LIKE 'depthLog%';");
+            if (knownDepthLogIds.Count > 0)
+            {
+                await connection.ExecuteAsync("DELETE FROM VMX_TIME_LOG WHERE LOG_ID IN @ids;", new { ids = knownDepthLogIds.ToArray() });
+            }
+        }
+        catch { }
 
         var hasSummary = await connection.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+        if (hasSummary > 0)
+        {
+            try
+            {
+                await connection.ExecuteAsync("DELETE FROM VMX_TIME_LOG_SUMMARY WHERE DataTableName LIKE 'depthLog%';");
+                if (knownDepthLogIds.Count > 0)
+                {
+                    await connection.ExecuteAsync("DELETE FROM VMX_TIME_LOG_SUMMARY WHERE LogId IN @ids;", new { ids = knownDepthLogIds.ToArray() });
+                }
+            }
+            catch { }
+        }
+
+        string lastError = string.Empty;
+        var list = TimeLogService.LoadTimeLogs(dataService, "", ref lastError);
+
+        // Filter out any depth log entries
+        list = list.Where(tl => !IsDepthLogEntry(tl.ObjectID, tl.__dataTableName)).ToList();
 
         if (list.Count > 0)
         {
             if (hasSummary > 0)
             {
                 var summaries = (await connection.QueryAsync<dynamic>(
-                    "SELECT LogId, LogName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_TIME_LOG_SUMMARY;")).ToList();
+                    "SELECT * FROM VMX_TIME_LOG_SUMMARY;")).ToList();
 
                 foreach (var tl in list)
                 {
-                    var match = summaries.FirstOrDefault(s => 
-                        (!string.IsNullOrWhiteSpace((string)s.LogId) && (string)s.LogId == tl.ObjectID) ||
-                        (!string.IsNullOrWhiteSpace((string)s.DataTableName) && (string)s.DataTableName == tl.__dataTableName) || 
-                        (!string.IsNullOrWhiteSpace((string)s.LogName) && (string)s.LogName == tl.nameLog));
+                    var match = summaries.FirstOrDefault(s =>
+                    {
+                        var sDict = s as IDictionary<string, object>;
+                        if (sDict == null) return false;
+                        string? sId = sDict.TryGetValue("LogId", out var idO) ? Convert.ToString(idO) : null;
+                        string? sTbl = sDict.TryGetValue("DataTableName", out var tblO) ? Convert.ToString(tblO) : null;
+                        string? sName = sDict.TryGetValue("LogName", out var nameO) ? Convert.ToString(nameO) : null;
+                        return (!string.IsNullOrWhiteSpace(sId) && sId == tl.ObjectID) ||
+                               (!string.IsNullOrWhiteSpace(sTbl) && sTbl == tl.__dataTableName) ||
+                               (!string.IsNullOrWhiteSpace(sName) && sName == tl.nameLog);
+                    });
 
                     if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(tl.description))
                     {
@@ -435,24 +510,35 @@ public class WellDataRepository : IWellDataRepository
         if (hasSummary > 0)
         {
             var rows = await connection.QueryAsync<dynamic>(
-                "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_TIME_LOG_SUMMARY ORDER BY Id DESC;");
+                "SELECT * FROM VMX_TIME_LOG_SUMMARY ORDER BY Id DESC;");
 
             foreach (var r in rows)
             {
-                DateTime dt = DateTime.Now;
-                if (r.ImportDate != null)
-                    DateTime.TryParse((string)r.ImportDate, out dt);
+                var dict = (IDictionary<string, object>)r;
+                string rLogId = dict.TryGetValue("LogId", out var idVal) ? Convert.ToString(idVal) ?? string.Empty : string.Empty;
+                string rTbl = dict.TryGetValue("DataTableName", out var tblVal) ? Convert.ToString(tblVal) ?? string.Empty : string.Empty;
+                if (IsDepthLogEntry(rLogId, rTbl)) continue;
 
-                double qc = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0;
+                string logName = dict.TryGetValue("LogName", out var nameVal) ? Convert.ToString(nameVal) ?? string.Empty : string.Empty;
+                string wellName = dict.TryGetValue("WellName", out var wellVal) ? Convert.ToString(wellVal) ?? string.Empty : string.Empty;
+                string status = dict.TryGetValue("ImportStatus", out var statusVal) ? Convert.ToString(statusVal) ?? string.Empty : string.Empty;
+
+                DateTime dt = DateTime.Now;
+                if (dict.TryGetValue("ImportDate", out var dtVal) && dtVal != null && dtVal != DBNull.Value)
+                    DateTime.TryParse(Convert.ToString(dtVal), out dt);
+
+                double qc = 0;
+                if (dict.TryGetValue("QcScore", out var qcVal) && qcVal != null && qcVal != DBNull.Value)
+                    double.TryParse(Convert.ToString(qcVal), NumberStyles.Any, CultureInfo.InvariantCulture, out qc);
 
                 list.Add(new TimeLog
                 {
-                    ObjectID = Guid.NewGuid().ToString(),
-                    nameLog = (string)(r.LogName ?? string.Empty),
-                    nameWell = (string)(r.WellName ?? string.Empty),
-                    __WellName = (string)(r.WellName ?? string.Empty),
-                    __dataTableName = (string)(r.DataTableName ?? string.Empty),
-                    comments = (string)(r.ImportStatus ?? string.Empty),
+                    ObjectID = !string.IsNullOrWhiteSpace(rLogId) ? rLogId : Guid.NewGuid().ToString(),
+                    nameLog = logName,
+                    nameWell = wellName,
+                    __WellName = wellName,
+                    __dataTableName = rTbl,
+                    comments = status,
                     description = $"QC: {qc:F1}% • {dt:dd-MM-yyyy hh:mm tt}",
                     creationDate = dt.ToString("dd-MMM-yyyy HH:mm:ss")
                 });
@@ -468,25 +554,101 @@ public class WellDataRepository : IWellDataRepository
         var connection = _session.GetConnection();
         var dataService = _session.GetDataService();
 
+        // 1. Gather known TimeLog IDs and tables to enforce strict separation
+        var knownTimeLogIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var knownTimeTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var hasTimeTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG';");
+        if (hasTimeTable > 0)
+        {
+            var timeRows = await connection.QueryAsync<dynamic>("SELECT LOG_ID, DATA_TABLE_NAME FROM VMX_TIME_LOG;");
+            foreach (var r in timeRows)
+            {
+                if (r.LOG_ID != null) knownTimeLogIds.Add(Convert.ToString(r.LOG_ID));
+                if (r.DATA_TABLE_NAME != null) knownTimeTables.Add(Convert.ToString(r.DATA_TABLE_NAME));
+            }
+        }
+
+        var hasTimeSummary = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+        if (hasTimeSummary > 0)
+        {
+            var timeSummaryRows = await connection.QueryAsync<dynamic>("SELECT * FROM VMX_TIME_LOG_SUMMARY;");
+            foreach (var r in timeSummaryRows)
+            {
+                var sDict = r as IDictionary<string, object>;
+                if (sDict != null)
+                {
+                    if (sDict.TryGetValue("LogId", out var idVal) && idVal != null) knownTimeLogIds.Add(Convert.ToString(idVal)!);
+                    if (sDict.TryGetValue("DataTableName", out var tblVal) && tblVal != null) knownTimeTables.Add(Convert.ToString(tblVal)!);
+                }
+            }
+        }
+
+        bool IsTimeLogEntry(string? id, string? tbl)
+        {
+            if (!string.IsNullOrWhiteSpace(id) && knownTimeLogIds.Contains(id)) return true;
+            if (!string.IsNullOrWhiteSpace(tbl))
+            {
+                if (knownTimeTables.Contains(tbl)) return true;
+                if (tbl.StartsWith("timeLog", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        // 2. Clean up any stale cross-listed timelogs from VMX_DEPTH_LOG and VMX_DEPTH_LOG_SUMMARY
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM VMX_DEPTH_LOG WHERE DATA_TABLE_NAME LIKE 'timeLog%';");
+            if (knownTimeLogIds.Count > 0)
+            {
+                await connection.ExecuteAsync("DELETE FROM VMX_DEPTH_LOG WHERE LOG_ID IN @ids;", new { ids = knownTimeLogIds.ToArray() });
+            }
+        }
+        catch { }
+
+        var hasDepthSummary = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+        if (hasDepthSummary > 0)
+        {
+            try
+            {
+                await connection.ExecuteAsync("DELETE FROM VMX_DEPTH_LOG_SUMMARY WHERE DataTableName LIKE 'timeLog%';");
+                if (knownTimeLogIds.Count > 0)
+                {
+                    await connection.ExecuteAsync("DELETE FROM VMX_DEPTH_LOG_SUMMARY WHERE LogId IN @ids;", new { ids = knownTimeLogIds.ToArray() });
+                }
+            }
+            catch { }
+        }
+
         string lastError = string.Empty;
         var list = DepthLogService.LoadDepthLogs(dataService, "", ref lastError);
 
-        var hasSummary = await connection.ExecuteScalarAsync<int>(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+        // Filter out any timelog entries
+        list = list.Where(dl => !IsTimeLogEntry(dl.ObjectID, dl.__dataTableName)).ToList();
 
         if (list.Count > 0)
         {
-            if (hasSummary > 0)
+            if (hasDepthSummary > 0)
             {
                 var summaries = (await connection.QueryAsync<dynamic>(
-                    "SELECT LogId, LogName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_DEPTH_LOG_SUMMARY;")).ToList();
+                    "SELECT * FROM VMX_DEPTH_LOG_SUMMARY;")).ToList();
 
                 foreach (var dl in list)
                 {
-                    var match = summaries.FirstOrDefault(s => 
-                        (!string.IsNullOrWhiteSpace((string)s.LogId) && (string)s.LogId == dl.ObjectID) ||
-                        (!string.IsNullOrWhiteSpace((string)s.DataTableName) && (string)s.DataTableName == dl.__dataTableName) || 
-                        (!string.IsNullOrWhiteSpace((string)s.LogName) && (string)s.LogName == dl.nameLog));
+                    var match = summaries.FirstOrDefault(s =>
+                    {
+                        var sDict = s as IDictionary<string, object>;
+                        if (sDict == null) return false;
+                        string? sId = sDict.TryGetValue("LogId", out var idO) ? Convert.ToString(idO) : null;
+                        string? sTbl = sDict.TryGetValue("DataTableName", out var tblO) ? Convert.ToString(tblO) : null;
+                        string? sName = sDict.TryGetValue("LogName", out var nameO) ? Convert.ToString(nameO) : null;
+                        return (!string.IsNullOrWhiteSpace(sId) && sId == dl.ObjectID) ||
+                               (!string.IsNullOrWhiteSpace(sTbl) && sTbl == dl.__dataTableName) ||
+                               (!string.IsNullOrWhiteSpace(sName) && sName == dl.nameLog);
+                    });
 
                     if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(dl.description))
                     {
@@ -506,27 +668,38 @@ public class WellDataRepository : IWellDataRepository
         }
 
         // Fallback: If VMX_DEPTH_LOG is empty but VMX_DEPTH_LOG_SUMMARY has records from previous imports
-        if (hasSummary > 0)
+        if (hasDepthSummary > 0)
         {
             var rows = await connection.QueryAsync<dynamic>(
-                "SELECT Id, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate FROM VMX_DEPTH_LOG_SUMMARY ORDER BY Id DESC;");
+                "SELECT * FROM VMX_DEPTH_LOG_SUMMARY ORDER BY Id DESC;");
 
             foreach (var r in rows)
             {
-                DateTime dt = DateTime.Now;
-                if (r.ImportDate != null)
-                    DateTime.TryParse((string)r.ImportDate, out dt);
+                var dict = (IDictionary<string, object>)r;
+                string rLogId = dict.TryGetValue("LogId", out var idVal) ? Convert.ToString(idVal) ?? string.Empty : string.Empty;
+                string rTbl = dict.TryGetValue("DataTableName", out var tblVal) ? Convert.ToString(tblVal) ?? string.Empty : string.Empty;
+                if (IsTimeLogEntry(rLogId, rTbl)) continue;
 
-                double qc = r.QcScore != null ? Convert.ToDouble(r.QcScore) : 0;
+                string logName = dict.TryGetValue("LogName", out var nameVal) ? Convert.ToString(nameVal) ?? string.Empty : string.Empty;
+                string wellName = dict.TryGetValue("WellName", out var wellVal) ? Convert.ToString(wellVal) ?? string.Empty : string.Empty;
+                string status = dict.TryGetValue("ImportStatus", out var statusVal) ? Convert.ToString(statusVal) ?? string.Empty : string.Empty;
+
+                DateTime dt = DateTime.Now;
+                if (dict.TryGetValue("ImportDate", out var dtVal) && dtVal != null && dtVal != DBNull.Value)
+                    DateTime.TryParse(Convert.ToString(dtVal), out dt);
+
+                double qc = 0;
+                if (dict.TryGetValue("QcScore", out var qcVal) && qcVal != null && qcVal != DBNull.Value)
+                    double.TryParse(Convert.ToString(qcVal), NumberStyles.Any, CultureInfo.InvariantCulture, out qc);
 
                 list.Add(new DepthLog
                 {
-                    ObjectID = Guid.NewGuid().ToString(),
-                    nameLog = (string)(r.LogName ?? string.Empty),
-                    nameWell = (string)(r.WellName ?? string.Empty),
-                    __WellName = (string)(r.WellName ?? string.Empty),
-                    __dataTableName = (string)(r.DataTableName ?? string.Empty),
-                    comments = (string)(r.ImportStatus ?? string.Empty),
+                    ObjectID = !string.IsNullOrWhiteSpace(rLogId) ? rLogId : Guid.NewGuid().ToString(),
+                    nameLog = logName,
+                    nameWell = wellName,
+                    __WellName = wellName,
+                    __dataTableName = rTbl,
+                    comments = status,
                     description = $"QC: {qc:F1}% • {dt:dd-MM-yyyy hh:mm tt}",
                     creationDate = dt.ToString("dd-MMM-yyyy HH:mm:ss")
                 });

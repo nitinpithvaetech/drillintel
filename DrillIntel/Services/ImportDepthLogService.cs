@@ -420,6 +420,7 @@ public class ImportDepthLogService : IImportDepthLogService
                 existingLog.stepIncrement = importResult.StepIncrement;
 
             await _repository.LogDepthLogAsync(existingLog);
+            _session?.NotifyDataChanged();
 
             return new List<DepthLog> { existingLog };
         }
@@ -476,6 +477,7 @@ public class ImportDepthLogService : IImportDepthLogService
             depthLog.stepIncrement = result.StepIncrement;
 
         await _repository.LogDepthLogAsync(depthLog);
+        _session?.NotifyDataChanged();
 
         return logs;
     }
