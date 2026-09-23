@@ -17,6 +17,10 @@ public class StreamImportResult
     public string TableName { get; set; } = string.Empty;
     public double? MinDepth { get; set; }
     public double? MaxDepth { get; set; }
+    public double? FirstDepth { get; set; }
+    public double? LastDepth { get; set; }
+    public string? StepIncrement { get; set; }
+    public string? LastDataIndex { get; set; }
     public string? MinDate { get; set; }
     public string? MaxDate { get; set; }
 }

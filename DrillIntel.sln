@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillIntel.DataService", "D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillIntel.Data.Objects", "DrillIntel.Data.Objects\DrillIntel.Data.Objects.csproj", "{9CFAFB3F-7B62-4E53-BD6A-52B05A1C24BB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DrillIntel.Tests", "DrillIntel.Tests\DrillIntel.Tests.csproj", "{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{9CFAFB3F-7B62-4E53-BD6A-52B05A1C24BB}.Release|x64.Build.0 = Release|Any CPU
 		{9CFAFB3F-7B62-4E53-BD6A-52B05A1C24BB}.Release|x86.ActiveCfg = Release|Any CPU
 		{9CFAFB3F-7B62-4E53-BD6A-52B05A1C24BB}.Release|x86.Build.0 = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|x64.Build.0 = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Debug|x86.Build.0 = Debug|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|x64.ActiveCfg = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|x64.Build.0 = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|x86.ActiveCfg = Release|Any CPU
+		{2F42CBB8-807D-4275-ADF8-EEACE7EDC4AC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

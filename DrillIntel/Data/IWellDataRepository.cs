@@ -37,5 +37,29 @@ public interface IWellDataRepository
         List<ChannelMapping> mappings,
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
+
+    Task<StreamImportResult> StreamImportDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    Task<List<string>> GetTableColumnsAsync(string tableName);
+
+    Task<StreamImportResult> StreamUpdateDepthDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default);
 }
 

@@ -15,6 +15,8 @@ using DrillIntel.Models;
 using DrillIntel.Projects;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Data.Objects.DataObjects.Services;
+using DrillIntel.Services;
+using DrillIntel.Services.Readers;
 
 namespace DrillIntel.Data;
 
@@ -166,6 +168,19 @@ public class WellDataRepository : IWellDataRepository
             ImportDate = DateTime.Now.ToString("o")
         });
 
+        var vmxTimeCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_TIME_LOG');")).ToList();
+        if (!vmxTimeCols.Contains("QC_SCORE", StringComparer.OrdinalIgnoreCase))
+        {
+            try { await connection.ExecuteAsync("ALTER TABLE VMX_TIME_LOG ADD COLUMN QC_SCORE REAL;"); } catch { }
+        }
+        try
+        {
+            await connection.ExecuteAsync(
+                "UPDATE VMX_TIME_LOG SET QC_SCORE = @QcScore WHERE LOG_ID = @LogId;",
+                new { QcScore = qcScore, LogId = log.ObjectID });
+        }
+        catch { }
+
         // Flush SQLite WAL to disk
         try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
     }
@@ -291,6 +306,65 @@ public class WellDataRepository : IWellDataRepository
             QcScore = qcScore,
             ImportDate = DateTime.Now.ToString("o")
         });
+
+        // 3. Log import status and QC score in VMX_TIME_LOG and VMX_TIME_LOG_SUMMARY (Requirement 3)
+        try
+        {
+            var vmxTimeCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_TIME_LOG');")).ToList();
+            if (!vmxTimeCols.Contains("QC_SCORE", StringComparer.OrdinalIgnoreCase))
+            {
+                try { await connection.ExecuteAsync("ALTER TABLE VMX_TIME_LOG ADD COLUMN QC_SCORE REAL;"); } catch { }
+            }
+
+            var insertTimeSql = @"
+                INSERT OR REPLACE INTO VMX_TIME_LOG (
+                    WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, COMMENTS, DESCRIPTION, QC_SCORE, CREATED_DATE
+                ) VALUES (
+                    @WellID, @WellboreID, @LogId, @LogName, @DataTableName, @Comments, @Description, @QcScore, @CreatedDate
+                );";
+
+            await connection.ExecuteAsync(insertTimeSql, new
+            {
+                WellID = log.WellID,
+                WellboreID = log.WellboreID,
+                LogId = log.ObjectID,
+                LogName = log.nameLog,
+                DataTableName = log.__dataTableName,
+                Comments = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
+                Description = log.description,
+                QcScore = qcScore,
+                CreatedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
+            });
+
+            var createTimeSummary = @"
+                CREATE TABLE IF NOT EXISTS VMX_TIME_LOG_SUMMARY (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    LogId TEXT,
+                    LogName TEXT,
+                    WellName TEXT,
+                    DataTableName TEXT,
+                    ImportStatus TEXT,
+                    QcScore REAL,
+                    ImportDate TEXT
+                );";
+            await connection.ExecuteAsync(createTimeSummary);
+
+            var insertTimeSummarySql = @"
+                INSERT INTO VMX_TIME_LOG_SUMMARY (LogId, LogName, WellName, DataTableName, ImportStatus, QcScore, ImportDate)
+                VALUES (@LogId, @LogName, @WellName, @DataTableName, @ImportStatus, @QcScore, @ImportDate);";
+
+            await connection.ExecuteAsync(insertTimeSummarySql, new
+            {
+                LogId = log.ObjectID,
+                LogName = log.nameLog,
+                WellName = wellName,
+                DataTableName = log.__dataTableName,
+                ImportStatus = !string.IsNullOrWhiteSpace(log.comments) ? log.comments : "Success",
+                QcScore = qcScore,
+                ImportDate = DateTime.Now.ToString("o")
+            });
+        }
+        catch { }
 
         // Flush SQLite WAL to disk
         try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
@@ -687,10 +761,24 @@ public class WellDataRepository : IWellDataRepository
     /// High-throughput streaming importer directly into SQLite.
     /// Eliminates memory spikes, eliminates exception overhead, and imports 1,000,000+ rows in seconds.
     /// </summary>
+    public Task<StreamImportResult> StreamImportDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        return StreamImportDataAsync(tableName, filePath, mappings, 1, 2, ",", null, progress, cancellationToken);
+    }
+
     public async Task<StreamImportResult> StreamImportDataAsync(
         string tableName,
         string filePath,
         List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -698,7 +786,6 @@ public class WellDataRepository : IWellDataRepository
             throw new InvalidOperationException("No project is currently loaded.");
 
         var connection = _session.GetConnection();
-        bool isLas = Path.GetExtension(filePath).Equals(".las", StringComparison.OrdinalIgnoreCase);
 
         // 1. Determine columns and map to source headers
         var columnPlans = new List<ColumnPlan>();
@@ -777,6 +864,20 @@ public class WellDataRepository : IWellDataRepository
                         existingTableCols.Add(cName);
                 }
             }
+
+            // Dynamically create any missing columns in target table
+            foreach (var plan in columnPlans)
+            {
+                if (!existingTableCols.Contains(plan.DbColumnName))
+                {
+                    using (var alterCmd = connection.CreateCommand())
+                    {
+                        alterCmd.CommandText = $"ALTER TABLE [{tableName}] ADD COLUMN [{plan.DbColumnName}] NUMERIC;";
+                        alterCmd.ExecuteNonQuery();
+                    }
+                    existingTableCols.Add(plan.DbColumnName);
+                }
+            }
         }
 
         bool hasDataIndex = existingTableCols.Contains("DATA_INDEX");
@@ -823,10 +924,39 @@ public class WellDataRepository : IWellDataRepository
             cmdParams[i] = p;
         }
 
+        // 4. Resolve Reader and Headers
+        var formatReaders = new IDepthLogFormatReader[]
+        {
+            new LasDepthReader(),
+            new WitsmlDepthReader(),
+            new ExcelDepthReader(),
+            new CsvDepthReader()
+        };
+        var reader = formatReaders.FirstOrDefault(r => r.CanHandle(filePath)) ?? new CsvDepthReader();
+        var fileMetadata = reader.ExtractMetadata(filePath);
+        var sourceHeaders = reader.GetHeaders(filePath, columnHeadingRow, worksheetName, delimiter);
+
+        for (int i = 0; i < columnPlans.Count; i++)
+        {
+            int idx = sourceHeaders.FindIndex(h => h.Equals(columnPlans[i].SourceHeader, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0)
+            {
+                if (columnPlans[i].SourceHeader.StartsWith("#") && int.TryParse(columnPlans[i].SourceHeader.Substring(1), out int numIdx))
+                {
+                    idx = numIdx;
+                }
+            }
+            columnPlans[i].SourceIndex = idx;
+        }
+
         int totalRows = 0;
         int validRows = 0;
         double? minDepth = null;
         double? maxDepth = null;
+        double? firstDepth = null;
+        double? lastDepth = null;
+        double? prevDepth = null;
+        string? calculatedStep = null;
         string? minDate = null;
         string? maxDate = null;
         const int batchSize = 50000;
@@ -836,230 +966,108 @@ public class WellDataRepository : IWellDataRepository
 
         try
         {
-            if (isLas)
+            foreach (var tokens in reader.StreamDataRows(filePath, importFromRow, worksheetName, delimiter, cancellationToken))
             {
-                // Stream LAS file
-                using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 65536);
-                using var reader = new StreamReader(fileStream, Encoding.UTF8);
-
-                var lasHeaders = new List<string>();
-                bool inCurve = false;
-                bool inAscii = false;
-                string? line;
-
-                while ((line = reader.ReadLine()) != null)
+                cancellationToken.ThrowIfCancellationRequested();
+                totalRows++;
+                if (hasDataIndex && pDataIndex != null)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var trimmed = line.Trim();
-                    if (string.IsNullOrWhiteSpace(trimmed)) continue;
-
-                    if (trimmed.StartsWith("~"))
-                    {
-                        if (trimmed.StartsWith("~C", StringComparison.OrdinalIgnoreCase))
-                        {
-                            inCurve = true;
-                            continue;
-                        }
-                        else if (inCurve && !trimmed.StartsWith("~C", StringComparison.OrdinalIgnoreCase))
-                        {
-                            inCurve = false;
-                        }
-
-                        if (trimmed.StartsWith("~A", StringComparison.OrdinalIgnoreCase))
-                        {
-                            inAscii = true;
-
-                            // Resolve SourceIndex for each column plan
-                            for (int i = 0; i < columnPlans.Count; i++)
-                            {
-                                columnPlans[i].SourceIndex = lasHeaders.FindIndex(h => h.Equals(columnPlans[i].SourceHeader, StringComparison.OrdinalIgnoreCase));
-                            }
-                            continue;
-                        }
-                    }
-
-                    if (inCurve && !trimmed.StartsWith("#"))
-                    {
-                        var mnem = trimmed.Split(new[] { '.', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                        if (!string.IsNullOrEmpty(mnem)) lasHeaders.Add(mnem);
-                        continue;
-                    }
-
-                    if (inAscii && !trimmed.StartsWith("#"))
-                    {
-                        var tokens = trimmed.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                        totalRows++;
-                        if (hasDataIndex && pDataIndex != null)
-                        {
-                            pDataIndex.Value = totalRows;
-                        }
-                        bool isRowValid = true;
-
-                        for (int i = 0; i < columnPlans.Count; i++)
-                        {
-                            int sIdx = columnPlans[i].SourceIndex;
-                            if (sIdx >= 0 && sIdx < tokens.Length)
-                            {
-                                var raw = tokens[sIdx];
-                                if (string.IsNullOrWhiteSpace(raw) || raw == "-999.25" || raw == "-9999")
-                                {
-                                    cmdParams[i].Value = DBNull.Value;
-                                    if (columnPlans[i].IsDepthColumn) isRowValid = false;
-                                }
-                                else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
-                                {
-                                    cmdParams[i].Value = dblVal;
-                                    if (columnPlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
-                                    if (columnPlans[i].IsDepthColumn)
-                                    {
-                                        if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
-                                        if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
-                                    }
-                                    if (columnPlans[i].IsDateTimeColumn)
-                                    {
-                                        if (minDate == null) minDate = raw;
-                                        maxDate = raw;
-                                    }
-                                }
-                                else
-                                {
-                                    cmdParams[i].Value = raw;
-                                    if (columnPlans[i].IsDateTimeColumn)
-                                    {
-                                        if (minDate == null) minDate = raw;
-                                        maxDate = raw;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                cmdParams[i].Value = DBNull.Value;
-                                if (columnPlans[i].IsDepthColumn) isRowValid = false;
-                            }
-                        }
-
-                        if (isRowValid) validRows++;
-                        insertCmd.ExecuteNonQuery();
-
-                        if (totalRows % batchSize == 0)
-                        {
-                            transaction.Commit();
-                            transaction.Dispose();
-                            transaction = connection.BeginTransaction();
-                            insertCmd.Transaction = transaction;
-
-                            progress?.Report(new ImportProgressReport
-                            {
-                                RowsProcessed = totalRows,
-                                StatusMessage = $"Imported {totalRows:N0} records...",
-                                IsIndeterminate = true
-                            });
-                        }
-                    }
+                    pDataIndex.Value = totalRows;
                 }
-            }
-            else
-            {
-                // Stream CSV file
-                var config = new CsvConfiguration(CultureInfo.InvariantCulture)
-                {
-                    HasHeaderRecord = true,
-                    MissingFieldFound = null,
-                    BadDataFound = null,
-                    BufferSize = 65536
-                };
-
-                using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 65536);
-                long fileLength = fileStream.Length;
-                using var reader = new StreamReader(fileStream, Encoding.UTF8);
-                using var csv = new CsvReader(reader, config);
-
-                csv.Read();
-                csv.ReadHeader();
-
-                var headerMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                if (csv.HeaderRecord != null)
-                {
-                    for (int i = 0; i < csv.HeaderRecord.Length; i++)
-                    {
-                        var h = csv.HeaderRecord[i];
-                        if (!headerMap.ContainsKey(h)) headerMap[h] = i;
-                    }
-                }
+                bool isRowValid = true;
+                bool depthIsNull = false;
 
                 for (int i = 0; i < columnPlans.Count; i++)
                 {
-                    if (headerMap.TryGetValue(columnPlans[i].SourceHeader, out int idx))
-                    {
-                        columnPlans[i].SourceIndex = idx;
-                    }
-                }
+                    int sIdx = columnPlans[i].SourceIndex;
+                    string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
 
-                while (csv.Read())
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    totalRows++;
-                    if (hasDataIndex && pDataIndex != null)
+                    if (string.IsNullOrWhiteSpace(raw) || raw == "-999.25" || raw == "-9999" || (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
                     {
-                        pDataIndex.Value = totalRows;
-                    }
-                    bool isRowValid = true;
-
-                    for (int i = 0; i < columnPlans.Count; i++)
-                    {
-                        int sIdx = columnPlans[i].SourceIndex;
-                        string? raw = sIdx >= 0 ? csv.GetField(sIdx) : null;
-
-                        if (string.IsNullOrWhiteSpace(raw))
+                        cmdParams[i].Value = DBNull.Value;
+                        if (columnPlans[i].IsDepthColumn)
                         {
-                            cmdParams[i].Value = DBNull.Value;
-                            if (columnPlans[i].IsDepthColumn) isRowValid = false;
+                            isRowValid = false;
+                            depthIsNull = true;
                         }
-                        else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
+                    }
+                    else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
+                    {
+                        cmdParams[i].Value = dblVal;
+                        if (double.IsNaN(dblVal) || double.IsInfinity(dblVal)) isRowValid = false;
+
+                        if (columnPlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
+                        if (columnPlans[i].IsDepthColumn)
                         {
-                            cmdParams[i].Value = dblVal;
-                            if (columnPlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
-                            if (columnPlans[i].IsDepthColumn)
+                            if (dblVal < 0) isRowValid = false;
+                            if (!firstDepth.HasValue) firstDepth = dblVal;
+                            if (prevDepth.HasValue && calculatedStep == null)
                             {
-                                if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
-                                if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
+                                double diff = Math.Abs(dblVal - prevDepth.Value);
+                                if (diff > 0.00001)
+                                {
+                                    calculatedStep = diff.ToString("0.####", CultureInfo.InvariantCulture);
+                                }
                             }
-                            if (columnPlans[i].IsDateTimeColumn)
-                            {
-                                if (minDate == null) minDate = raw;
-                                maxDate = raw;
-                            }
+                            prevDepth = dblVal;
+                            lastDepth = dblVal;
+
+                            if (!minDepth.HasValue || dblVal < minDepth.Value) minDepth = dblVal;
+                            if (!maxDepth.HasValue || dblVal > maxDepth.Value) maxDepth = dblVal;
+                        }
+
+                        var colUpper = columnPlans[i].DbColumnName.ToUpperInvariant();
+                        if ((colUpper.Contains("RPM") || colUpper.Contains("SPPA") || colUpper.Contains("PRESS") ||
+                             colUpper.Contains("PUMP") || colUpper.Contains("TORQ") || colUpper.Contains("TQA") ||
+                             colUpper.Contains("WOB") || colUpper.Contains("GAMMA") || colUpper == "GR") && dblVal < 0)
+                        {
+                            isRowValid = false;
+                        }
+
+                        if (columnPlans[i].IsDateTimeColumn)
+                        {
+                            if (minDate == null) minDate = raw;
+                            maxDate = raw;
+                        }
+                    }
+                    else
+                    {
+                        cmdParams[i].Value = raw.Trim();
+                        if (columnPlans[i].IsDateTimeColumn)
+                        {
+                            if (minDate == null) minDate = raw.Trim();
+                            maxDate = raw.Trim();
                         }
                         else
                         {
-                            cmdParams[i].Value = raw.Trim();
-                            if (columnPlans[i].IsDateTimeColumn)
+                            isRowValid = false;
+                            if (columnPlans[i].IsDepthColumn)
                             {
-                                if (minDate == null) minDate = raw.Trim();
-                                maxDate = raw.Trim();
+                                depthIsNull = true;
                             }
                         }
                     }
+                }
 
-                    if (isRowValid) validRows++;
+                if (isRowValid) validRows++;
+                if (!depthIsNull)
+                {
                     insertCmd.ExecuteNonQuery();
+                }
 
-                    if (totalRows % batchSize == 0)
+                if (totalRows % batchSize == 0)
+                {
+                    transaction.Commit();
+                    transaction.Dispose();
+                    transaction = connection.BeginTransaction();
+                    insertCmd.Transaction = transaction;
+
+                    progress?.Report(new ImportProgressReport
                     {
-                        transaction.Commit();
-                        transaction.Dispose();
-                        transaction = connection.BeginTransaction();
-                        insertCmd.Transaction = transaction;
-
-                        double pct = fileLength > 0 ? ((double)fileStream.Position / fileLength * 100.0) : 0;
-                        progress?.Report(new ImportProgressReport
-                        {
-                            RowsProcessed = totalRows,
-                            PercentCompleted = Math.Min(99.0, pct),
-                            IsIndeterminate = false,
-                            StatusMessage = $"Importing: {totalRows:N0} rows processed ({pct:F0}%)..."
-                        });
-                    }
+                        RowsProcessed = totalRows,
+                        StatusMessage = $"Imported {totalRows:N0} records...",
+                        IsIndeterminate = true
+                    });
                 }
             }
 
@@ -1073,11 +1081,14 @@ public class WellDataRepository : IWellDataRepository
             {
                 try { transaction.Rollback(); } catch { }
                 transaction.Dispose();
+                transaction = null;
             }
             throw;
         }
 
         double finalQcScore = totalRows > 0 ? ((double)validRows / totalRows * 100.0) : 0.0;
+        string? stepIncrement = !string.IsNullOrEmpty(fileMetadata?.StepIncrement) ? fileMetadata.StepIncrement : calculatedStep;
+        string? lastDataIndex = lastDepth.HasValue ? lastDepth.Value.ToString(CultureInfo.InvariantCulture) : null;
 
         progress?.Report(new ImportProgressReport
         {
@@ -1094,9 +1105,332 @@ public class WellDataRepository : IWellDataRepository
             QcScore = finalQcScore,
             MinDepth = minDepth,
             MaxDepth = maxDepth,
+            FirstDepth = firstDepth,
+            LastDepth = lastDepth,
+            StepIncrement = stepIncrement,
+            LastDataIndex = lastDataIndex,
             MinDate = minDate,
             MaxDate = maxDate
         };
     }
-}
 
+    public async Task<List<string>> GetTableColumnsAsync(string tableName)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(tableName))
+            return new List<string>();
+
+        var connection = _session.GetConnection();
+        var columns = new List<string>();
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info([{tableName}]);";
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var colName = reader["name"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(colName))
+            {
+                columns.Add(colName);
+            }
+        }
+
+        return columns;
+    }
+
+    /// <summary>
+    /// Updates an existing DepthLog target table with data from a source file.
+    /// Strictly adheres to:
+    /// 1. Only updates mapped VuMax columns (unmapped columns retain original DB values).
+    /// 2. Does NOT create any new columns.
+    /// 3. Does NOT alter existing column names in the target table.
+    /// </summary>
+    public async Task<StreamImportResult> StreamUpdateDepthDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_session.IsProjectOpen)
+            throw new InvalidOperationException("No project is currently loaded.");
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"Import file not found: {filePath}", filePath);
+
+        var connection = _session.GetConnection();
+
+        // 1. Validate DEPTH mapping (mandatory)
+        var depthMapping = mappings.FirstOrDefault(m =>
+            m.MappedVumaxChannel.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+            m.MappedVumaxChannel.Equals("Depth", StringComparison.OrdinalIgnoreCase));
+
+        if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.CsvColumnHeader))
+        {
+            throw new InvalidOperationException("You must map and select DEPTH channel. Please map and select the depth channel to continue");
+        }
+
+        // 2. Verify target table exists and retrieve existing columns
+        bool tableExists;
+        using (var checkCmd = connection.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@tName;";
+            var pName = checkCmd.CreateParameter();
+            pName.ParameterName = "@tName";
+            pName.Value = tableName;
+            checkCmd.Parameters.Add(pName);
+            tableExists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync(cancellationToken)) > 0;
+        }
+
+        if (!tableExists)
+            throw new InvalidOperationException($"Target table '{tableName}' does not exist in the database.");
+
+        var existingTableCols = new HashSet<string>(await GetTableColumnsAsync(tableName), StringComparer.OrdinalIgnoreCase);
+
+        // 3. Filter mappings: ONLY mapped columns that exist in the target table (excluding DEPTH)
+        // Strictly prevents creation of any new columns and prevents alteration of existing column names
+        var validCurveMappings = mappings
+            .Where(m => !m.MappedVumaxChannel.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) &&
+                        !m.MappedVumaxChannel.Equals("Dynamic (New Column)", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(m.CsvColumnHeader) &&
+                        existingTableCols.Contains(m.MappedVumaxChannel))
+            .ToList();
+
+        // 4. Resolve Reader and Headers
+        var formatReaders = new IDepthLogFormatReader[]
+        {
+            new LasDepthReader(),
+            new WitsmlDepthReader(),
+            new ExcelDepthReader(),
+            new CsvDepthReader()
+        };
+        var reader = formatReaders.FirstOrDefault(r => r.CanHandle(filePath)) ?? new CsvDepthReader();
+        var fileMetadata = reader.ExtractMetadata(filePath);
+        var sourceHeaders = reader.GetHeaders(filePath, columnHeadingRow, worksheetName, delimiter);
+
+        // Map depth source column index
+        int depthSourceIndex = sourceHeaders.FindIndex(h => h.Equals(depthMapping.CsvColumnHeader, StringComparison.OrdinalIgnoreCase));
+        if (depthSourceIndex < 0 && depthMapping.CsvColumnHeader.StartsWith("#") && int.TryParse(depthMapping.CsvColumnHeader.Substring(1), out int numDepthIdx))
+        {
+            depthSourceIndex = numDepthIdx;
+        }
+
+        if (depthSourceIndex < 0)
+        {
+            throw new InvalidOperationException($"Source column '{depthMapping.CsvColumnHeader}' for DEPTH not found in file headers.");
+        }
+
+        // Map curve source column indices
+        var curvePlans = new List<ColumnPlan>();
+        for (int i = 0; i < validCurveMappings.Count; i++)
+        {
+            var map = validCurveMappings[i];
+            int sIdx = sourceHeaders.FindIndex(h => h.Equals(map.CsvColumnHeader, StringComparison.OrdinalIgnoreCase));
+            if (sIdx < 0 && map.CsvColumnHeader.StartsWith("#") && int.TryParse(map.CsvColumnHeader.Substring(1), out int numIdx))
+            {
+                sIdx = numIdx;
+            }
+
+            if (sIdx >= 0)
+            {
+                // Find exact casing from existing table columns
+                var exactDbCol = existingTableCols.First(c => c.Equals(map.MappedVumaxChannel, StringComparison.OrdinalIgnoreCase));
+                curvePlans.Add(new ColumnPlan
+                {
+                    SourceHeader = map.CsvColumnHeader,
+                    DbColumnName = exactDbCol,
+                    SourceIndex = sIdx,
+                    IsDepthColumn = false,
+                    IsHookloadColumn = exactDbCol.Equals("HKLD", StringComparison.OrdinalIgnoreCase)
+                });
+            }
+        }
+
+        // 5. Build Targeted Parameterized SQL
+        // Ensure unique index on DEPTH exists for upsert
+        try
+        {
+            using var idxCmd = connection.CreateCommand();
+            idxCmd.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS [{tableName}_PK] ON [{tableName}](DEPTH);";
+            await idxCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch { }
+
+        // Construct UPSERT statement:
+        // Only updates the mapped VuMax columns; unmapped columns retain their database values.
+        string sql;
+        if (curvePlans.Count > 0)
+        {
+            var insertColNames = new List<string> { "[DEPTH]" };
+            var insertParamNames = new List<string> { "@pDepth" };
+            var updateSetClauses = new List<string>();
+
+            for (int i = 0; i < curvePlans.Count; i++)
+            {
+                insertColNames.Add($"[{curvePlans[i].DbColumnName}]");
+                insertParamNames.Add($"@p{i}");
+                updateSetClauses.Add($"[{curvePlans[i].DbColumnName}] = excluded.[{curvePlans[i].DbColumnName}]");
+            }
+
+            sql = $"INSERT INTO [{tableName}] ({string.Join(", ", insertColNames)}) VALUES ({string.Join(", ", insertParamNames)}) " +
+                  $"ON CONFLICT([DEPTH]) DO UPDATE SET {string.Join(", ", updateSetClauses)};";
+        }
+        else
+        {
+            // Only DEPTH is mapped
+            sql = $"INSERT OR IGNORE INTO [{tableName}] ([DEPTH]) VALUES (@pDepth);";
+        }
+
+        using var updateCmd = connection.CreateCommand();
+        updateCmd.CommandText = sql;
+
+        var pDepth = updateCmd.CreateParameter();
+        pDepth.ParameterName = "@pDepth";
+        updateCmd.Parameters.Add(pDepth);
+
+        var curveParams = new DbParameter[curvePlans.Count];
+        for (int i = 0; i < curvePlans.Count; i++)
+        {
+            var p = updateCmd.CreateParameter();
+            p.ParameterName = $"@p{i}";
+            updateCmd.Parameters.Add(p);
+            curveParams[i] = p;
+        }
+
+        // 6. Stream rows and execute update
+        int totalRows = 0;
+        int validRows = 0;
+        double? minDepth = null;
+        double? maxDepth = null;
+        double? firstDepth = null;
+        double? lastDepth = null;
+        double? prevDepth = null;
+        string? calculatedStep = null;
+        const int batchSize = 50000;
+
+        DbTransaction? transaction = connection.BeginTransaction();
+        updateCmd.Transaction = transaction;
+
+        try
+        {
+            foreach (var tokens in reader.StreamDataRows(filePath, importFromRow, worksheetName, delimiter, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                totalRows++;
+
+                string? rawDepth = (depthSourceIndex >= 0 && depthSourceIndex < tokens.Length) ? tokens[depthSourceIndex] : null;
+                if (string.IsNullOrWhiteSpace(rawDepth) ||
+                    rawDepth == "-999.25" ||
+                    rawDepth == "-9999" ||
+                    (fileMetadata?.NullValue != null && rawDepth == fileMetadata.NullValue) ||
+                    !double.TryParse(rawDepth, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblDepth))
+                {
+                    // Invalid depth: skip row
+                    continue;
+                }
+
+                pDepth.Value = dblDepth;
+                bool isRowValid = true;
+
+                if (!firstDepth.HasValue) firstDepth = dblDepth;
+                if (prevDepth.HasValue && calculatedStep == null)
+                {
+                    double diff = Math.Abs(dblDepth - prevDepth.Value);
+                    if (diff > 0.00001)
+                    {
+                        calculatedStep = diff.ToString("0.####", CultureInfo.InvariantCulture);
+                    }
+                }
+                prevDepth = dblDepth;
+                lastDepth = dblDepth;
+
+                if (!minDepth.HasValue || dblDepth < minDepth.Value) minDepth = dblDepth;
+                if (!maxDepth.HasValue || dblDepth > maxDepth.Value) maxDepth = dblDepth;
+
+                // Bind curve parameters
+                for (int i = 0; i < curvePlans.Count; i++)
+                {
+                    int sIdx = curvePlans[i].SourceIndex;
+                    string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
+
+                    if (string.IsNullOrWhiteSpace(raw) ||
+                        raw == "-999.25" ||
+                        raw == "-9999" ||
+                        (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
+                    {
+                        curveParams[i].Value = DBNull.Value;
+                    }
+                    else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
+                    {
+                        curveParams[i].Value = dblVal;
+                        if (curvePlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
+                    }
+                    else
+                    {
+                        curveParams[i].Value = raw.Trim();
+                    }
+                }
+
+                if (isRowValid) validRows++;
+                updateCmd.ExecuteNonQuery();
+
+                if (totalRows % batchSize == 0)
+                {
+                    transaction.Commit();
+                    transaction.Dispose();
+                    transaction = connection.BeginTransaction();
+                    updateCmd.Transaction = transaction;
+
+                    progress?.Report(new ImportProgressReport
+                    {
+                        RowsProcessed = totalRows,
+                        StatusMessage = $"Updated {totalRows:N0} records...",
+                        IsIndeterminate = true
+                    });
+                }
+            }
+
+            transaction.Commit();
+            transaction.Dispose();
+            transaction = null;
+        }
+        catch
+        {
+            if (transaction != null)
+            {
+                try { transaction.Rollback(); } catch { }
+                transaction.Dispose();
+                transaction = null;
+            }
+            throw;
+        }
+
+        double finalQcScore = totalRows > 0 ? ((double)validRows / totalRows * 100.0) : 0.0;
+        string? stepIncrement = !string.IsNullOrEmpty(fileMetadata?.StepIncrement) ? fileMetadata.StepIncrement : calculatedStep;
+        string? lastDataIndex = lastDepth.HasValue ? lastDepth.Value.ToString(CultureInfo.InvariantCulture) : null;
+
+        progress?.Report(new ImportProgressReport
+        {
+            RowsProcessed = totalRows,
+            PercentCompleted = 100,
+            IsIndeterminate = false,
+            StatusMessage = $"Update completed! {totalRows:N0} rows processed."
+        });
+
+        return new StreamImportResult
+        {
+            TableName = tableName,
+            TotalRows = totalRows,
+            QcScore = finalQcScore,
+            MinDepth = minDepth,
+            MaxDepth = maxDepth,
+            FirstDepth = firstDepth,
+            LastDepth = lastDepth,
+            StepIncrement = stepIncrement,
+            LastDataIndex = lastDataIndex
+        };
+    }
+}

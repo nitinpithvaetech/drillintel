@@ -23,14 +23,41 @@ public partial class ImportDataViewModel : ObservableObject
     private readonly CsvImportService _importService;
     private readonly IWellDataRepository _repository;
     private readonly ProjectSession _session;
+    private readonly IImportDepthLogService _depthLogService;
 
     public event EventHandler? RequestClose;
+
+    public ObservableCollection<string> AvailableWorksheets { get; } = new();
+
+    private string? _selectedWorksheet;
+    public string? SelectedWorksheet
+    {
+        get => _selectedWorksheet;
+        set
+        {
+            if (SetProperty(ref _selectedWorksheet, value))
+            {
+                if (IsFileUploaded && !IsLoading && !string.IsNullOrEmpty(value))
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
+    }
+
+    private bool _hasMultipleWorksheets;
+    public bool HasMultipleWorksheets
+    {
+        get => _hasMultipleWorksheets;
+        set => SetProperty(ref _hasMultipleWorksheets, value);
+    }
 
     public ImportDataViewModel(ProjectSession session)
     {
         _session = session;
         _importService = new CsvImportService();
         _repository = new WellDataRepository(_session);
+        _depthLogService = new ImportDepthLogService(_repository);
 
         ExistingWellList = new ObservableCollection<Well>();
         UpdateWellList = new ObservableCollection<Well>();
@@ -58,6 +85,17 @@ public partial class ImportDataViewModel : ObservableObject
             {
                 ProjectWellName = _session.ProjectName;
                 NewWellName = _session.ProjectName;
+            }
+
+            var depthLogs = await _repository.GetDepthLogsAsync();
+            ExistingDepthLogs.Clear();
+            foreach (var dl in depthLogs)
+            {
+                ExistingDepthLogs.Add(dl);
+            }
+            if (SelectedExistingDepthLog == null && ExistingDepthLogs.Count > 0)
+            {
+                SelectedExistingDepthLog = ExistingDepthLogs.FirstOrDefault();
             }
         }
         catch
@@ -98,6 +136,10 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.OperationType == value) return;
             Settings.OperationType = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsNewDataOperation));
+            OnPropertyChanged(nameof(IsUpdateDataOperation));
+            OnPropertyChanged(nameof(StartImportButtonText));
+            OnPropertyChanged(nameof(MappingSubtitle));
             OnPropertyChanged(nameof(ShowDataAssociationTab));
             OnPropertyChanged(nameof(ShowDataAssociationUpdateTab));
             OnPropertyChanged(nameof(ShowDateFormatTab));
@@ -105,6 +147,62 @@ public partial class ImportDataViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowFinishTab));
         }
     }
+
+    public bool IsNewDataOperation
+    {
+        get => OperationType == OperationType.NewData;
+        set
+        {
+            if (value && OperationType != OperationType.NewData)
+            {
+                OperationType = OperationType.NewData;
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
+    }
+
+    public bool IsUpdateDataOperation
+    {
+        get => OperationType == OperationType.UpdateData;
+        set
+        {
+            if (value && OperationType != OperationType.UpdateData)
+            {
+                OperationType = OperationType.UpdateData;
+                if (SelectedExistingDepthLog == null && ExistingDepthLogs.Count > 0)
+                {
+                    SelectedExistingDepthLog = ExistingDepthLogs.FirstOrDefault();
+                }
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
+    }
+
+    public ObservableCollection<DepthLog> ExistingDepthLogs { get; } = new();
+
+    private DepthLog? _selectedExistingDepthLog;
+    public DepthLog? SelectedExistingDepthLog
+    {
+        get => _selectedExistingDepthLog;
+        set
+        {
+            if (SetProperty(ref _selectedExistingDepthLog, value))
+            {
+                if (value != null)
+                {
+                    Settings.UpdatedTimelogId = value.ObjectID;
+                    LogName = value.nameLog;
+                }
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
+    }
+
+    public string StartImportButtonText => OperationType == OperationType.UpdateData ? "UPDATE LOG" : "START IMPORT";
+
+    public string MappingSubtitle => OperationType == OperationType.UpdateData
+        ? "Update Mode: Only mapped VuMax channels will be updated. Unmapped existing columns retain current database values. No new columns will be created."
+        : "We have auto-mapped standard VuMax channels. Unmapped columns will be created as dynamic custom fields.";
 
     public ImportDataType TypeOfDataInput
     {
@@ -166,7 +264,17 @@ public partial class ImportDataViewModel : ObservableObject
     public DelimiterChar ColumnDelimiter
     {
         get => Settings.ColumnDelimiter;
-        set { Settings.ColumnDelimiter = value; OnPropertyChanged(); OnPropertyChanged(nameof(ShowOtherDelimiterBox)); }
+        set
+        {
+            if (Settings.ColumnDelimiter == value) return;
+            Settings.ColumnDelimiter = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowOtherDelimiterBox));
+            if (IsFileUploaded && !IsLoading)
+            {
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
     }
 
     public string OtherColumnDelimiter
@@ -219,13 +327,31 @@ public partial class ImportDataViewModel : ObservableObject
     public int ImportFromRow
     {
         get => Settings.ImportFromRow;
-        set { Settings.ImportFromRow = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.ImportFromRow == value) return;
+            Settings.ImportFromRow = value;
+            OnPropertyChanged();
+            if (IsFileUploaded && !IsLoading && value >= 1)
+            {
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
     }
 
     public int ColumnHeadingRow
     {
         get => Settings.ColumnHeadingRow;
-        set { Settings.ColumnHeadingRow = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.ColumnHeadingRow == value) return;
+            Settings.ColumnHeadingRow = value;
+            OnPropertyChanged();
+            if (IsFileUploaded && !IsLoading && value >= 1)
+            {
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
     }
 
     public bool IsDatetimeInSeperatorColumn
@@ -518,9 +644,26 @@ public partial class ImportDataViewModel : ObservableObject
     private void NextStep()
     {
         if (CurrentTab == WizardTab.FileSelection && IsFileUploaded)
+        {
             CurrentTab = WizardTab.Mapping;
+        }
         else if (CurrentTab == WizardTab.Mapping)
+        {
+            if (TypeOfDataInput == ImportDataType.DepthLogData)
+            {
+                var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+                if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+                {
+                    MessageBox.Show(
+                        "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+            }
             CurrentTab = WizardTab.Finalize;
+        }
     }
 
     private void PreviousStep()
@@ -535,7 +678,7 @@ public partial class ImportDataViewModel : ObservableObject
 
     private void UploadFile()
     {
-        var filter = "Supported files (*.csv;*.las)|*.csv;*.las|CSV files (*.csv)|*.csv|LAS files (*.las)|*.las|All files (*.*)|*.*";
+        var filter = "All Supported Files (*.csv;*.txt;*.las;*.witsml;*.xml;*.xlsx;*.xls)|*.csv;*.txt;*.las;*.witsml;*.xml;*.xlsx;*.xls|CSV / Text Files (*.csv;*.txt)|*.csv;*.txt|Excel Files (*.xlsx;*.xls)|*.xlsx;*.xls|LAS Files (*.las)|*.las|WITSML Files (*.witsml;*.xml)|*.witsml;*.xml|All Files (*.*)|*.*";
 
         var dlg = new OpenFileDialog { Filter = filter };
         if (dlg.ShowDialog() != true) return;
@@ -553,29 +696,49 @@ public partial class ImportDataViewModel : ObservableObject
             LogName = System.IO.Path.GetFileNameWithoutExtension(filePath);
         }
 
+        ColumnMappings.Clear();
+        await RefreshPreviewAsync(reloadWorksheets: true);
+    }
+
+    private async Task RefreshPreviewAsync(bool reloadWorksheets = false)
+    {
+        if (string.IsNullOrEmpty(FileName)) return;
+
         try 
         {
             IsLoading = true;
             ImportProgressStatus = "Reading file headers...";
 
+            var ext = System.IO.Path.GetExtension(FileName).ToLowerInvariant();
+            bool isExcel = ext == ".xlsx" || ext == ".xls";
+
+            if (reloadWorksheets && isExcel)
+            {
+                var sheets = await Task.Run(() => DrillIntel.Services.Readers.ExcelDepthReader.GetWorksheetNames(FileName));
+                AvailableWorksheets.Clear();
+                foreach (var s in sheets) AvailableWorksheets.Add(s);
+                HasMultipleWorksheets = AvailableWorksheets.Count > 1;
+                SelectedWorksheet = AvailableWorksheets.FirstOrDefault();
+            }
+            else if (!isExcel)
+            {
+                AvailableWorksheets.Clear();
+                HasMultipleWorksheets = false;
+                SelectedWorksheet = null;
+            }
+
+            var effectiveDelimiter = ColumnDelimiter switch
+            {
+                DelimiterChar.Tab => "\t",
+                DelimiterChar.Other => !string.IsNullOrEmpty(OtherColumnDelimiter) ? OtherColumnDelimiter : ",",
+                _ => ","
+            };
+
             var (headers, previewRows) = await Task.Run(() =>
             {
-                var rawHeaders = _importService.GetHeaders(FileName);
-                var distinctHeaders = new List<string>();
-                foreach (var h in rawHeaders)
-                {
-                    var colName = string.IsNullOrWhiteSpace(h) ? $"Column {distinctHeaders.Count + 1}" : h.Trim();
-                    int suffix = 1;
-                    var finalColName = colName;
-                    while (distinctHeaders.Contains(finalColName))
-                    {
-                        finalColName = $"{colName}_{suffix++}";
-                    }
-                    distinctHeaders.Add(finalColName);
-                }
-
-                var rows = _importService.GetPreviewRows(FileName, 100);
-                return (distinctHeaders, rows);
+                var h = _depthLogService.GetHeaders(FileName, ColumnHeadingRow, SelectedWorksheet, effectiveDelimiter);
+                var r = _depthLogService.GetPreviewRows(FileName, ImportFromRow, 100, SelectedWorksheet, effectiveDelimiter);
+                return (h, r);
             });
 
             PreviewColumns.Clear();
@@ -595,45 +758,158 @@ public partial class ImportDataViewModel : ObservableObject
             }
             PreviewRows = dt;
 
-            ColumnMappings.Clear();
-            var targetOptions = TypeOfDataInput == ImportDataType.DepthLogData
-                ? new List<MappingChannels>
-                  {
-                      new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
-                  }
-                : new List<MappingChannels>
-                  {
-                      new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
-                      new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
-                      new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
-                      new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
-                      new MappingChannels { Mnemonic = "BPOS",  ChannelName = "Block Position" },
-                      new MappingChannels { Mnemonic = "CIRC",  ChannelName = "Circulation" },
-                      new MappingChannels { Mnemonic = "STOR",  ChannelName = "Surface Torque" },
-                      new MappingChannels { Mnemonic = "HDTH",  ChannelName = "Hole Depth" },
-                  };
             var sourceOptions = new List<string> { "" };
             sourceOptions.AddRange(headers);
-            
-            foreach (var t in targetOptions)
-            {
-                var row = new ColumnMappingRow { VuMaxColumnID = t.Mnemonic };
-                foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
-                
-                // Auto-map based on exact match or common naming conventions
-                var dictMatch = headers.FirstOrDefault(h => 
-                    h.Equals(t.Mnemonic, StringComparison.OrdinalIgnoreCase) ||
-                    h.StartsWith(t.Mnemonic + "#", StringComparison.OrdinalIgnoreCase) ||
-                    h.StartsWith(t.Mnemonic + "_", StringComparison.OrdinalIgnoreCase) ||
-                    (t.Mnemonic == "DEPTH" && (h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) || h.Equals("DMEA", StringComparison.OrdinalIgnoreCase))));
 
-                if (dictMatch != null)
+            if (TypeOfDataInput == ImportDataType.DepthLogData && OperationType == OperationType.UpdateData && SelectedExistingDepthLog != null)
+            {
+                var existingCols = await _repository.GetTableColumnsAsync(SelectedExistingDepthLog.__dataTableName);
+                var targetCols = existingCols.Where(c => !c.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (!targetCols.Any(c => c.Equals("DEPTH", StringComparison.OrdinalIgnoreCase)))
                 {
-                    row.SourceColumnName = dictMatch;
-                    t.MappedMnemonic = dictMatch;
+                    targetCols.Insert(0, "DEPTH");
                 }
-                
-                ColumnMappings.Add(row);
+
+                var previousSelections = ColumnMappings.ToDictionary(m => m.VuMaxColumnID, m => m.SourceColumnName, StringComparer.OrdinalIgnoreCase);
+
+                ColumnMappings.Clear();
+                foreach (var colName in targetCols)
+                {
+                    var row = new ColumnMappingRow { VuMaxColumnID = colName };
+                    foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
+
+                    if (previousSelections.TryGetValue(colName, out var prev) && !string.IsNullOrEmpty(prev) && headers.Contains(prev))
+                    {
+                        row.SourceColumnName = prev;
+                    }
+                    else
+                    {
+                        // Mapping Rules:
+                        // "If the VuMax column name matches the imported file column name, auto-map and update.
+                        // If no match is found, keep current logic as it is."
+                        var dictMatch = headers.FirstOrDefault(h =>
+                            h.Equals(colName, StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(colName + "#", StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(colName + "_", StringComparison.OrdinalIgnoreCase) ||
+                            (colName.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) && (
+                                h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("MeasuredDepth", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("Measured Depth", StringComparison.OrdinalIgnoreCase))));
+
+                        if (dictMatch != null)
+                        {
+                            row.SourceColumnName = dictMatch;
+                        }
+                    }
+
+                    ColumnMappings.Add(row);
+                }
+            }
+            else if (ColumnMappings.Count == 0)
+            {
+                var targetOptions = TypeOfDataInput == ImportDataType.DepthLogData
+                    ? new List<MappingChannels>
+                      {
+                          new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
+                          //new MappingChannels { Mnemonic = "GAMMARAY", ChannelName = "Gamma Ray" },
+                          //new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
+                          //new MappingChannels { Mnemonic = "WOB",   ChannelName = "Weight on Bit" },
+                          //new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
+                          //new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
+                          //new MappingChannels { Mnemonic = "TORQ",  ChannelName = "Torque" },
+                          //new MappingChannels { Mnemonic = "ROP",   ChannelName = "Rate of Penetration" },
+                      }
+                    : new List<MappingChannels>
+                      {
+                          new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
+                          new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
+                          new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
+                          new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
+                          new MappingChannels { Mnemonic = "BPOS",  ChannelName = "Block Position" },
+                          new MappingChannels { Mnemonic = "CIRC",  ChannelName = "Circulation" },
+                          new MappingChannels { Mnemonic = "STOR",  ChannelName = "Surface Torque" },
+                          new MappingChannels { Mnemonic = "HDTH",  ChannelName = "Hole Depth" },
+                      };
+
+                foreach (var t in targetOptions)
+                {
+                    var row = new ColumnMappingRow { VuMaxColumnID = t.Mnemonic };
+                    foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
+                    
+                    // Auto-map based on exact match or common naming conventions
+                    var dictMatch = headers.FirstOrDefault(h => 
+                        h.Equals(t.Mnemonic, StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(t.Mnemonic + "#", StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(t.Mnemonic + "_", StringComparison.OrdinalIgnoreCase) ||
+                        (t.Mnemonic == "DEPTH" && (
+                            h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) || 
+                            h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("MeasuredDepth", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("Measured Depth", StringComparison.OrdinalIgnoreCase))));
+
+                    if (dictMatch != null)
+                    {
+                        row.SourceColumnName = dictMatch;
+                        t.MappedMnemonic = dictMatch;
+                    }
+                    
+                    row.PropertyChanged += (sender, args) =>
+                    {
+                        if (args.PropertyName == nameof(ColumnMappingRow.SourceColumnName))
+                        {
+                            var changedRow = (ColumnMappingRow)sender!;
+                            if (!string.IsNullOrEmpty(changedRow.SourceColumnName))
+                            {
+                                foreach (var other in ColumnMappings)
+                                {
+                                    if (!ReferenceEquals(other, changedRow) && other.SourceColumnName == changedRow.SourceColumnName)
+                                    {
+                                        other.SourceColumnName = "";
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    ColumnMappings.Add(row);
+                }
+            }
+            else
+            {
+                // Preserve existing user selection or explicit mapping
+                foreach (var row in ColumnMappings)
+                {
+                    var currentSelection = row.SourceColumnName;
+                    row.AvailableSourceColumns.Clear();
+                    foreach (var s in sourceOptions) row.AvailableSourceColumns.Add(s);
+
+                    if (!string.IsNullOrEmpty(currentSelection) && headers.Contains(currentSelection))
+                    {
+                        row.SourceColumnName = currentSelection;
+                    }
+                    else if (string.IsNullOrEmpty(row.SourceColumnName))
+                    {
+                        var dictMatch = headers.FirstOrDefault(h => 
+                            h.Equals(row.VuMaxColumnID, StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(row.VuMaxColumnID + "#", StringComparison.OrdinalIgnoreCase) ||
+                            h.StartsWith(row.VuMaxColumnID + "_", StringComparison.OrdinalIgnoreCase) ||
+                            (row.VuMaxColumnID == "DEPTH" && (
+                                h.Equals("DEPT", StringComparison.OrdinalIgnoreCase) || 
+                                h.Equals("DMEA", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("MeasuredDepth", StringComparison.OrdinalIgnoreCase) ||
+                                h.Equals("Measured Depth", StringComparison.OrdinalIgnoreCase))));
+
+                        if (dictMatch != null)
+                        {
+                            row.SourceColumnName = dictMatch;
+                        }
+                    }
+                }
             }
 
             RowsMappingUpdate.Clear();
@@ -655,11 +931,123 @@ public partial class ImportDataViewModel : ObservableObject
         }
     }
 
-    private void UploadMappingFile()
+    private async void UploadMappingFile()
     {
-        var dlg = new OpenFileDialog { Filter = "Mapping files (*.json;*.xml;*.csv)|*.json;*.xml;*.csv|All files (*.*)|*.*" };
+        var dlg = new OpenFileDialog { Filter = "Mapping files (*.vmf;*.json;*.csv)|*.vmf;*.json;*.csv|VMF files (*.vmf)|*.vmf|JSON files (*.json)|*.json|CSV files (*.csv)|*.csv|All files (*.*)|*.*" };
         if (dlg.ShowDialog() == true)
+        {
             MappingFileName = dlg.FileName;
+            await ApplyMappingFileAsync(dlg.FileName);
+        }
+    }
+
+    private async Task ApplyMappingFileAsync(string mappingFilePath)
+    {
+        try
+        {
+            var mappingResult = _depthLogService.LoadMappingFile(mappingFilePath);
+            if (!mappingResult.Success)
+            {
+                MessageBox.Show(mappingResult.ErrorMessage ?? "Failed to load mapping file.", "Mapping Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            bool needPreviewRefresh = false;
+
+            if (mappingResult.ColumnHeadingRow.HasValue && mappingResult.ColumnHeadingRow.Value != ColumnHeadingRow)
+            {
+                Settings.ColumnHeadingRow = mappingResult.ColumnHeadingRow.Value;
+                OnPropertyChanged(nameof(ColumnHeadingRow));
+                needPreviewRefresh = true;
+            }
+
+            if (mappingResult.ImportFromRow.HasValue && mappingResult.ImportFromRow.Value != ImportFromRow)
+            {
+                Settings.ImportFromRow = mappingResult.ImportFromRow.Value;
+                OnPropertyChanged(nameof(ImportFromRow));
+                needPreviewRefresh = true;
+            }
+
+            if (mappingResult.DatetimeSeparator != null)
+                DatetimeSeparator = mappingResult.DatetimeSeparator;
+
+            if (mappingResult.DateTimeInSeparateCol.HasValue)
+                IsDatetimeInSeperatorColumn = mappingResult.DateTimeInSeparateCol.Value;
+
+            if (mappingResult.DateColNo.HasValue)
+                DateColNo = mappingResult.DateColNo.Value;
+
+            if (mappingResult.TimeColNo.HasValue)
+                TimeColNo = mappingResult.TimeColNo.Value;
+
+            if (!string.IsNullOrEmpty(mappingResult.DateFormat))
+            {
+                if (mappingResult.DateFormat.Contains("ISO", StringComparison.OrdinalIgnoreCase))
+                    DateFormat = DateFormatType.ISOFormat;
+                else if (mappingResult.DateFormat.Contains("dd", StringComparison.OrdinalIgnoreCase))
+                    DateFormat = DateFormatType.DDMMYYYYFormat;
+                else if (mappingResult.DateFormat.Contains("MM", StringComparison.OrdinalIgnoreCase))
+                    DateFormat = DateFormatType.MMDDYYYYFormat;
+            }
+
+            if (needPreviewRefresh && !string.IsNullOrEmpty(FileName))
+            {
+                await RefreshPreviewAsync(reloadWorksheets: false);
+            }
+
+            var sourceOptions = new List<string> { "" };
+            sourceOptions.AddRange(PreviewColumns);
+
+            // 1. TargetToColumnIndex mappings (e.g. from .vmf DEPTH~0, DBPOS~2)
+            foreach (var kvp in mappingResult.TargetToColumnIndex)
+            {
+                var targetMnemonic = kvp.Key;
+                var colIndex = kvp.Value;
+                if (colIndex >= 0 && colIndex < PreviewColumns.Count)
+                {
+                    var sourceColName = PreviewColumns[colIndex];
+                    var existing = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(targetMnemonic, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        existing.SourceColumnName = sourceColName;
+                    }
+                    else
+                    {
+                        var newRow = new ColumnMappingRow { VuMaxColumnID = targetMnemonic, SourceColumnName = sourceColName };
+                        foreach (var s in sourceOptions) newRow.AvailableSourceColumns.Add(s);
+                        ColumnMappings.Add(newRow);
+                    }
+                }
+            }
+
+            // 2. TargetToSourceColumn mappings (e.g. from JSON or CSV)
+            foreach (var kvp in mappingResult.TargetToSourceColumn)
+            {
+                var targetMnemonic = kvp.Key;
+                var sourceName = kvp.Value;
+                var matchedCol = PreviewColumns.FirstOrDefault(c => c.Equals(sourceName, StringComparison.OrdinalIgnoreCase));
+                if (matchedCol != null)
+                {
+                    var existing = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(targetMnemonic, StringComparison.OrdinalIgnoreCase));
+                    if (existing != null)
+                    {
+                        existing.SourceColumnName = matchedCol;
+                    }
+                    else
+                    {
+                        var newRow = new ColumnMappingRow { VuMaxColumnID = targetMnemonic, SourceColumnName = matchedCol };
+                        foreach (var s in sourceOptions) newRow.AvailableSourceColumns.Add(s);
+                        ColumnMappings.Add(newRow);
+                    }
+                }
+            }
+
+            MessageBox.Show($"Loaded mapping file successfully: {System.IO.Path.GetFileName(mappingFilePath)}", "Mapping Loaded", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error applying mapping file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async Task SaveAsync()
@@ -670,6 +1058,20 @@ public partial class ImportDataViewModel : ObservableObject
             return;
         }
 
+        if (TypeOfDataInput == ImportDataType.DepthLogData)
+        {
+            var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+            if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+            {
+                MessageBox.Show(
+                    "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+        }
+
         IsLoading = true;
         IsIndeterminateProgress = true;
         ImportProgressPercent = 0;
@@ -677,21 +1079,141 @@ public partial class ImportDataViewModel : ObservableObject
 
         try
         {
-            var activeMappings = new List<ChannelMapping>();
-            foreach (var col in PreviewColumns)
+            bool isDepthLog = TypeOfDataInput == ImportDataType.DepthLogData;
+
+            if (isDepthLog && OperationType == OperationType.UpdateData)
             {
-                var mapping = ColumnMappings.FirstOrDefault(m => m.SourceColumnName == col);
-                if (mapping != null)
+                if (SelectedExistingDepthLog == null)
                 {
-                    activeMappings.Add(new ChannelMapping { CsvColumnHeader = col, MappedVumaxChannel = mapping.VuMaxColumnID });
+                    MessageBox.Show("Please select an existing DepthLog to update.", "Import Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
-                else
+
+                string updateTargetTableName = SelectedExistingDepthLog.__dataTableName;
+                var existingCols = new HashSet<string>(await _repository.GetTableColumnsAsync(updateTargetTableName), StringComparer.OrdinalIgnoreCase);
+
+                // Update Logic:
+                // For each mapped column:
+                // Take the Source Column value from the uploaded file.
+                // Replace/update the value in the corresponding VuMax mapped column.
+                // Only update VuMax columns when a valid mapping exists.
+                // Restrictions:
+                // Do not create any new columns.
+                // Do not alter existing column names in the target table (e.g., depthLog11026259#41675093).
+                // Only update values in mapped VuMax columns.
+                var updateMappings = new List<ChannelMapping>();
+                foreach (var mapping in ColumnMappings)
                 {
-                    activeMappings.Add(new ChannelMapping { CsvColumnHeader = col, MappedVumaxChannel = "Dynamic (New Column)" });
+                    if (!string.IsNullOrWhiteSpace(mapping.SourceColumnName) &&
+                        existingCols.Contains(mapping.VuMaxColumnID))
+                    {
+                        updateMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = mapping.SourceColumnName,
+                            MappedVumaxChannel = mapping.VuMaxColumnID
+                        });
+                    }
+                }
+
+                var updateProgress = new Progress<ImportProgressReport>(report =>
+                {
+                    ImportProgressStatus = report.StatusMessage;
+                    ImportProgressPercent = report.PercentCompleted;
+                    IsIndeterminateProgress = report.IsIndeterminate;
+                });
+
+                var updateDelimiter = ColumnDelimiter switch
+                {
+                    DelimiterChar.Tab => "\t",
+                    DelimiterChar.Other => !string.IsNullOrEmpty(OtherColumnDelimiter) ? OtherColumnDelimiter : ",",
+                    _ => ","
+                };
+
+                var updateResult = await Task.Run(async () =>
+                {
+                    return await _repository.StreamUpdateDepthDataAsync(
+                        updateTargetTableName,
+                        FileName,
+                        updateMappings,
+                        ColumnHeadingRow,
+                        ImportFromRow,
+                        updateDelimiter,
+                        SelectedWorksheet,
+                        updateProgress);
+                });
+
+                if (updateResult != null)
+                {
+                    SelectedExistingDepthLog.description = $"QC: {updateResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                    if (updateResult.MinDepth.HasValue)
+                        SelectedExistingDepthLog.startIndex = updateResult.MinDepth.Value.ToString(CultureInfo.InvariantCulture);
+                    if (updateResult.MaxDepth.HasValue)
+                        SelectedExistingDepthLog.endIndex = updateResult.MaxDepth.Value.ToString(CultureInfo.InvariantCulture);
+                    if (!string.IsNullOrEmpty(updateResult.StepIncrement))
+                        SelectedExistingDepthLog.stepIncrement = updateResult.StepIncrement;
+                    if (!string.IsNullOrEmpty(updateResult.LastDataIndex))
+                        SelectedExistingDepthLog.lastDataIndex = updateResult.LastDataIndex;
+
+                    await _repository.LogDepthLogAsync(SelectedExistingDepthLog);
+
+                    MessageBox.Show($"Update successful!\n\nRecords Processed: {updateResult.TotalRows:N0}\nQC Score: {updateResult.QcScore:F1}%\nTarget Table: {updateTargetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+
+                ColumnMappings.Clear();
+                FileName = string.Empty;
+                LogName = string.Empty;
+                IsFileUploaded = false;
+
+                RequestClose?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            var activeMappings = new List<ChannelMapping>();
+            var mappedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var mappedVuMaxTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Process mapped VuMax channels first (prioritizing DEPTH channel)
+            var orderedMappings = ColumnMappings
+                .OrderByDescending(m => m.VuMaxColumnID.Equals("DEPTH", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var mapping in orderedMappings)
+            {
+                if (!string.IsNullOrWhiteSpace(mapping.SourceColumnName) &&
+                    PreviewColumns.Any(c => c.Equals(mapping.SourceColumnName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var matchedCol = PreviewColumns.First(c => c.Equals(mapping.SourceColumnName, StringComparison.OrdinalIgnoreCase));
+                    if (!mappedSources.Contains(matchedCol) && !mappedVuMaxTargets.Contains(mapping.VuMaxColumnID))
+                    {
+                        activeMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = matchedCol,
+                            MappedVumaxChannel = mapping.VuMaxColumnID
+                        });
+                        mappedSources.Add(matchedCol);
+                        mappedVuMaxTargets.Add(mapping.VuMaxColumnID);
+                    }
                 }
             }
 
-            bool isDepthLog = TypeOfDataInput == ImportDataType.DepthLogData;
+            // 2. Process unmapped imported columns (dynamically create new columns in target table)
+            foreach (var col in PreviewColumns)
+            {
+                // If mapped to a VuMax channel, do NOT create or keep the original imported column
+                if (mappedSources.Contains(col))
+                    continue;
+
+                // If this unmapped column name conflicts with an already claimed target VuMax channel,
+                // skip it to prevent creating duplicate column in table
+                if (mappedVuMaxTargets.Contains(col))
+                    continue;
+
+                activeMappings.Add(new ChannelMapping
+                {
+                    CsvColumnHeader = col,
+                    MappedVumaxChannel = col
+                });
+            }
 
             var effectiveWellName = !string.IsNullOrWhiteSpace(ProjectWellName) && ProjectWellName != "Loading Well..."
                 ? ProjectWellName.Trim()
@@ -721,7 +1243,7 @@ public partial class ImportDataViewModel : ObservableObject
                 var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var map in activeMappings)
                 {
-                    var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? map.CsvColumnHeader : map.MappedVumaxChannel;
+                    var targetChannel = map.MappedVumaxChannel;
                     var safeMnemonic = WellDataRepository.SanitizeIdentifier(targetChannel, order - 1);
                     var finalMnemonic = safeMnemonic;
                     int suffix = 1;
@@ -817,34 +1339,56 @@ public partial class ImportDataViewModel : ObservableObject
                 IsIndeterminateProgress = report.IsIndeterminate;
             });
 
+            var effectiveDelimiter = ColumnDelimiter switch
+            {
+                DelimiterChar.Tab => "\t",
+                DelimiterChar.Other => !string.IsNullOrEmpty(OtherColumnDelimiter) ? OtherColumnDelimiter : ",",
+                _ => ","
+            };
+
             // Execute streaming import directly on background thread to keep UI completely responsive
             var importResult = await Task.Run(async () =>
             {
-                return await _repository.StreamImportDataAsync(targetTableName, FileName, activeMappings, progress);
+                return await _repository.StreamImportDataAsync(
+                    targetTableName,
+                    FileName,
+                    activeMappings,
+                    ColumnHeadingRow,
+                    ImportFromRow,
+                    effectiveDelimiter,
+                    SelectedWorksheet,
+                    progress);
             });
 
-            if (isDepthLog && depthLog != null)
+            if (importResult != null)
             {
-                depthLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
-                if (importResult.MinDepth.HasValue)
-                    depthLog.startIndex = importResult.MinDepth.Value.ToString(CultureInfo.InvariantCulture);
-                if (importResult.MaxDepth.HasValue)
-                    depthLog.endIndex = importResult.MaxDepth.Value.ToString(CultureInfo.InvariantCulture);
+                if (isDepthLog && depthLog != null)
+                {
+                    depthLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                    if (importResult.MinDepth.HasValue)
+                        depthLog.startIndex = importResult.MinDepth.Value.ToString(CultureInfo.InvariantCulture);
+                    if (importResult.MaxDepth.HasValue)
+                        depthLog.endIndex = importResult.MaxDepth.Value.ToString(CultureInfo.InvariantCulture);
+                    depthLog.stepIncrement = importResult.StepIncrement ?? "0";
+                    depthLog.lastDataIndex = importResult.LastDataIndex ?? "0";
+                    depthLog.indexCurve = "DEPTH";
+                    depthLog.indexType = "measured depth";
 
-                await _repository.LogDepthLogAsync(depthLog);
+                    await _repository.LogDepthLogAsync(depthLog);
+                }
+                else if (timeLog != null)
+                {
+                    timeLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                    if (!string.IsNullOrEmpty(importResult.MinDate))
+                        timeLog.startIndex = importResult.MinDate;
+                    if (!string.IsNullOrEmpty(importResult.MaxDate))
+                        timeLog.endIndex = importResult.MaxDate;
+
+                    await _repository.LogTimeLogAsync(timeLog);
+                }
+
+                MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            else if (timeLog != null)
-            {
-                timeLog.description = $"QC: {importResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
-                if (!string.IsNullOrEmpty(importResult.MinDate))
-                    timeLog.startIndex = importResult.MinDate;
-                if (!string.IsNullOrEmpty(importResult.MaxDate))
-                    timeLog.endIndex = importResult.MaxDate;
-
-                await _repository.LogTimeLogAsync(timeLog);
-            }
-
-            MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             
             ColumnMappings.Clear();
             FileName = string.Empty;

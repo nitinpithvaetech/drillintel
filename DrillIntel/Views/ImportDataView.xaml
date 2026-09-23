@@ -58,20 +58,44 @@
             
             <!-- STEP 1: File Selection -->
             <TabItem Tag="{x:Static models:WizardTab.FileSelection}">
-                <materialDesign:Card Padding="32" UniformCornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <materialDesign:Card Padding="32" UniformCornerRadius="8" VerticalAlignment="Center" HorizontalAlignment="Center" MinWidth="480">
                     <StackPanel>
-                        <TextBlock Text="Step 1 of 3: Select File" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,24" HorizontalAlignment="Center" />
+                        <TextBlock Text="Step 1 of 3: Select File" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,20" HorizontalAlignment="Center" />
                         
-                        <Grid Width="400" Height="250" AllowDrop="True" Drop="DropZone_Drop" MouseLeftButtonDown="DropZone_Click" Cursor="Hand" Background="Transparent" ToolTip="Drag and drop your data file here">
+                        <!-- Operation Mode Selector -->
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16,12" Margin="0,0,0,20" BorderBrush="#E5E7EB" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="Operation Mode" FontSize="12" Foreground="Gray" FontWeight="Medium" Margin="0,0,0,8" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <RadioButton Grid.Column="0" Content="Create New Log" IsChecked="{Binding IsNewDataOperation}" FontWeight="Medium" Margin="0,0,20,0" GroupName="OperationTypeGroup" />
+                                    <RadioButton Grid.Column="1" Content="Update Existing Log" IsChecked="{Binding IsUpdateDataOperation}" FontWeight="Medium" Margin="0,0,16,0" GroupName="OperationTypeGroup" />
+                                    <ComboBox Grid.Column="2" 
+                                              ItemsSource="{Binding ExistingDepthLogs}" 
+                                              SelectedItem="{Binding SelectedExistingDepthLog}" 
+                                              DisplayMemberPath="nameLog" 
+                                              Visibility="{Binding IsUpdateDataOperation, Converter={StaticResource BoolToVisibilityConverter}}"
+                                              materialDesign:HintAssist.Hint="Select DepthLog to update"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Center" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid Width="420" Height="220" AllowDrop="True" Drop="DropZone_Drop" MouseLeftButtonDown="DropZone_Click" Cursor="Hand" Background="Transparent" ToolTip="Drag and drop your data file here">
                             <Rectangle Stroke="{DynamicResource PrimaryHueMidBrush}" StrokeThickness="2" StrokeDashArray="4 4" RadiusX="8" RadiusY="8" Fill="#0A000000" />
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                 <materialDesign:PackIcon Kind="CloudUploadOutline" Width="64" Height="64" Foreground="{DynamicResource PrimaryHueMidBrush}" HorizontalAlignment="Center" Margin="0,0,0,16" />
-                                <TextBlock Text="Drag and drop your CSV/Excel file here" FontSize="16" HorizontalAlignment="Center" />
+                                <TextBlock Text="Drag and drop your CSV / Excel / LAS / WITSML file here" FontSize="16" HorizontalAlignment="Center" />
                                 <TextBlock Text="or click to browse" FontSize="14" Foreground="Gray" HorizontalAlignment="Center" Margin="0,4,0,0" />
                             </StackPanel>
                         </Grid>
 
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0" Visibility="{Binding IsFileUploaded, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,20,0,0" Visibility="{Binding IsFileUploaded, Converter={StaticResource BoolToVisibilityConverter}}">
                             <materialDesign:PackIcon Kind="CheckCircle" Foreground="Green" VerticalAlignment="Center" Margin="0,0,8,0" />
                             <TextBlock Text="{Binding FileName}" VerticalAlignment="Center" FontWeight="Medium" />
                         </StackPanel>
@@ -83,10 +107,35 @@
             <TabItem Tag="{x:Static models:WizardTab.Mapping}">
                 <materialDesign:Card Padding="24" UniformCornerRadius="8">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,16">
-                            <TextBlock Text="Step 2 of 3: Map Columns" FontSize="18" FontWeight="SemiBold" />
-                            <TextBlock Text="We have auto-mapped standard VuMax channels. Unmapped columns will be created as dynamic custom fields." Foreground="Gray" Margin="0,4,0,0" />
-                        </StackPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Step 2 of 3: Map Columns" FontSize="18" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding MappingSubtitle}" Foreground="Gray" Margin="0,4,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- Worksheet Selector for Excel -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Visibility="{Binding HasMultipleWorksheets, Converter={StaticResource BoolToVisibilityConverter}}" VerticalAlignment="Center">
+                                    <materialDesign:PackIcon Kind="FileExcel" Foreground="#217346" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <TextBlock Text="Sheet:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="Medium" />
+                                    <ComboBox ItemsSource="{Binding AvailableWorksheets}" SelectedItem="{Binding SelectedWorksheet}" Width="140" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <!-- Load Mapping File Button -->
+                                <Button Command="{Binding UploadMappingFileCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        ToolTip="Load column mapping and row settings from .vmf, .json, or .csv file"
+                                        Padding="12,4"
+                                        Height="36">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="FolderUploadOutline" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="Load Mapping File" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
 
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
@@ -202,9 +251,32 @@
                             </Grid>
                         </Border>
 
-                        <TextBox materialDesign:HintAssist.Hint="{Binding LogNameHint}" Text="{Binding LogName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignFloatingHintTextBox}" Margin="0,0,0,32" FontSize="16" ToolTip="{Binding LogNameToolTip}" />
+                        <!-- New Data: Log Name Input -->
+                        <TextBox materialDesign:HintAssist.Hint="{Binding LogNameHint}" 
+                                 Text="{Binding LogName, UpdateSourceTrigger=PropertyChanged}" 
+                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                                 Margin="0,0,0,32" 
+                                 FontSize="16" 
+                                 ToolTip="{Binding LogNameToolTip}"
+                                 Visibility="{Binding IsNewDataOperation, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                        <Button Content="START IMPORT" Command="{Binding SaveCommand}" IsEnabled="{Binding CanStartImport}" Style="{StaticResource MaterialDesignRaisedButton}" Height="48" FontSize="16" />
+                        <!-- Update Data: Target DepthLog & Table Summary -->
+                        <Border Background="#F9FAFB" 
+                                Padding="16,12" 
+                                CornerRadius="8" 
+                                Margin="0,0,0,32" 
+                                BorderBrush="#E5E7EB" 
+                                BorderThickness="1"
+                                Visibility="{Binding IsUpdateDataOperation, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock Text="Target DepthLog (Update Mode)" FontSize="11" Foreground="Gray" FontWeight="Medium" />
+                                <TextBlock Text="{Binding SelectedExistingDepthLog.nameLog}" FontSize="15" FontWeight="Bold" Margin="0,2,0,4" />
+                                <TextBlock Text="Target Table Name:" FontSize="11" Foreground="Gray" />
+                                <TextBlock Text="{Binding SelectedExistingDepthLog.__dataTableName}" FontFamily="Consolas" FontSize="13" Foreground="#2563EB" />
+                            </StackPanel>
+                        </Border>
+
+                        <Button Content="{Binding StartImportButtonText}" Command="{Binding SaveCommand}" IsEnabled="{Binding CanStartImport}" Style="{StaticResource MaterialDesignRaisedButton}" Height="48" FontSize="16" />
 
                         <!-- Progress Display -->
                         <StackPanel Margin="0,20,0,0" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
