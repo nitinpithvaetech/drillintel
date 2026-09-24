@@ -13,6 +13,7 @@ public class ImportProgressReport
 public class StreamImportResult
 {
     public int TotalRows { get; set; }
+    public int ValidRows { get; set; }
     public double QcScore { get; set; }
     public string TableName { get; set; } = string.Empty;
     public double? MinDepth { get; set; }
@@ -23,5 +24,8 @@ public class StreamImportResult
     public string? LastDataIndex { get; set; }
     public string? MinDate { get; set; }
     public string? MaxDate { get; set; }
+    public bool IsSequential { get; set; } = true;
+    public int NonSequentialCount { get; set; }
+    public System.Collections.Generic.List<string> ValidationMessages { get; set; } = new();
 }
 

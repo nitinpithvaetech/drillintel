@@ -953,7 +953,8 @@ public class WellDataRepository : IWellDataRepository
         string delimiter = ",",
         string? worksheetName = null,
         IProgress<ImportProgressReport>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeLogDateTimeOptions? dateTimeOptions = null)
     {
         if (!_session.IsProjectOpen)
             throw new InvalidOperationException("No project is currently loaded.");
@@ -966,7 +967,47 @@ public class WellDataRepository : IWellDataRepository
 
         var connection = _session.GetConnection();
 
-        // 1. Determine columns and map to source headers
+        // 1. Resolve Reader and Headers
+        var formatReaders = new IDepthLogFormatReader[]
+        {
+            new LasDepthReader(),
+            new WitsmlDepthReader(),
+            new ExcelDepthReader(),
+            new CsvDepthReader()
+        };
+        var reader = formatReaders.FirstOrDefault(r => r.CanHandle(filePath)) ?? new CsvDepthReader();
+        var fileMetadata = reader.ExtractMetadata(filePath);
+        var sourceHeaders = reader.GetHeaders(filePath, columnHeadingRow, worksheetName, delimiter);
+
+        bool isTimeLog = tableName.StartsWith("timeLog", StringComparison.OrdinalIgnoreCase) || dateTimeOptions != null;
+        string? separateDateColHeader = null;
+        string? separateTimeColHeader = null;
+
+        if (isTimeLog)
+        {
+            dateTimeOptions ??= new TimeLogDateTimeOptions();
+
+            // Auto-detect separate Date & Time columns if not explicitly set
+            if (!dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
+                {
+                    dateTimeOptions.IsDatetimeInSeperatorColumn = true;
+                    dateTimeOptions.DateColNo = dIdx;
+                    dateTimeOptions.TimeColNo = tIdx;
+                }
+            }
+
+            if (dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (dateTimeOptions.DateColNo >= 0 && dateTimeOptions.DateColNo < sourceHeaders.Count)
+                    separateDateColHeader = sourceHeaders[dateTimeOptions.DateColNo];
+                if (dateTimeOptions.TimeColNo >= 0 && dateTimeOptions.TimeColNo < sourceHeaders.Count)
+                    separateTimeColHeader = sourceHeaders[dateTimeOptions.TimeColNo];
+            }
+        }
+
+        // 2. Determine columns and map to source headers
         var columnPlans = new List<ColumnPlan>();
         var distinctNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -974,6 +1015,19 @@ public class WellDataRepository : IWellDataRepository
         foreach (var map in mappings)
         {
             var header = map.CsvColumnHeader;
+
+            // In split datetime mode for TimeLog, skip separate raw Date and Time columns so they don't become numeric columns
+            if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (!map.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (separateDateColHeader != null && header.Equals(separateDateColHeader, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (separateTimeColHeader != null && header.Equals(separateTimeColHeader, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+            }
+
             var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? header : map.MappedVumaxChannel;
             var safeName = SanitizeIdentifier(targetChannel, colIdx++);
 
@@ -998,7 +1052,7 @@ public class WellDataRepository : IWellDataRepository
             });
         }
 
-        // 2. Check if table already exists (e.g. created by DepthLogService.AddDepthLog)
+        // 3. Check if table already exists (e.g. created by DepthLogService.AddDepthLog / TimeLogService.addTimeLog)
         bool tableExists = false;
         var existingTableCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1059,9 +1113,23 @@ public class WellDataRepository : IWellDataRepository
             }
         }
 
+        // Ensure primary DATETIME column plan is present for TimeLog tables (or tables containing DATETIME column)
+        if ((isTimeLog || existingTableCols.Contains("DATETIME")) &&
+            !columnPlans.Any(p => p.DbColumnName.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)))
+        {
+            columnPlans.Insert(0, new ColumnPlan
+            {
+                SourceHeader = separateDateColHeader ?? "DATETIME",
+                DbColumnName = "DATETIME",
+                IsDateTimeColumn = true,
+                SourceIndex = -1
+            });
+            existingTableCols.Add("DATETIME");
+        }
+
         bool hasDataIndex = existingTableCols.Contains("DATA_INDEX");
 
-        // 3. Prepare Parameterized Insert Command
+        // 4. Prepare Parameterized Insert Command
         var insertCols = new List<string>();
         var insertParams = new List<string>();
 
@@ -1103,18 +1171,7 @@ public class WellDataRepository : IWellDataRepository
             cmdParams[i] = p;
         }
 
-        // 4. Resolve Reader and Headers
-        var formatReaders = new IDepthLogFormatReader[]
-        {
-            new LasDepthReader(),
-            new WitsmlDepthReader(),
-            new ExcelDepthReader(),
-            new CsvDepthReader()
-        };
-        var reader = formatReaders.FirstOrDefault(r => r.CanHandle(filePath)) ?? new CsvDepthReader();
-        var fileMetadata = reader.ExtractMetadata(filePath);
-        var sourceHeaders = reader.GetHeaders(filePath, columnHeadingRow, worksheetName, delimiter);
-
+        // Map column plan source indices
         for (int i = 0; i < columnPlans.Count; i++)
         {
             int idx = sourceHeaders.FindIndex(h => h.Equals(columnPlans[i].SourceHeader, StringComparison.OrdinalIgnoreCase));
@@ -1128,8 +1185,21 @@ public class WellDataRepository : IWellDataRepository
             columnPlans[i].SourceIndex = idx;
         }
 
+        if (isTimeLog && dateTimeOptions != null && dateTimeOptions.SingleDateTimeColIdx < 0)
+        {
+            var dtPlan = columnPlans.FirstOrDefault(p => p.IsDateTimeColumn && p.SourceIndex >= 0);
+            if (dtPlan != null)
+            {
+                dateTimeOptions.SingleDateTimeColIdx = dtPlan.SourceIndex;
+            }
+        }
+
         int totalRows = 0;
         int validRows = 0;
+        int nonSequentialCount = 0;
+        var validationMessages = new List<string>();
+        DateTime? prevDateTime = null;
+        string? prevFormattedDate = null;
         double? minDepth = null;
         double? maxDepth = null;
         double? firstDepth = null;
@@ -1156,12 +1226,73 @@ public class WellDataRepository : IWellDataRepository
                 bool isRowValid = true;
                 bool depthIsNull = false;
 
+                // --- [NEW LOGIC (TimeLog DateTime parsing using TimeLogDateTimeParser and full QC validation)] ---
+                string? rowFormattedDate = null;
+                bool dateTimeParsedOk = false;
+
+                if (isTimeLog && dateTimeOptions != null)
+                {
+                    dateTimeParsedOk = TimeLogDateTimeParser.TryParse(tokens, dateTimeOptions, out var parsedDt, out rowFormattedDate);
+                    if (dateTimeParsedOk && !string.IsNullOrEmpty(rowFormattedDate))
+                    {
+                        if (minDate == null) minDate = rowFormattedDate;
+                        maxDate = rowFormattedDate;
+
+                        if (prevDateTime.HasValue)
+                        {
+                            if (parsedDt < prevDateTime.Value)
+                            {
+                                nonSequentialCount++;
+                                if (validationMessages.Count < 20)
+                                {
+                                    validationMessages.Add($"Row {totalRows}: Timestamp {rowFormattedDate} is earlier than previous timestamp {prevFormattedDate}.");
+                                }
+                            }
+                        }
+                        prevDateTime = parsedDt;
+                        prevFormattedDate = rowFormattedDate;
+                    }
+                    else
+                    {
+                        isRowValid = false;
+                    }
+                }
+
                 for (int i = 0; i < columnPlans.Count; i++)
                 {
-                    int sIdx = columnPlans[i].SourceIndex;
-                    string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
+                    if (columnPlans[i].IsDateTimeColumn)
+                    {
+                        if (columnPlans[i].DbColumnName.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) && rowFormattedDate != null)
+                        {
+                            cmdParams[i].Value = rowFormattedDate;
+                        }
+                        else if (rowFormattedDate != null && columnPlans[i].SourceIndex < 0)
+                        {
+                            cmdParams[i].Value = rowFormattedDate;
+                        }
+                        else
+                        {
+                            int sIdx = columnPlans[i].SourceIndex;
+                            string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
+                            if (string.IsNullOrWhiteSpace(raw))
+                            {
+                                cmdParams[i].Value = DBNull.Value;
+                                if (isTimeLog && columnPlans[i].DbColumnName.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)) isRowValid = false;
+                            }
+                            else
+                            {
+                                cmdParams[i].Value = raw.Trim();
+                                if (minDate == null) minDate = raw.Trim();
+                                maxDate = raw.Trim();
+                            }
+                        }
+                        continue;
+                    }
 
-                    if (string.IsNullOrWhiteSpace(raw) || raw == "-999.25" || raw == "-9999" || (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
+                    int srcIdx = columnPlans[i].SourceIndex;
+                    string? rawVal = (srcIdx >= 0 && srcIdx < tokens.Length) ? tokens[srcIdx] : null;
+
+                    if (string.IsNullOrWhiteSpace(rawVal) || rawVal == "-999.25" || rawVal == "-9999" || (fileMetadata?.NullValue != null && rawVal == fileMetadata.NullValue))
                     {
                         cmdParams[i].Value = DBNull.Value;
                         if (columnPlans[i].IsDepthColumn)
@@ -1170,7 +1301,7 @@ public class WellDataRepository : IWellDataRepository
                             depthIsNull = true;
                         }
                     }
-                    else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
+                    else if (double.TryParse(rawVal, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
                     {
                         cmdParams[i].Value = dblVal;
                         if (double.IsNaN(dblVal) || double.IsInfinity(dblVal)) isRowValid = false;
@@ -1202,34 +1333,29 @@ public class WellDataRepository : IWellDataRepository
                         {
                             isRowValid = false;
                         }
-
-                        if (columnPlans[i].IsDateTimeColumn)
-                        {
-                            if (minDate == null) minDate = raw;
-                            maxDate = raw;
-                        }
                     }
                     else
                     {
-                        cmdParams[i].Value = raw.Trim();
-                        if (columnPlans[i].IsDateTimeColumn)
+                        cmdParams[i].Value = rawVal.Trim();
+                        isRowValid = false;
+                        if (columnPlans[i].IsDepthColumn)
                         {
-                            if (minDate == null) minDate = raw.Trim();
-                            maxDate = raw.Trim();
-                        }
-                        else
-                        {
-                            isRowValid = false;
-                            if (columnPlans[i].IsDepthColumn)
-                            {
-                                depthIsNull = true;
-                            }
+                            depthIsNull = true;
                         }
                     }
                 }
 
                 if (isRowValid) validRows++;
-                if (!depthIsNull)
+
+                if (isTimeLog)
+                {
+                    // For TimeLog: insert row if DATETIME was successfully parsed (or if no explicit options configured)
+                    if (dateTimeOptions == null || dateTimeParsedOk)
+                    {
+                        insertCmd.ExecuteNonQuery();
+                    }
+                }
+                else if (!depthIsNull)
                 {
                     insertCmd.ExecuteNonQuery();
                 }
@@ -1281,6 +1407,7 @@ public class WellDataRepository : IWellDataRepository
         {
             TableName = tableName,
             TotalRows = totalRows,
+            ValidRows = validRows,
             QcScore = finalQcScore,
             MinDepth = minDepth,
             MaxDepth = maxDepth,
@@ -1289,7 +1416,10 @@ public class WellDataRepository : IWellDataRepository
             StepIncrement = stepIncrement,
             LastDataIndex = lastDataIndex,
             MinDate = minDate,
-            MaxDate = maxDate
+            MaxDate = maxDate,
+            IsSequential = nonSequentialCount == 0,
+            NonSequentialCount = nonSequentialCount,
+            ValidationMessages = validationMessages
         };
     }
 
@@ -1616,6 +1746,398 @@ public class WellDataRepository : IWellDataRepository
             LastDepth = lastDepth,
             StepIncrement = stepIncrement,
             LastDataIndex = lastDataIndex
+        };
+    }
+
+    /// <summary>
+    /// High-throughput streaming update for TimeLog tables.
+    /// Follows legacy VuMax Main (frmMain.vb / ASCIILoader.vb) logic:
+    /// - Mandatory DATETIME mapping (or configured via DateTime options)
+    /// - Updates existing columns matching file channels via SQL UPSERT
+    /// - Unmapped columns retain their database values
+    /// - No new columns created during update
+    /// </summary>
+    public async Task<StreamImportResult> StreamUpdateTimeDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
+        TimeLogDateTimeOptions? dateTimeOptions = null,
+        UpdateMethodType updateMethod = UpdateMethodType.DateTimeComaparision,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_session.IsProjectOpen)
+            throw new InvalidOperationException("No project is currently loaded.");
+
+        if (columnHeadingRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(columnHeadingRow), "Column Heading Row is mandatory and must be a positive integer.");
+
+        if (importFromRow <= 0)
+            throw new ArgumentOutOfRangeException(nameof(importFromRow), "Import from Row is mandatory and must be a positive integer.");
+
+        if (!File.Exists(filePath))
+            throw new FileNotFoundException($"Import file not found: {filePath}", filePath);
+
+        var connection = _session.GetConnection();
+
+        // 1. Verify target table exists and retrieve existing columns
+        bool tableExists;
+        using (var checkCmd = connection.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@tName;";
+            var pName = checkCmd.CreateParameter();
+            pName.ParameterName = "@tName";
+            pName.Value = tableName;
+            checkCmd.Parameters.Add(pName);
+            tableExists = Convert.ToInt32(await checkCmd.ExecuteScalarAsync(cancellationToken)) > 0;
+        }
+
+        if (!tableExists)
+            throw new InvalidOperationException($"Target table '{tableName}' does not exist in the database.");
+
+        var existingTableCols = new HashSet<string>(await GetTableColumnsAsync(tableName), StringComparer.OrdinalIgnoreCase);
+
+        bool isDateTimeComparison = updateMethod == UpdateMethodType.DateTimeComaparision;
+        string keyColName = isDateTimeComparison ? "DATETIME" : "DEPTH";
+
+        // 2. Resolve Reader and Headers upfront
+        var formatReaders = new IDepthLogFormatReader[]
+        {
+            new LasDepthReader(),
+            new WitsmlDepthReader(),
+            new ExcelDepthReader(),
+            new CsvDepthReader()
+        };
+        var reader = formatReaders.FirstOrDefault(r => r.CanHandle(filePath)) ?? new CsvDepthReader();
+        var fileMetadata = reader.ExtractMetadata(filePath);
+        var sourceHeaders = reader.GetHeaders(filePath, columnHeadingRow, worksheetName, delimiter);
+
+        // Auto-detect separate Date & Time columns if not explicitly configured
+        string? separateDateColHeader = null;
+        string? separateTimeColHeader = null;
+        if (isDateTimeComparison)
+        {
+            if (dateTimeOptions == null || !dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
+                {
+                    dateTimeOptions ??= new TimeLogDateTimeOptions();
+                    dateTimeOptions.IsDatetimeInSeperatorColumn = true;
+                    dateTimeOptions.DateColNo = dIdx;
+                    dateTimeOptions.TimeColNo = tIdx;
+                }
+            }
+
+            if (dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (dateTimeOptions.DateColNo >= 0 && dateTimeOptions.DateColNo < sourceHeaders.Count)
+                    separateDateColHeader = sourceHeaders[dateTimeOptions.DateColNo];
+                if (dateTimeOptions.TimeColNo >= 0 && dateTimeOptions.TimeColNo < sourceHeaders.Count)
+                    separateTimeColHeader = sourceHeaders[dateTimeOptions.TimeColNo];
+            }
+        }
+
+        // 3. Validate mandatory Key Channel mapping based on comparison method
+        ChannelMapping? keyMapping = null;
+        if (isDateTimeComparison)
+        {
+            keyMapping = mappings.FirstOrDefault(m =>
+                m.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                m.MappedVumaxChannel.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                m.MappedVumaxChannel.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                m.MappedVumaxChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase));
+
+            bool hasValidSplitOptions = dateTimeOptions != null &&
+                ((dateTimeOptions.IsDatetimeInSeperatorColumn && dateTimeOptions.DateColNo >= 0 && dateTimeOptions.TimeColNo >= 0) ||
+                 !string.IsNullOrWhiteSpace(dateTimeOptions.DatetimeSeparator));
+
+            if (keyMapping == null && !hasValidSplitOptions)
+            {
+                throw new InvalidOperationException("You must map and select DATE/TIME channel. Please map and select these channels to continue");
+            }
+        }
+        else
+        {
+            keyMapping = mappings.FirstOrDefault(m =>
+                m.MappedVumaxChannel.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+                m.MappedVumaxChannel.Equals("Depth", StringComparison.OrdinalIgnoreCase));
+
+            if (keyMapping == null || string.IsNullOrWhiteSpace(keyMapping.CsvColumnHeader))
+            {
+                throw new InvalidOperationException("You must map and select DEPTH channel. Please map and select the depth channel to continue");
+            }
+        }
+
+        // 4. Filter mappings: ONLY mapped columns that exist in the target table (excluding key column, DATA_INDEX, and Dynamic)
+        var validCurveMappings = mappings
+            .Where(m => !m.MappedVumaxChannel.Equals(keyColName, StringComparison.OrdinalIgnoreCase) &&
+                        !m.MappedVumaxChannel.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase) &&
+                        !m.MappedVumaxChannel.Equals("Dynamic (New Column)", StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(m.CsvColumnHeader) &&
+                        existingTableCols.Contains(m.MappedVumaxChannel))
+            .ToList();
+
+        if (isDateTimeComparison && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        {
+            validCurveMappings = validCurveMappings.Where(m =>
+            {
+                if (separateDateColHeader != null && m.CsvColumnHeader.Equals(separateDateColHeader, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (separateTimeColHeader != null && m.CsvColumnHeader.Equals(separateTimeColHeader, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                return true;
+            }).ToList();
+        }
+
+        int keySourceIndex = -1;
+        if (keyMapping != null && !string.IsNullOrWhiteSpace(keyMapping.CsvColumnHeader))
+        {
+            keySourceIndex = sourceHeaders.FindIndex(h => h.Equals(keyMapping.CsvColumnHeader, StringComparison.OrdinalIgnoreCase));
+            if (keySourceIndex < 0 && keyMapping.CsvColumnHeader.StartsWith("#") && int.TryParse(keyMapping.CsvColumnHeader.Substring(1), out int numIdx))
+            {
+                keySourceIndex = numIdx;
+            }
+        }
+
+        if (dateTimeOptions != null && keySourceIndex >= 0 && dateTimeOptions.SingleDateTimeColIdx < 0)
+        {
+            dateTimeOptions.SingleDateTimeColIdx = keySourceIndex;
+        }
+
+        // Map curve source column indices
+        var curvePlans = new List<ColumnPlan>();
+        for (int i = 0; i < validCurveMappings.Count; i++)
+        {
+            var map = validCurveMappings[i];
+            int sIdx = sourceHeaders.FindIndex(h => h.Equals(map.CsvColumnHeader, StringComparison.OrdinalIgnoreCase));
+            if (sIdx < 0 && map.CsvColumnHeader.StartsWith("#") && int.TryParse(map.CsvColumnHeader.Substring(1), out int numIdx))
+            {
+                sIdx = numIdx;
+            }
+
+            if (sIdx >= 0)
+            {
+                var exactDbCol = existingTableCols.First(c => c.Equals(map.MappedVumaxChannel, StringComparison.OrdinalIgnoreCase));
+                curvePlans.Add(new ColumnPlan
+                {
+                    SourceHeader = map.CsvColumnHeader,
+                    DbColumnName = exactDbCol,
+                    SourceIndex = sIdx,
+                    IsDepthColumn = exactDbCol.Equals("DEPTH", StringComparison.OrdinalIgnoreCase),
+                    IsHookloadColumn = exactDbCol.Equals("HKLD", StringComparison.OrdinalIgnoreCase)
+                });
+            }
+        }
+
+        // 5. Ensure unique index on key column for UPSERT
+        try
+        {
+            using var idxCmd = connection.CreateCommand();
+            idxCmd.CommandText = $"CREATE UNIQUE INDEX IF NOT EXISTS [{tableName}_{keyColName}_PK] ON [{tableName}]([{keyColName}]);";
+            await idxCmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch { }
+
+        // Construct UPSERT statement
+        string sql;
+        if (curvePlans.Count > 0)
+        {
+            var insertColNames = new List<string> { $"[{keyColName}]" };
+            var insertParamNames = new List<string> { "@pKey" };
+            var updateSetClauses = new List<string>();
+
+            for (int i = 0; i < curvePlans.Count; i++)
+            {
+                insertColNames.Add($"[{curvePlans[i].DbColumnName}]");
+                insertParamNames.Add($"@p{i}");
+                updateSetClauses.Add($"[{curvePlans[i].DbColumnName}] = excluded.[{curvePlans[i].DbColumnName}]");
+            }
+
+            sql = $"INSERT INTO [{tableName}] ({string.Join(", ", insertColNames)}) " +
+                  $"VALUES ({string.Join(", ", insertParamNames)}) " +
+                  $"ON CONFLICT([{keyColName}]) DO UPDATE SET {string.Join(", ", updateSetClauses)};";
+        }
+        else
+        {
+            sql = $"INSERT OR IGNORE INTO [{tableName}] ([{keyColName}]) VALUES (@pKey);";
+        }
+
+        using var updateCmd = connection.CreateCommand();
+        updateCmd.CommandText = sql;
+
+        var pKey = updateCmd.CreateParameter();
+        pKey.ParameterName = "@pKey";
+        updateCmd.Parameters.Add(pKey);
+
+        var curveParams = new DbParameter[curvePlans.Count];
+        for (int i = 0; i < curvePlans.Count; i++)
+        {
+            var p = updateCmd.CreateParameter();
+            p.ParameterName = $"@p{i}";
+            updateCmd.Parameters.Add(p);
+            curveParams[i] = p;
+        }
+
+        // 6. Stream rows and execute update
+        int totalRows = 0;
+        int validRows = 0;
+        int nonSequentialCount = 0;
+        var validationMessages = new List<string>();
+        DateTime? prevDateTime = null;
+        string? prevFormattedDate = null;
+        string? minDate = null;
+        string? maxDate = null;
+        double? minDepth = null;
+        double? maxDepth = null;
+        const int batchSize = 50000;
+
+        DbTransaction? transaction = connection.BeginTransaction();
+        updateCmd.Transaction = transaction;
+
+        try
+        {
+            foreach (var tokens in reader.StreamDataRows(filePath, importFromRow, worksheetName, delimiter, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                totalRows++;
+
+                bool isRowValid = true;
+
+                if (isDateTimeComparison)
+                {
+                    string formattedDt;
+                    DateTime parsedDt = default;
+                    if (dateTimeOptions != null)
+                    {
+                        if (!TimeLogDateTimeParser.TryParse(tokens, dateTimeOptions, out parsedDt, out formattedDt))
+                        {
+                            continue; // Skip row if DATETIME cannot be parsed
+                        }
+                    }
+                    else
+                    {
+                        string? rawDt = (keySourceIndex >= 0 && keySourceIndex < tokens.Length) ? tokens[keySourceIndex] : null;
+                        if (string.IsNullOrWhiteSpace(rawDt)) continue;
+                        formattedDt = rawDt.Trim();
+                    }
+
+                    pKey.Value = formattedDt;
+                    if (minDate == null) minDate = formattedDt;
+                    maxDate = formattedDt;
+
+                    if (prevDateTime.HasValue && parsedDt != default)
+                    {
+                        if (parsedDt < prevDateTime.Value)
+                        {
+                            nonSequentialCount++;
+                            if (validationMessages.Count < 20)
+                            {
+                                validationMessages.Add($"Row {totalRows}: Timestamp {formattedDt} is earlier than previous timestamp {prevFormattedDate}.");
+                            }
+                        }
+                    }
+                    if (parsedDt != default) prevDateTime = parsedDt;
+                    prevFormattedDate = formattedDt;
+                }
+                else
+                {
+                    string? rawDepth = (keySourceIndex >= 0 && keySourceIndex < tokens.Length) ? tokens[keySourceIndex] : null;
+                    if (string.IsNullOrWhiteSpace(rawDepth) || !double.TryParse(rawDepth, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblDepth))
+                    {
+                        continue;
+                    }
+                    pKey.Value = dblDepth;
+                    if (!minDepth.HasValue || dblDepth < minDepth.Value) minDepth = dblDepth;
+                    if (!maxDepth.HasValue || dblDepth > maxDepth.Value) maxDepth = dblDepth;
+                }
+
+                // Bind curve parameters
+                for (int i = 0; i < curvePlans.Count; i++)
+                {
+                    int sIdx = curvePlans[i].SourceIndex;
+                    string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
+
+                    if (string.IsNullOrWhiteSpace(raw) ||
+                        raw == "-999.25" ||
+                        raw == "-9999" ||
+                        (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
+                    {
+                        curveParams[i].Value = DBNull.Value;
+                    }
+                    else if (double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblVal))
+                    {
+                        curveParams[i].Value = dblVal;
+                        if (double.IsNaN(dblVal) || double.IsInfinity(dblVal)) isRowValid = false;
+                        if (curvePlans[i].IsHookloadColumn && dblVal < 0) isRowValid = false;
+                        if (curvePlans[i].IsDepthColumn && dblVal < 0) isRowValid = false;
+                    }
+                    else
+                    {
+                        curveParams[i].Value = raw.Trim();
+                    }
+                }
+
+                if (isRowValid) validRows++;
+                updateCmd.ExecuteNonQuery();
+
+                if (totalRows % batchSize == 0)
+                {
+                    transaction.Commit();
+                    transaction.Dispose();
+                    transaction = connection.BeginTransaction();
+                    updateCmd.Transaction = transaction;
+
+                    progress?.Report(new ImportProgressReport
+                    {
+                        RowsProcessed = totalRows,
+                        StatusMessage = $"Updated {totalRows:N0} records...",
+                        IsIndeterminate = true
+                    });
+                }
+            }
+
+            transaction.Commit();
+            transaction.Dispose();
+            transaction = null;
+        }
+        catch
+        {
+            if (transaction != null)
+            {
+                try { transaction.Rollback(); } catch { }
+                transaction.Dispose();
+                transaction = null;
+            }
+            throw;
+        }
+
+        double finalQcScore = totalRows > 0 ? ((double)validRows / totalRows * 100.0) : 0.0;
+
+        progress?.Report(new ImportProgressReport
+        {
+            RowsProcessed = totalRows,
+            PercentCompleted = 100,
+            IsIndeterminate = false,
+            StatusMessage = $"Update completed! {totalRows:N0} rows processed."
+        });
+
+        return new StreamImportResult
+        {
+            TableName = tableName,
+            TotalRows = totalRows,
+            ValidRows = validRows,
+            QcScore = finalQcScore,
+            MinDepth = minDepth,
+            MaxDepth = maxDepth,
+            MinDate = minDate,
+            MaxDate = maxDate,
+            IsSequential = nonSequentialCount == 0,
+            NonSequentialCount = nonSequentialCount,
+            ValidationMessages = validationMessages
         };
     }
 }

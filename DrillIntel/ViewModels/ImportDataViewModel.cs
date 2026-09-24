@@ -97,6 +97,17 @@ public partial class ImportDataViewModel : ObservableObject
             {
                 SelectedExistingDepthLog = ExistingDepthLogs.FirstOrDefault();
             }
+
+            var timeLogs = await _repository.GetTimeLogsAsync();
+            ExistingTimeLogs.Clear();
+            foreach (var tl in timeLogs)
+            {
+                ExistingTimeLogs.Add(tl);
+            }
+            if (SelectedExistingTimeLog == null && ExistingTimeLogs.Count > 0)
+            {
+                SelectedExistingTimeLog = ExistingTimeLogs.FirstOrDefault();
+            }
         }
         catch
         {
@@ -173,6 +184,10 @@ public partial class ImportDataViewModel : ObservableObject
                 {
                     SelectedExistingDepthLog = ExistingDepthLogs.FirstOrDefault();
                 }
+                if (SelectedExistingTimeLog == null && ExistingTimeLogs.Count > 0)
+                {
+                    SelectedExistingTimeLog = ExistingTimeLogs.FirstOrDefault();
+                }
                 _ = RefreshPreviewAsync(reloadWorksheets: false);
             }
         }
@@ -193,17 +208,54 @@ public partial class ImportDataViewModel : ObservableObject
                     Settings.UpdatedTimelogId = value.ObjectID;
                     LogName = value.nameLog;
                 }
+                OnPropertyChanged(nameof(SelectedExistingLogName));
+                OnPropertyChanged(nameof(SelectedExistingLogTableName));
                 _ = RefreshPreviewAsync(reloadWorksheets: false);
             }
         }
     }
+
+    public ObservableCollection<TimeLog> ExistingTimeLogs { get; } = new();
+
+    private TimeLog? _selectedExistingTimeLog;
+    public TimeLog? SelectedExistingTimeLog
+    {
+        get => _selectedExistingTimeLog;
+        set
+        {
+            if (SetProperty(ref _selectedExistingTimeLog, value))
+            {
+                if (value != null)
+                {
+                    Settings.UpdatedTimelogId = value.ObjectID;
+                    LogName = value.nameLog;
+                }
+                OnPropertyChanged(nameof(SelectedExistingLogName));
+                OnPropertyChanged(nameof(SelectedExistingLogTableName));
+                _ = RefreshPreviewAsync(reloadWorksheets: false);
+            }
+        }
+    }
+
+    public bool IsDepthLogUpdating => IsUpdateDataOperation && IsDepthLog;
+    public bool IsTimeLogUpdating => IsUpdateDataOperation && IsTimeLog;
+
+    public string SelectedExistingLogName => IsDepthLog
+        ? (SelectedExistingDepthLog?.nameLog ?? string.Empty)
+        : (SelectedExistingTimeLog?.nameLog ?? string.Empty);
+
+    public string SelectedExistingLogTableName => IsDepthLog
+        ? (SelectedExistingDepthLog?.__dataTableName ?? string.Empty)
+        : (SelectedExistingTimeLog?.__dataTableName ?? string.Empty);
+
+    public string TargetLogLabel => IsDepthLog ? "Target DepthLog (Update Mode)" : "Target TimeLog (Update Mode)";
 
     public string StartImportButtonText => OperationType == OperationType.UpdateData ? "UPDATE LOG" : "START IMPORT";
 
     public string MappingSubtitle => OperationType == OperationType.UpdateData
         ? (TypeOfDataInput == ImportDataType.DepthLogData
             ? "Update Mode: Only the DEPTH channel mapping is required. Unmapped existing columns retain current database values. No new columns will be created."
-            : "Update Mode: Only mapped VuMax channels will be updated. Unmapped existing columns retain current database values. No new columns will be created.")
+            : "Update Mode: Only the DATE/TIME channel mapping is required. Unmapped existing columns retain current database values. No new columns will be created.")
         : "We have auto-mapped standard VuMax channels. Unmapped columns will be created as dynamic custom fields.";
 
     public bool ShowDateTimeSettings => TypeOfDataInput == ImportDataType.TimeLogData;
@@ -228,6 +280,12 @@ public partial class ImportDataViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowDateTimeSettings));
             OnPropertyChanged(nameof(IsDepthLog));
             OnPropertyChanged(nameof(IsTimeLog));
+            OnPropertyChanged(nameof(IsDepthLogUpdating));
+            OnPropertyChanged(nameof(IsTimeLogUpdating));
+            OnPropertyChanged(nameof(SelectedExistingLogName));
+            OnPropertyChanged(nameof(SelectedExistingLogTableName));
+            OnPropertyChanged(nameof(TargetLogLabel));
+            OnPropertyChanged(nameof(MappingSubtitle));
             OnPropertyChanged(nameof(ImportFromRow));
             OnPropertyChanged(nameof(ColumnHeadingRow));
             OnPropertyChanged(nameof(ShowObjectTab));
@@ -372,34 +430,91 @@ public partial class ImportDataViewModel : ObservableObject
         }
     }
 
+    private List<string> _rawFileHeaders = new();
+
     public bool IsDatetimeInSeperatorColumn
     {
         get => Settings.IsDatetimeInSeperatorColumn;
-        set { Settings.IsDatetimeInSeperatorColumn = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.IsDatetimeInSeperatorColumn != value)
+            {
+                Settings.IsDatetimeInSeperatorColumn = value;
+                OnPropertyChanged();
+                if (IsFileUploaded && !IsLoading)
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
     }
 
     public string DatetimeSeparator
     {
         get => Settings.DatetimeSeparator;
-        set { Settings.DatetimeSeparator = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.DatetimeSeparator != value)
+            {
+                Settings.DatetimeSeparator = value;
+                OnPropertyChanged();
+                if (IsFileUploaded && !IsLoading)
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
     }
 
     public int DateColNo
     {
         get => Settings.DateColNo;
-        set { Settings.DateColNo = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.DateColNo != value)
+            {
+                Settings.DateColNo = value;
+                OnPropertyChanged();
+                if (IsFileUploaded && !IsLoading)
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
     }
 
     public int TimeColNo
     {
         get => Settings.TimeColNo;
-        set { Settings.TimeColNo = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.TimeColNo != value)
+            {
+                Settings.TimeColNo = value;
+                OnPropertyChanged();
+                if (IsFileUploaded && !IsLoading)
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
     }
 
     public DateFormatType DateFormat
     {
         get => Settings.DateFormat;
-        set { Settings.DateFormat = value; OnPropertyChanged(); }
+        set
+        {
+            if (Settings.DateFormat != value)
+            {
+                Settings.DateFormat = value;
+                OnPropertyChanged();
+                if (IsFileUploaded && !IsLoading)
+                {
+                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                }
+            }
+        }
     }
 
     public ObservableCollection<string> PreviewColumns { get; } = new();
@@ -687,6 +802,8 @@ public partial class ImportDataViewModel : ObservableObject
         }
         else if (CurrentTab == WizardTab.Mapping)
         {
+            // --- [OLD LOGIC (Only checked ColumnHeadingRow and ImportFromRow for DepthLogData)] ---
+            /*
             if (TypeOfDataInput == ImportDataType.DepthLogData)
             {
                 if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
@@ -721,6 +838,89 @@ public partial class ImportDataViewModel : ObservableObject
                     return;
                 }
             }
+            */
+            // --- [NEW LOGIC (Strict validation of Heading Row, Import Row, Depth channel for DepthLog, and Date/Time for TimeLog)] ---
+            string logTypeName = TypeOfDataInput == ImportDataType.DepthLogData ? "Depthlog" : "Timelog";
+
+            if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
+            {
+                MessageBox.Show(
+                    $"Please specify 'Column Heading Row'. Column Heading Row is mandatory for {logTypeName} import.",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+
+            if (!ImportFromRow.HasValue || ImportFromRow.Value <= 0)
+            {
+                MessageBox.Show(
+                    $"Please specify 'Import from Row'. Import from Row is mandatory for {logTypeName} import.",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+
+            if (TypeOfDataInput == ImportDataType.DepthLogData)
+            {
+                var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+                var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)) ?? ColumnMappings.FirstOrDefault();
+                if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+                {
+                    MessageBox.Show(
+                        $"You must map and select {depthMapping?.VuMaxColumnID ?? depthMnemonic} channel. Please map and select the depth channel to continue",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+            }
+            else if (TypeOfDataInput == ImportDataType.TimeLogData)
+            {
+                if (OperationType == OperationType.UpdateData && UpdateMethod == UpdateMethodType.DepthComparision)
+                {
+                    var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+                    var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase));
+                    if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+                    {
+                        MessageBox.Show(
+                            "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                            "Import Data",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Exclamation);
+                        return;
+                    }
+                }
+                else
+                {
+                    bool hasDtMapping = ColumnMappings.Any(m =>
+                        (m.VuMaxColumnID.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("DATE", StringComparison.OrdinalIgnoreCase)) &&
+                        !string.IsNullOrWhiteSpace(m.SourceColumnName));
+
+                    bool hasSeparateCols = IsDatetimeInSeperatorColumn && DateColNo >= 0 && TimeColNo >= 0;
+                    bool hasDateCol = DateColNo >= 0;
+                    bool hasPreviewDtCol = PreviewColumns.Any(c =>
+                        c.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                        c.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                        c.Equals("DATE TIME", StringComparison.OrdinalIgnoreCase) ||
+                        c.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                        c.Equals("TIMESTAMP", StringComparison.OrdinalIgnoreCase));
+
+                    if (!hasDtMapping && !hasSeparateCols && !hasDateCol && !hasPreviewDtCol)
+                    {
+                        MessageBox.Show(
+                            "You must map and select DATE/TIME channel. Please map and select these channels to continue",
+                            "Import Data",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Exclamation);
+                        return;
+                    }
+                }
+            }
             CurrentTab = WizardTab.Finalize;
         }
     }
@@ -745,7 +945,12 @@ public partial class ImportDataViewModel : ObservableObject
         ProcessFile(dlg.FileName);
     }
 
-    private async void ProcessFile(string? filePath)
+    private void ProcessFile(string? filePath)
+    {
+        _ = ProcessFileAsync(filePath);
+    }
+
+    internal async Task ProcessFileAsync(string? filePath)
     {
         if (string.IsNullOrEmpty(filePath)) return;
         
@@ -759,7 +964,7 @@ public partial class ImportDataViewModel : ObservableObject
         await RefreshPreviewAsync(reloadWorksheets: true);
     }
 
-    private async Task RefreshPreviewAsync(bool reloadWorksheets = false)
+    internal async Task RefreshPreviewAsync(bool reloadWorksheets = false)
     {
         if (string.IsNullOrEmpty(FileName)) return;
 
@@ -803,25 +1008,91 @@ public partial class ImportDataViewModel : ObservableObject
                 return (h, r);
             });
 
+            _rawFileHeaders = headers.ToList();
+
+            // Auto-detect separate Date & Time columns for TimeLog if not explicitly configured
+            if (TypeOfDataInput == ImportDataType.TimeLogData)
+            {
+                if (!IsDatetimeInSeperatorColumn)
+                {
+                    if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(headers, out int dIdx, out int tIdx))
+                    {
+                        Settings.IsDatetimeInSeperatorColumn = true;
+                        Settings.DateColNo = dIdx;
+                        Settings.TimeColNo = tIdx;
+                        OnPropertyChanged(nameof(IsDatetimeInSeperatorColumn));
+                        OnPropertyChanged(nameof(DateColNo));
+                        OnPropertyChanged(nameof(TimeColNo));
+
+                        var sampleDates = previewRows
+                            .Where(r => dIdx < r.Count && !string.IsNullOrWhiteSpace(r[dIdx]))
+                            .Select(r => r[dIdx])
+                            .Take(50);
+                        var detectedFmt = TimeLogDateTimeParser.DetectDateFormat(sampleDates);
+                        Settings.DateFormat = detectedFmt;
+                        OnPropertyChanged(nameof(DateFormat));
+                    }
+                }
+            }
+
+            bool isTimeLogWithSplitDt = TypeOfDataInput == ImportDataType.TimeLogData &&
+                                        (IsDatetimeInSeperatorColumn || (DateColNo >= 0 && TimeColNo >= 0 && DateColNo != TimeColNo));
+
             PreviewColumns.Clear();
+            if (isTimeLogWithSplitDt)
+            {
+                if (!headers.Any(h => h.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)))
+                {
+                    PreviewColumns.Add("DATETIME");
+                }
+            }
             foreach (var c in headers) PreviewColumns.Add(c);
 
             var dt = new DataTable();
-            foreach (var c in headers) dt.Columns.Add(c);
-            
+            foreach (var c in PreviewColumns) dt.Columns.Add(c);
+
+            var previewDtOptions = isTimeLogWithSplitDt ? new TimeLogDateTimeOptions
+            {
+                IsDatetimeInSeperatorColumn = true,
+                DatetimeSeparator = DatetimeSeparator,
+                DateColNo = DateColNo,
+                TimeColNo = TimeColNo,
+                DateFormat = DateFormat
+            } : null;
+
             foreach (var r in previewRows)
             {
                 var row = dt.NewRow();
-                for (int i = 0; i < dt.Columns.Count; i++)
+                for (int i = 0; i < headers.Count; i++)
                 {
-                    if (i < r.Count) row[i] = r[i];
+                    if (i < r.Count)
+                    {
+                        var hName = headers[i];
+                        if (dt.Columns.Contains(hName))
+                        {
+                            row[hName] = r[i];
+                        }
+                    }
                 }
+
+                if (isTimeLogWithSplitDt && dt.Columns.Contains("DATETIME"))
+                {
+                    if (previewDtOptions != null && TimeLogDateTimeParser.TryParse(r.ToArray(), previewDtOptions, out _, out string formattedDt))
+                    {
+                        row["DATETIME"] = formattedDt;
+                    }
+                    else
+                    {
+                        row["DATETIME"] = string.Empty;
+                    }
+                }
+
                 dt.Rows.Add(row);
             }
             PreviewRows = dt;
 
             var sourceOptions = new List<string> { "" };
-            sourceOptions.AddRange(headers);
+            sourceOptions.AddRange(PreviewColumns);
 
             var targetOptions = GetDefaultMappingChannels(TypeOfDataInput);
             var depthMnemonic = targetOptions.FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
@@ -1072,6 +1343,8 @@ public partial class ImportDataViewModel : ObservableObject
             return;
         }
 
+        // --- [OLD LOGIC (Only validated ColumnHeadingRow and ImportFromRow for DepthLogData)] ---
+        /*
         if (TypeOfDataInput == ImportDataType.DepthLogData)
         {
             if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
@@ -1106,11 +1379,97 @@ public partial class ImportDataViewModel : ObservableObject
                 return;
             }
         }
+        */
+        // --- [NEW LOGIC (Strict validation of Heading Row, Import Row, Depth channel for DepthLog, and Date/Time for TimeLog)] ---
+        string logTypeName = TypeOfDataInput == ImportDataType.DepthLogData ? "Depthlog" : "Timelog";
+
+        if (!ColumnHeadingRow.HasValue || ColumnHeadingRow.Value <= 0)
+        {
+            MessageBox.Show(
+                $"Please specify 'Column Heading Row'. Column Heading Row is mandatory for {logTypeName} import.",
+                "Import Data",
+                MessageBoxButton.OK,
+                MessageBoxImage.Exclamation);
+            return;
+        }
+
+        if (!ImportFromRow.HasValue || ImportFromRow.Value <= 0)
+        {
+            MessageBox.Show(
+                $"Please specify 'Import from Row'. Import from Row is mandatory for {logTypeName} import.",
+                "Import Data",
+                MessageBoxButton.OK,
+                MessageBoxImage.Exclamation);
+            return;
+        }
+
+        if (TypeOfDataInput == ImportDataType.DepthLogData)
+        {
+            var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+            var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase)) ?? ColumnMappings.FirstOrDefault();
+            if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+            {
+                MessageBox.Show(
+                    $"You must map and select {depthMapping?.VuMaxColumnID ?? depthMnemonic} channel. Please map and select the depth channel to continue",
+                    "Import Data",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Exclamation);
+                return;
+            }
+        }
+        else if (TypeOfDataInput == ImportDataType.TimeLogData)
+        {
+            if (OperationType == OperationType.UpdateData && UpdateMethod == UpdateMethodType.DepthComparision)
+            {
+                var depthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+                var depthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(depthMnemonic, StringComparison.OrdinalIgnoreCase));
+                if (depthMapping == null || string.IsNullOrWhiteSpace(depthMapping.SourceColumnName))
+                {
+                    MessageBox.Show(
+                        "You must map and select DEPTH channel. Please map and select the depth channel to continue",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+            }
+            else
+            {
+                bool hasDtMapping = ColumnMappings.Any(m =>
+                    (m.VuMaxColumnID.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                     m.VuMaxColumnID.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                     m.VuMaxColumnID.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                     m.VuMaxColumnID.Equals("DATE", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.IsNullOrWhiteSpace(m.SourceColumnName));
+
+                bool hasSeparateCols = IsDatetimeInSeperatorColumn && DateColNo >= 0 && TimeColNo >= 0;
+                bool hasDateCol = DateColNo >= 0;
+                bool hasPreviewDtCol = PreviewColumns.Any(c =>
+                    c.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                    c.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                    c.Equals("DATE TIME", StringComparison.OrdinalIgnoreCase) ||
+                    c.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                    c.Equals("TIMESTAMP", StringComparison.OrdinalIgnoreCase));
+
+                if (!hasDtMapping && !hasSeparateCols && !hasDateCol && !hasPreviewDtCol)
+                {
+                    MessageBox.Show(
+                        "You must map and select DATE/TIME channel. Please map and select these channels to continue",
+                        "Import Data",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Exclamation);
+                    return;
+                }
+            }
+        }
 
         IsLoading = true;
         IsIndeterminateProgress = true;
         ImportProgressPercent = 0;
         ImportProgressStatus = "Preparing table and import stream...";
+        string targetTableName = string.Empty;
+        DepthLog? depthLog = null;
+        TimeLog? timeLog = null;
 
         try
         {
@@ -1152,14 +1511,14 @@ public partial class ImportDataViewModel : ObservableObject
                 {
                     new ChannelMapping
                     {
-                        CsvColumnHeader = depthMapping.SourceColumnName,
-                        MappedVumaxChannel = depthMapping.VuMaxColumnID
+                        CsvColumnHeader = depthMapping?.SourceColumnName ?? "",
+                        MappedVumaxChannel = depthMapping?.VuMaxColumnID ?? "DEPTH"
                     }
                 };
 
                 foreach (var vuCol in existingCols)
                 {
-                    if (vuCol.Equals(depthMapping.VuMaxColumnID, StringComparison.OrdinalIgnoreCase) ||
+                    if (vuCol.Equals(depthMapping?.VuMaxColumnID ?? "DEPTH", StringComparison.OrdinalIgnoreCase) ||
                         vuCol.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
@@ -1234,6 +1593,182 @@ public partial class ImportDataViewModel : ObservableObject
                 return;
             }
 
+            // --- [OLD LOGIC (No update branch for TimeLog existed)] ---
+            // --- [NEW LOGIC (TimeLog update branch following legacy VuMax frmMain.vb / ASCIILoader.vb)] ---
+            if (!isDepthLog && OperationType == OperationType.UpdateData)
+            {
+                if (SelectedExistingTimeLog == null)
+                {
+                    MessageBox.Show("Please select an existing TimeLog to update.", "Import Data", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                string updateTargetTableName = SelectedExistingTimeLog.__dataTableName;
+                var existingCols = new HashSet<string>(await _repository.GetTableColumnsAsync(updateTargetTableName), StringComparer.OrdinalIgnoreCase);
+
+                var updateTimeLogDtOptions = new TimeLogDateTimeOptions
+                {
+                    IsDatetimeInSeperatorColumn = IsDatetimeInSeperatorColumn,
+                    DatetimeSeparator = DatetimeSeparator,
+                    DateColNo = DateColNo,
+                    TimeColNo = TimeColNo,
+                    DateFormat = DateFormat
+                };
+
+                // TimeLog Update Logic:
+                // 1. Mandatory key channel (DATETIME or DEPTH based on UpdateMethod)
+                // 2. Auto-align matching channels with existing table columns
+                // 3. Do not create new columns, unmapped columns retain database values
+                var updateMappings = new List<ChannelMapping>();
+
+                // Add key column mapping
+                if (UpdateMethod == UpdateMethodType.DateTimeComaparision)
+                {
+                    var dtMapping = ColumnMappings.FirstOrDefault(m =>
+                        (m.VuMaxColumnID.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                         m.VuMaxColumnID.Equals("DATE", StringComparison.OrdinalIgnoreCase)) &&
+                        !string.IsNullOrWhiteSpace(m.SourceColumnName));
+
+                    if (dtMapping != null)
+                    {
+                        updateMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = dtMapping.SourceColumnName ?? "",
+                            MappedVumaxChannel = "DATETIME"
+                        });
+                    }
+                    else if (!IsDatetimeInSeperatorColumn)
+                    {
+                        var matchedDt = PreviewColumns.FirstOrDefault(h =>
+                            h.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("DATE TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("TIMESTAMP", StringComparison.OrdinalIgnoreCase));
+                        if (matchedDt != null)
+                        {
+                            updateMappings.Add(new ChannelMapping
+                            {
+                                CsvColumnHeader = matchedDt,
+                                MappedVumaxChannel = "DATETIME"
+                            });
+                        }
+                    }
+                }
+                else
+                {
+                    var updateDepthMnemonic = GetDefaultMappingChannels(TypeOfDataInput).FirstOrDefault(t => t.ChannelName.Equals("Depth", StringComparison.OrdinalIgnoreCase))?.Mnemonic ?? "DEPTH";
+                    var updateDepthMapping = ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID.Equals(updateDepthMnemonic, StringComparison.OrdinalIgnoreCase));
+                    if (updateDepthMapping != null && !string.IsNullOrWhiteSpace(updateDepthMapping.SourceColumnName))
+                    {
+                        updateMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = updateDepthMapping.SourceColumnName ?? "",
+                            MappedVumaxChannel = "DEPTH"
+                        });
+                    }
+                }
+
+                // Auto-align other existing table columns against file headers
+                foreach (var vuCol in existingCols)
+                {
+                    if (vuCol.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                        vuCol.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (UpdateMethod == UpdateMethodType.DepthComparision &&
+                        vuCol.Equals("DEPTH", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Check explicit user mapping
+                    var explicitMap = ColumnMappings.FirstOrDefault(m =>
+                        m.VuMaxColumnID.Equals(vuCol, StringComparison.OrdinalIgnoreCase) &&
+                        !string.IsNullOrWhiteSpace(m.SourceColumnName));
+
+                    if (explicitMap != null)
+                    {
+                        updateMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = explicitMap.SourceColumnName ?? "",
+                            MappedVumaxChannel = vuCol
+                        });
+                        continue;
+                    }
+
+                    // Auto-match header
+                    var matchedHeader = PreviewColumns.FirstOrDefault(h =>
+                        h.Equals(vuCol, StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(vuCol + "#", StringComparison.OrdinalIgnoreCase) ||
+                        h.StartsWith(vuCol + "_", StringComparison.OrdinalIgnoreCase));
+
+                    if (matchedHeader != null)
+                    {
+                        updateMappings.Add(new ChannelMapping
+                        {
+                            CsvColumnHeader = matchedHeader,
+                            MappedVumaxChannel = vuCol
+                        });
+                    }
+                }
+
+                var updateProgress = new Progress<ImportProgressReport>(report =>
+                {
+                    ImportProgressStatus = report.StatusMessage;
+                    ImportProgressPercent = report.PercentCompleted;
+                    IsIndeterminateProgress = report.IsIndeterminate;
+                });
+
+                var updateDelimiter = ColumnDelimiter switch
+                {
+                    DelimiterChar.Tab => "\t",
+                    DelimiterChar.Other => !string.IsNullOrEmpty(OtherColumnDelimiter) ? OtherColumnDelimiter : ",",
+                    _ => ","
+                };
+
+                var updateResult = await Task.Run(async () =>
+                {
+                    return await _repository.StreamUpdateTimeDataAsync(
+                        updateTargetTableName,
+                        FileName,
+                        updateMappings,
+                        ColumnHeadingRow ?? 1,
+                        ImportFromRow ?? 2,
+                        updateDelimiter,
+                        SelectedWorksheet,
+                        updateTimeLogDtOptions,
+                        UpdateMethod,
+                        updateProgress);
+                });
+
+                if (updateResult != null)
+                {
+                    SelectedExistingTimeLog.description = $"QC: {updateResult.QcScore:F1}% • {DateTime.Now:dd-MM-yyyy hh:mm tt}";
+                    if (!string.IsNullOrEmpty(updateResult.MinDate))
+                        SelectedExistingTimeLog.startIndex = updateResult.MinDate;
+                    if (!string.IsNullOrEmpty(updateResult.MaxDate))
+                        SelectedExistingTimeLog.endIndex = updateResult.MaxDate;
+
+                    await _repository.LogTimeLogAsync(SelectedExistingTimeLog);
+                    _session.NotifyDataChanged();
+
+                    MessageBox.Show($"Update successful!\n\nRecords Processed: {updateResult.TotalRows:N0}\nQC Score: {updateResult.QcScore:F1}%\nTarget Table: {updateTargetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+
+                ColumnMappings.Clear();
+                FileName = string.Empty;
+                LogName = string.Empty;
+                IsFileUploaded = false;
+
+                RequestClose?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
             var activeMappings = new List<ChannelMapping>();
             var mappedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var mappedVuMaxTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1263,6 +1798,62 @@ public partial class ImportDataViewModel : ObservableObject
                 }
             }
 
+            // For TimeLog: ensure DATETIME channel mapping is established
+            string? dateColHeader = null;
+            string? timeColHeader = null;
+            if (!isDepthLog)
+            {
+                var sourceHeaders = _rawFileHeaders.Count > 0 ? _rawFileHeaders : PreviewColumns.ToList();
+                if (!IsDatetimeInSeperatorColumn)
+                {
+                    if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int autoD, out int autoT))
+                    {
+                        IsDatetimeInSeperatorColumn = true;
+                        DateColNo = autoD;
+                        TimeColNo = autoT;
+                    }
+                }
+
+                if (IsDatetimeInSeperatorColumn)
+                {
+                    dateColHeader = DateColNo >= 0 && DateColNo < sourceHeaders.Count ? sourceHeaders[DateColNo] : null;
+                    timeColHeader = TimeColNo >= 0 && TimeColNo < sourceHeaders.Count ? sourceHeaders[TimeColNo] : null;
+
+                    if (!activeMappings.Any(m => m.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        activeMappings.Insert(0, new ChannelMapping
+                        {
+                            CsvColumnHeader = dateColHeader ?? "DATETIME",
+                            MappedVumaxChannel = "DATETIME"
+                        });
+                        mappedVuMaxTargets.Add("DATETIME");
+                    }
+                }
+                else
+                {
+                    if (!activeMappings.Any(m => m.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var matchedDt = PreviewColumns.FirstOrDefault(h =>
+                            h.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("DATE TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                            h.Equals("TIMESTAMP", StringComparison.OrdinalIgnoreCase));
+
+                        activeMappings.Insert(0, new ChannelMapping
+                        {
+                            CsvColumnHeader = matchedDt ?? "DATETIME",
+                            MappedVumaxChannel = "DATETIME"
+                        });
+                        if (matchedDt != null)
+                        {
+                            mappedSources.Add(matchedDt);
+                        }
+                        mappedVuMaxTargets.Add("DATETIME");
+                    }
+                }
+            }
+
             // 2. Process unmapped imported columns (dynamically create new columns in target table)
             foreach (var col in PreviewColumns)
             {
@@ -1275,11 +1866,32 @@ public partial class ImportDataViewModel : ObservableObject
                 if (mappedVuMaxTargets.Contains(col))
                     continue;
 
+                // For TimeLog in split datetime mode, skip the separate Date and Time columns
+                // matching legacy VuMax (frmMain.vb lines 1322-1330)
+                if (!isDepthLog && IsDatetimeInSeperatorColumn)
+                {
+                    if (dateColHeader != null && col.Equals(dateColHeader, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (timeColHeader != null && col.Equals(timeColHeader, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+
                 activeMappings.Add(new ChannelMapping
                 {
                     CsvColumnHeader = col,
                     MappedVumaxChannel = col
                 });
+            }
+
+            if (!isDepthLog && IsDatetimeInSeperatorColumn)
+            {
+                activeMappings = activeMappings.Where(m =>
+                {
+                    if (m.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (dateColHeader != null && m.CsvColumnHeader.Equals(dateColHeader, StringComparison.OrdinalIgnoreCase)) return false;
+                    if (timeColHeader != null && m.CsvColumnHeader.Equals(timeColHeader, StringComparison.OrdinalIgnoreCase)) return false;
+                    return true;
+                }).ToList();
             }
 
             var effectiveWellName = !string.IsNullOrWhiteSpace(ProjectWellName) && ProjectWellName != "Loading Well..."
@@ -1288,10 +1900,6 @@ public partial class ImportDataViewModel : ObservableObject
             var finalLogName = string.IsNullOrWhiteSpace(LogName) ? System.IO.Path.GetFileNameWithoutExtension(FileName) : LogName;
 
             await _repository.EnsureWellAsync(effectiveWellName);
-
-            string targetTableName;
-            DepthLog? depthLog = null;
-            TimeLog? timeLog = null;
 
             if (isDepthLog)
             {
@@ -1353,9 +1961,12 @@ public partial class ImportDataViewModel : ObservableObject
                     nameWell = effectiveWellName,
                     __WellName = effectiveWellName,
                     comments = "Success",
-                    creationDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss")
+                    creationDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss"),
+                    DontCalcHoleDepth = true
                 };
 
+                // --- [OLD LOGIC (timeLog.logCurves did not guarantee DATETIME curve was present if unmapped)] ---
+                /*
                 int order = 1;
                 var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var map in activeMappings)
@@ -1372,6 +1983,55 @@ public partial class ImportDataViewModel : ObservableObject
 
                     bool isDateTime = finalMnemonic.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
                                       finalMnemonic.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                                      finalMnemonic.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                                      finalMnemonic.Equals("DATE", StringComparison.OrdinalIgnoreCase);
+
+                    var channel = new LogChannel
+                    {
+                        mnemonic = finalMnemonic,
+                        curveDescription = map.CsvColumnHeader,
+                        typeLogData = isDateTime ? "DateTime" : "Double",
+                        unit = isDateTime ? "" : (finalMnemonic.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : ""),
+                        ColumnOrder = order++,
+                        witsmlMnemonic = finalMnemonic
+                    };
+                    timeLog.logCurves[finalMnemonic] = channel;
+                }
+                */
+                // --- [NEW LOGIC (Populate LogCurves guaranteeing DATETIME curve and dynamic unmapped curves)] ---
+                int order = 1;
+                var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                // Always ensure DATETIME curve is present as the primary time index
+                timeLog.logCurves["DATETIME"] = new LogChannel
+                {
+                    mnemonic = "DATETIME",
+                    curveDescription = "Date and Time",
+                    typeLogData = "DateTime",
+                    unit = "",
+                    ColumnOrder = 0,
+                    witsmlMnemonic = "DATETIME"
+                };
+                distinctMnemonic.Add("DATETIME");
+
+                foreach (var map in activeMappings)
+                {
+                    var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? map.CsvColumnHeader : map.MappedVumaxChannel;
+                    var safeMnemonic = WellDataRepository.SanitizeIdentifier(targetChannel, order - 1);
+                    if (safeMnemonic.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var finalMnemonic = safeMnemonic;
+                    int suffix = 1;
+                    while (distinctMnemonic.Contains(finalMnemonic))
+                    {
+                        finalMnemonic = $"{safeMnemonic}_{suffix++}";
+                    }
+                    distinctMnemonic.Add(finalMnemonic);
+
+                    bool isDateTime = finalMnemonic.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
                                       finalMnemonic.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
                                       finalMnemonic.Equals("DATE", StringComparison.OrdinalIgnoreCase);
 
@@ -1413,7 +2073,8 @@ public partial class ImportDataViewModel : ObservableObject
                 _ => ","
             };
 
-            // Execute streaming import directly on background thread to keep UI completely responsive
+            // --- [OLD LOGIC (StreamImportDataAsync called without timeLogDtOptions)] ---
+            /*
             var importResult = await Task.Run(async () =>
             {
                 return await _repository.StreamImportDataAsync(
@@ -1425,6 +2086,31 @@ public partial class ImportDataViewModel : ObservableObject
                     effectiveDelimiter,
                     SelectedWorksheet,
                     progress);
+            });
+            */
+            // --- [NEW LOGIC (StreamImportDataAsync with active TimeLogDateTimeOptions)] ---
+            var timeLogDtOptions = isDepthLog ? null : new TimeLogDateTimeOptions
+            {
+                IsDatetimeInSeperatorColumn = IsDatetimeInSeperatorColumn,
+                DatetimeSeparator = DatetimeSeparator,
+                DateColNo = DateColNo,
+                TimeColNo = TimeColNo,
+                DateFormat = DateFormat
+            };
+
+            var importResult = await Task.Run(async () =>
+            {
+                return await _repository.StreamImportDataAsync(
+                    targetTableName,
+                    FileName,
+                    activeMappings,
+                    ColumnHeadingRow ?? 1,
+                    ImportFromRow ?? 2,
+                    effectiveDelimiter,
+                    SelectedWorksheet,
+                    progress,
+                    default,
+                    timeLogDtOptions);
             });
 
             if (importResult != null)
@@ -1456,7 +2142,10 @@ public partial class ImportDataViewModel : ObservableObject
 
                 _session.NotifyDataChanged();
 
-                MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                string seqNotice = !importResult.IsSequential && importResult.NonSequentialCount > 0
+                    ? $"\nWarning: {importResult.NonSequentialCount} non-sequential timestamp(s) detected."
+                    : "";
+                MessageBox.Show($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}{seqNotice}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             
             ColumnMappings.Clear();
@@ -1468,6 +2157,27 @@ public partial class ImportDataViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            // Clean up newly created empty table and metadata if streaming import failed
+            if (!string.IsNullOrWhiteSpace(targetTableName))
+            {
+                try
+                {
+                    var cleanupService = _session.GetDataService();
+                    cleanupService.ExecuteNonQuery($"DROP TABLE IF EXISTS [{targetTableName.Replace("'", "''")}];");
+                    if (timeLog != null && !string.IsNullOrWhiteSpace(timeLog.ObjectID))
+                    {
+                        cleanupService.ExecuteNonQuery($"DELETE FROM VMX_TIME_LOG WHERE LOG_ID='{timeLog.ObjectID.Replace("'", "''")}';");
+                        cleanupService.ExecuteNonQuery($"DELETE FROM VMX_TIME_LOG_SUMMARY WHERE DataTableName='{targetTableName.Replace("'", "''")}';");
+                    }
+                    else if (depthLog != null && !string.IsNullOrWhiteSpace(depthLog.ObjectID))
+                    {
+                        cleanupService.ExecuteNonQuery($"DELETE FROM VMX_DEPTH_LOG WHERE LOG_ID='{depthLog.ObjectID.Replace("'", "''")}';");
+                        cleanupService.ExecuteNonQuery($"DELETE FROM VMX_DEPTH_LOG_SUMMARY WHERE DataTableName='{targetTableName.Replace("'", "''")}';");
+                    }
+                }
+                catch { }
+            }
+
             MessageBox.Show($"Error during import: {ex.Message}", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally

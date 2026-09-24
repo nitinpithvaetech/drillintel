@@ -38,6 +38,7 @@ public interface IWellDataRepository
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
 
+
     Task<StreamImportResult> StreamImportDataAsync(
         string tableName,
         string filePath,
@@ -47,7 +48,8 @@ public interface IWellDataRepository
         string delimiter = ",",
         string? worksheetName = null,
         IProgress<ImportProgressReport>? progress = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        DrillIntel.Services.TimeLogDateTimeOptions? dateTimeOptions = null);
 
     Task<List<string>> GetTableColumnsAsync(string tableName);
 
@@ -59,6 +61,19 @@ public interface IWellDataRepository
         int importFromRow,
         string delimiter = ",",
         string? worksheetName = null,
+        IProgress<ImportProgressReport>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    Task<StreamImportResult> StreamUpdateTimeDataAsync(
+        string tableName,
+        string filePath,
+        List<ChannelMapping> mappings,
+        int columnHeadingRow,
+        int importFromRow,
+        string delimiter = ",",
+        string? worksheetName = null,
+        DrillIntel.Services.TimeLogDateTimeOptions? dateTimeOptions = null,
+        UpdateMethodType updateMethod = UpdateMethodType.DateTimeComaparision,
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
 }

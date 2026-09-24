@@ -78,8 +78,16 @@
                                               ItemsSource="{Binding ExistingDepthLogs}" 
                                               SelectedItem="{Binding SelectedExistingDepthLog}" 
                                               DisplayMemberPath="nameLog" 
-                                              Visibility="{Binding IsUpdateDataOperation, Converter={StaticResource BoolToVisibilityConverter}}"
+                                              Visibility="{Binding IsDepthLogUpdating, Converter={StaticResource BoolToVisibilityConverter}}"
                                               materialDesign:HintAssist.Hint="Select DepthLog to update"
+                                              HorizontalAlignment="Stretch"
+                                              VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="2" 
+                                              ItemsSource="{Binding ExistingTimeLogs}" 
+                                              SelectedItem="{Binding SelectedExistingTimeLog}" 
+                                              DisplayMemberPath="nameLog" 
+                                              Visibility="{Binding IsTimeLogUpdating, Converter={StaticResource BoolToVisibilityConverter}}"
+                                              materialDesign:HintAssist.Hint="Select TimeLog to update"
                                               HorizontalAlignment="Stretch"
                                               VerticalAlignment="Center" />
                                 </Grid>
@@ -271,10 +279,10 @@
                                 BorderThickness="1"
                                 Visibility="{Binding IsUpdateDataOperation, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel>
-                                <TextBlock Text="Target DepthLog (Update Mode)" FontSize="11" Foreground="Gray" FontWeight="Medium" />
-                                <TextBlock Text="{Binding SelectedExistingDepthLog.nameLog}" FontSize="15" FontWeight="Bold" Margin="0,2,0,4" />
+                                <TextBlock Text="{Binding TargetLogLabel}" FontSize="11" Foreground="Gray" FontWeight="Medium" />
+                                <TextBlock Text="{Binding SelectedExistingLogName}" FontSize="15" FontWeight="Bold" Margin="0,2,0,4" />
                                 <TextBlock Text="Target Table Name:" FontSize="11" Foreground="Gray" />
-                                <TextBlock Text="{Binding SelectedExistingDepthLog.__dataTableName}" FontFamily="Consolas" FontSize="13" Foreground="#2563EB" />
+                                <TextBlock Text="{Binding SelectedExistingLogTableName}" FontFamily="Consolas" FontSize="13" Foreground="#2563EB" />
                             </StackPanel>
                         </Border>
 
