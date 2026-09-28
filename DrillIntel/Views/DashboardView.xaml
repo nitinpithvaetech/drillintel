@@ -15,6 +15,23 @@
     <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+
+        <ContextMenu x:Key="TreeItemContextMenu" x:Shared="False">
+            <MenuItem Header="Edit Object" 
+                      Command="{Binding PlacementTarget.Tag.EditObjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="PencilOutline" Width="18" Height="18" Foreground="#2196F3" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="View Data" 
+                      Command="{Binding PlacementTarget.Tag.ViewDataCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="TableEye" Width="18" Height="18" Foreground="#4CAF50" />
+                </MenuItem.Icon>
+            </MenuItem>
+        </ContextMenu>
     </UserControl.Resources>
 
     <Grid Margin="16">
@@ -88,6 +105,13 @@
                             <Style TargetType="TreeViewItem" BasedOn="{StaticResource MaterialDesignTreeViewItem}">
                                 <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
                                 <Setter Property="Padding" Value="4,2" />
+                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}" />
+                                <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasContextMenu}" Value="True">
+                                        <Setter Property="ContextMenu" Value="{StaticResource TreeItemContextMenu}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
                             </Style>
                         </TreeView.ItemContainerStyle>
                         <TreeView.ItemTemplate>

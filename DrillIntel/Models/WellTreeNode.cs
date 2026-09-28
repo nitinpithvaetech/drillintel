@@ -14,10 +14,26 @@ public enum WellTreeNodeType
 public partial class WellTreeNode : ObservableObject
 {
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDepthLogNode))]
+    [NotifyPropertyChangedFor(nameof(IsTimeLogNode))]
+    [NotifyPropertyChangedFor(nameof(HasContextMenu))]
     private string _name = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDepthLogNode))]
+    [NotifyPropertyChangedFor(nameof(IsTimeLogNode))]
+    [NotifyPropertyChangedFor(nameof(HasContextMenu))]
     private WellTreeNodeType _type;
+
+    public bool IsDepthLogNode =>
+        (Type == WellTreeNodeType.Folder && Name.Equals("Depthlogs", System.StringComparison.OrdinalIgnoreCase)) ||
+        Type == WellTreeNodeType.DepthLog;
+
+    public bool IsTimeLogNode =>
+        (Type == WellTreeNodeType.Folder && Name.Equals("Timelogs", System.StringComparison.OrdinalIgnoreCase)) ||
+        Type == WellTreeNodeType.TimeLog;
+
+    public bool HasContextMenu => IsDepthLogNode || IsTimeLogNode;
 
     [ObservableProperty]
     private string _iconKind = "File";

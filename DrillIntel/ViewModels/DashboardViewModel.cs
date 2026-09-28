@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -321,28 +322,183 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
+    [ObservableProperty]
+    private WellTreeNode? _contextSelectedNode;
+
+    public DataTable? LastLoadedLogData { get; private set; }
+    public string? LastLoadedLogType { get; private set; }
+    public string? LastLoadedLogName { get; private set; }
+    public WellInformationViewModel? LastEditWellViewModel { get; private set; }
+
+    public Func<ViewLogDataViewModel, bool?>? OpenViewDataDialogHandler { get; set; }
+    public Func<WellInformationViewModel, bool?>? OpenEditWellDialogHandler { get; set; }
+
     [RelayCommand]
-    private async Task EditWellAsync()
+    public async Task EditObjectAsync(WellTreeNode? targetNode = null)
     {
         if (_session?.IsProjectOpen != true || _repository == null) return;
         var currentWell = await _repository.GetProjectWellAsync();
-        var vm = new WellInformationViewModel(currentWell?.WellName ?? "", currentWell?.FieldName ?? "General Field");
-        var window = new DrillIntel.Views.WellInformationWindow
+        var vm = new WellInformationViewModel(currentWell ?? new Well());
+        LastEditWellViewModel = vm;
+
+        bool? result = false;
+        if (OpenEditWellDialogHandler != null)
         {
-            DataContext = vm,
-            Owner = System.Windows.Application.Current?.MainWindow
-        };
-        if (window.ShowDialog() == true)
+            result = OpenEditWellDialogHandler(vm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.WellInformationWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            vm.RequestClose += (saved) =>
+            {
+                window.DialogResult = saved;
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
         {
             var wellToSave = currentWell ?? new Well();
-            wellToSave.name = vm.WellName.Trim();
-            wellToSave.field = vm.FieldName.Trim();
+            vm.ApplyToWell(wellToSave);
             if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
             {
                 wellToSave.ObjectID = Guid.NewGuid().ToString();
             }
             await _repository.SaveProjectWellAsync(wellToSave);
             await RefreshAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task EditWellAsync()
+    {
+        await EditObjectAsync();
+    }
+
+    [RelayCommand]
+    public async Task ViewDataAsync(WellTreeNode? targetNode = null)
+    {
+        var node = targetNode ?? ContextSelectedNode ?? SelectedNode;
+        if (node == null || _repository == null || _session?.IsProjectOpen != true) return;
+
+        bool isDepthLog = node.IsDepthLogNode;
+        bool isTimeLog = node.IsTimeLogNode;
+
+        if (!isDepthLog && !isTimeLog) return;
+
+        string logType = isDepthLog ? "DepthLog" : "TimeLog";
+        string? targetTableName = null;
+        string logName = string.Empty;
+
+        if (isDepthLog)
+        {
+            var depthLogs = await _repository.GetDepthLogsAsync();
+            DepthLog? targetLog = null;
+            if (node.Tag is DepthLog directDl)
+            {
+                targetLog = directDl;
+            }
+            else if (SelectedNode?.Tag is DepthLog selectedDl)
+            {
+                targetLog = selectedDl;
+            }
+            else if (node.Children.Count > 0 && node.Children[0].Tag is DepthLog firstChildDl)
+            {
+                targetLog = firstChildDl;
+            }
+            else
+            {
+                targetLog = depthLogs.FirstOrDefault();
+            }
+
+            if (targetLog != null)
+            {
+                targetTableName = targetLog.__dataTableName;
+                logName = !string.IsNullOrWhiteSpace(targetLog.nameLog) ? targetLog.nameLog : targetLog.ObjectID;
+            }
+            else
+            {
+                logName = "Depthlogs";
+            }
+        }
+        else if (isTimeLog)
+        {
+            var timeLogs = await _repository.GetTimeLogsAsync();
+            TimeLog? targetLog = null;
+            if (node.Tag is TimeLog directTl)
+            {
+                targetLog = directTl;
+            }
+            else if (SelectedNode?.Tag is TimeLog selectedTl)
+            {
+                targetLog = selectedTl;
+            }
+            else if (node.Children.Count > 0 && node.Children[0].Tag is TimeLog firstChildTl)
+            {
+                targetLog = firstChildTl;
+            }
+            else
+            {
+                targetLog = timeLogs.FirstOrDefault();
+            }
+
+            if (targetLog != null)
+            {
+                targetTableName = targetLog.__dataTableName;
+                logName = !string.IsNullOrWhiteSpace(targetLog.nameLog) ? targetLog.nameLog : targetLog.ObjectID;
+            }
+            else
+            {
+                logName = "Timelogs";
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(targetTableName))
+        {
+            LastLoadedLogData = null;
+            LastLoadedLogType = logType;
+            LastLoadedLogName = logName;
+
+            if (System.Windows.Application.Current != null && OpenViewDataDialogHandler == null)
+            {
+                System.Windows.MessageBox.Show(
+                    $"No {logType} data available in this project yet. Please import a {logType} first.",
+                    "No Data Available",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Information);
+            }
+            return;
+        }
+
+        var dataTable = await _repository.GetLogDataTableAsync(targetTableName);
+        LastLoadedLogData = dataTable;
+        LastLoadedLogType = logType;
+        LastLoadedLogName = logName;
+
+        var viewLogVm = new ViewLogDataViewModel(
+            dataTable,
+            logType,
+            logName,
+            targetTableName,
+            SelectedWell?.WellName ?? "Unknown Well");
+
+        if (OpenViewDataDialogHandler != null)
+        {
+            OpenViewDataDialogHandler(viewLogVm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.ViewLogDataWindow
+            {
+                DataContext = viewLogVm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            viewLogVm.RequestClose += () => window.Close();
+            window.ShowDialog();
         }
     }
 }

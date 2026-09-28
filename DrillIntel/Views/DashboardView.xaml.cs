@@ -19,5 +19,36 @@ public partial class DashboardView : UserControl
             vm.OnTreeNodeSelected(node);
         }
     }
+
+    private void TreeViewItem_PreviewMouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source)
+        {
+            var item = FindVisualParent<TreeViewItem>(source);
+            if (item != null && item == sender)
+            {
+                item.Focus();
+                item.IsSelected = true;
+                if (DataContext is DashboardViewModel vm && item.DataContext is WellTreeNode node)
+                {
+                    vm.ContextSelectedNode = node;
+                    vm.OnTreeNodeSelected(node);
+                }
+            }
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent)
+            {
+                return parent;
+            }
+            child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+        }
+        return null;
+    }
 }
 

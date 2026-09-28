@@ -2140,4 +2140,27 @@ public class WellDataRepository : IWellDataRepository
             ValidationMessages = validationMessages
         };
     }
+
+    public async Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 5000)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(tableName))
+            return new DataTable();
+
+        return await Task.Run(() =>
+        {
+            try
+            {
+                var ds = _session.GetDataService();
+                string cleanTable = tableName.Trim().Trim('[', ']');
+                string sql = limitRows > 0
+                    ? $"SELECT * FROM [{cleanTable}] LIMIT {limitRows};"
+                    : $"SELECT * FROM [{cleanTable}];";
+                return ds.GetTable(sql) ?? new DataTable();
+            }
+            catch
+            {
+                return new DataTable();
+            }
+        });
+    }
 }

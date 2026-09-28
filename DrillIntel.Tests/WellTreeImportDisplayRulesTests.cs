@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Models;
@@ -325,5 +326,202 @@ public class WellTreeImportDisplayRulesTests : IDisposable
         {
             if (File.Exists(csvPath)) File.Delete(csvPath);
         }
+    }
+
+    [Fact]
+    public async Task ContextMenu_AppearsOnlyOnDepthlogsAndTimelogsNodes()
+    {
+        await _repo.EnsureWellAsync("Etech4");
+
+        // Import one depth log
+        string depthCsv = Path.Combine(Path.GetTempPath(), $"cm_depth_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(depthCsv, "DEPTH,GR\n100.0,45.0\n");
+            var options = new DepthLogImportOptions
+            {
+                LogName = "TestDepthLog",
+                WellName = "Etech4",
+                ColumnHeadingRow = 1,
+                ImportFromRow = 2,
+                ColumnMappings = new Dictionary<string, string> { ["DEPTH"] = "DEPTH" }
+            };
+            await _depthLogService.ImportFromFileAsync(depthCsv, options);
+
+            var dashboard = new DashboardViewModel(_session, _repo);
+            await dashboard.LoadDataAsync();
+
+            var wellNode = dashboard.WellTree[0];
+            var timeFolder = wellNode.Children.First(c => c.Name == "Timelogs");
+            var depthFolder = wellNode.Children.First(c => c.Name == "Depthlogs");
+            var depthChild = depthFolder.Children[0];
+
+            // Validation: Well node MUST NOT have context menu
+            Assert.False(wellNode.HasContextMenu);
+            Assert.False(wellNode.IsDepthLogNode);
+            Assert.False(wellNode.IsTimeLogNode);
+
+            // Validation: Timelogs node MUST have context menu
+            Assert.True(timeFolder.HasContextMenu);
+            Assert.True(timeFolder.IsTimeLogNode);
+            Assert.False(timeFolder.IsDepthLogNode);
+
+            // Validation: Depthlogs node MUST have context menu
+            Assert.True(depthFolder.HasContextMenu);
+            Assert.True(depthFolder.IsDepthLogNode);
+            Assert.False(depthFolder.IsTimeLogNode);
+
+            // Validation: DepthLog item child node MUST have context menu
+            Assert.True(depthChild.HasContextMenu);
+            Assert.True(depthChild.IsDepthLogNode);
+        }
+        finally
+        {
+            if (File.Exists(depthCsv)) File.Delete(depthCsv);
+        }
+    }
+
+    [Fact]
+    public async Task EditObject_OpensVmxWellEditDialog_AndPersistsWellFields()
+    {
+        await _repo.EnsureWellAsync("OriginalWell", "FieldA");
+
+        var dashboard = new DashboardViewModel(_session, _repo);
+        await dashboard.LoadDataAsync();
+
+        var wellNode = dashboard.WellTree[0];
+        var depthFolder = wellNode.Children.First(c => c.Name == "Depthlogs");
+
+        // Simulate user clicking "Edit Object" via context menu
+        dashboard.OpenEditWellDialogHandler = (vm) =>
+        {
+            Assert.Equal("OriginalWell", vm.WellName);
+            Assert.Equal("FieldA", vm.FieldName);
+
+            // User edits well-level information (vmx_well fields)
+            vm.OperatorName = "PetroTech Corp";
+            vm.Status = "Drilling";
+            vm.RigName = "Rig-77";
+            vm.Comments = "Updated from Well Tree Context Menu";
+            return true; // Click "SAVE WELL"
+        };
+
+        await dashboard.EditObjectAsync(depthFolder);
+
+        // Verify changes are saved to VMX_WELL in database
+        var savedWell = await _repo.GetProjectWellAsync();
+        Assert.NotNull(savedWell);
+        Assert.Equal("PetroTech Corp", savedWell.operatorName);
+        Assert.Equal("Drilling", savedWell.statusWell);
+        Assert.Equal("Rig-77", savedWell.RigName);
+        Assert.Equal("Updated from Well Tree Context Menu", savedWell.Comments);
+    }
+
+    [Fact]
+    public async Task ViewData_OnDepthlogsNode_LoadsDepthLogData()
+    {
+        await _repo.EnsureWellAsync("Etech4");
+
+        string depthCsv = Path.Combine(Path.GetTempPath(), $"view_depth_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(depthCsv, "DEPTH,GR,ROP\n1000.0,55.0,15.2\n1001.0,57.5,16.0\n");
+            var options = new DepthLogImportOptions
+            {
+                LogName = "DepthLog_ForViewData",
+                WellName = "Etech4",
+                ColumnHeadingRow = 1,
+                ImportFromRow = 2,
+                ColumnMappings = new Dictionary<string, string>
+                {
+                    ["DEPTH"] = "DEPTH",
+                    ["GR"] = "GR",
+                    ["ROP"] = "ROP"
+                }
+            };
+            await _depthLogService.ImportFromFileAsync(depthCsv, options);
+
+            var dashboard = new DashboardViewModel(_session, _repo);
+            await dashboard.LoadDataAsync();
+
+            var wellNode = dashboard.WellTree[0];
+            var depthFolder = wellNode.Children.First(c => c.Name == "Depthlogs");
+
+            bool dialogOpened = false;
+            dashboard.OpenViewDataDialogHandler = (vm) =>
+            {
+                dialogOpened = true;
+                Assert.Equal("DepthLog", vm.LogType);
+                Assert.Equal("DepthLog_ForViewData", vm.LogName);
+                Assert.Equal(2, vm.RecordCount);
+                Assert.True(vm.ColumnCount >= 3);
+                return true;
+            };
+
+            await dashboard.ViewDataAsync(depthFolder);
+
+            Assert.True(dialogOpened);
+            Assert.NotNull(dashboard.LastLoadedLogData);
+            Assert.Equal("DepthLog", dashboard.LastLoadedLogType);
+            Assert.Equal(2, dashboard.LastLoadedLogData.Rows.Count);
+            Assert.True(dashboard.LastLoadedLogData.Columns.Contains("DEPTH"));
+            Assert.True(dashboard.LastLoadedLogData.Columns.Contains("GR"));
+            Assert.True(dashboard.LastLoadedLogData.Columns.Contains("ROP"));
+        }
+        finally
+        {
+            if (File.Exists(depthCsv)) File.Delete(depthCsv);
+        }
+    }
+
+    [Fact]
+    public async Task ViewData_OnTimelogsNode_LoadsTimeLogData()
+    {
+        await _repo.EnsureWellAsync("Etech4");
+
+        // Create and register a TimeLog in repository
+        var timeLog = new TimeLog
+        {
+            ObjectID = Guid.NewGuid().ToString(),
+            nameLog = "TimeLog_ForViewData",
+            nameWell = "Etech4",
+            __WellName = "Etech4",
+            __dataTableName = $"timeLog_data_{Guid.NewGuid():N}"
+        };
+
+        // Create the underlying sqlite data table and insert records
+        var conn = _session.GetConnection();
+        await conn.ExecuteAsync($"CREATE TABLE [{timeLog.__dataTableName}] (DATETIME TEXT, DEPTH REAL, HKLD REAL);");
+        await conn.ExecuteAsync($"INSERT INTO [{timeLog.__dataTableName}] VALUES ('2024-05-01 10:00:00', 1000.0, 50.0);");
+        await conn.ExecuteAsync($"INSERT INTO [{timeLog.__dataTableName}] VALUES ('2024-05-01 10:00:10', 1000.5, 52.0);");
+
+        await _repo.LogTimeLogAsync(timeLog);
+
+        var dashboard = new DashboardViewModel(_session, _repo);
+        await dashboard.LoadDataAsync();
+
+        var wellNode = dashboard.WellTree[0];
+        var timeFolder = wellNode.Children.First(c => c.Name == "Timelogs");
+
+        bool dialogOpened = false;
+        dashboard.OpenViewDataDialogHandler = (vm) =>
+        {
+            dialogOpened = true;
+            Assert.Equal("TimeLog", vm.LogType);
+            Assert.Equal("TimeLog_ForViewData", vm.LogName);
+            Assert.Equal(2, vm.RecordCount);
+            Assert.True(vm.ColumnCount >= 3);
+            return true;
+        };
+
+        await dashboard.ViewDataAsync(timeFolder);
+
+        Assert.True(dialogOpened);
+        Assert.NotNull(dashboard.LastLoadedLogData);
+        Assert.Equal("TimeLog", dashboard.LastLoadedLogType);
+        Assert.Equal(2, dashboard.LastLoadedLogData.Rows.Count);
+        Assert.True(dashboard.LastLoadedLogData.Columns.Contains("DATETIME"));
+        Assert.True(dashboard.LastLoadedLogData.Columns.Contains("DEPTH"));
+        Assert.True(dashboard.LastLoadedLogData.Columns.Contains("HKLD"));
     }
 }

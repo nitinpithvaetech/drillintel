@@ -8,10 +8,11 @@
         xmlns:converters="clr-namespace:DrillIntel.Converters"
         d:DataContext="{d:DesignInstance Type=viewmodels:WellInformationViewModel}"
         mc:Ignorable="d"
-        Title="Well Information" 
-        Width="480" 
-        SizeToContent="Height"
-        ResizeMode="NoResize"
+        Title="Well Information — VMX_WELL" 
+        Width="680" 
+        Height="650"
+        MinWidth="550"
+        MinHeight="450"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
@@ -21,41 +22,253 @@
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
     </Window.Resources>
 
-    <Border Padding="28">
-        <StackPanel>
-            <!-- Header -->
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="30" Height="30" VerticalAlignment="Center" />
-                <TextBlock Text="Well Information" FontSize="20" FontWeight="Bold" Margin="12,0,0,0" VerticalAlignment="Center" />
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Margin="0,0,0,16" Padding="14,10" Background="#F4F6F9" CornerRadius="8" BorderBrush="#E0E6ED" BorderThickness="1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="32" Height="32" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Well Information (VMX_WELL)" FontSize="18" FontWeight="Bold" Foreground="#1976D2" />
+                    <TextBlock Text="Edit well-level attributes and parameters bound to the VMX_WELL table." FontSize="12" Foreground="Gray" Margin="0,2,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Scrollable Form Fields -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+            <StackPanel>
+                <!-- Group 1: General Identification -->
+                <TextBlock Text="General Identification" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+
+                <!-- Row 1: Well Name & Legal Name -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Well Name *" 
+                             Text="{Binding WellName, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Enter the unique well identifier/name (Mandatory)." />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="Legal Name" 
+                             Text="{Binding LegalName, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Full registered legal name." />
+                </Grid>
+
+                <!-- Row 2: Field & Operator -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Field Name" 
+                             Text="{Binding FieldName, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Field or project designation." />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="Operator Name" 
+                             Text="{Binding OperatorName, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Operating company name." />
+                </Grid>
+
+                <!-- Row 3: Status, Purpose & UWI -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Status" 
+                             Text="{Binding Status, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Well operational status (e.g. Active, Drilling)." />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="Purpose" 
+                             Text="{Binding Purpose, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Well purpose (e.g. Development, Exploration)." />
+                    <TextBox Grid.Column="4" 
+                             materialDesign:HintAssist.Hint="UWI / API No." 
+                             Text="{Binding Uwi, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Unique Well Identifier or API license number." />
+                </Grid>
+
+                <!-- Row 4: Rig Name, Spud Date & License No -->
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Rig Name" 
+                             Text="{Binding RigName, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Name or number of drilling rig." />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="Spud Date" 
+                             Text="{Binding SpudDate, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Spud date (e.g. DD-MMM-YYYY)." />
+                    <TextBox Grid.Column="4" 
+                             materialDesign:HintAssist.Hint="License No." 
+                             Text="{Binding LicenseNo, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" 
+                             ToolTip="Government or regulatory license number." />
+                </Grid>
+
+                <!-- Group 2: Geographic & Regional -->
+                <Separator Margin="0,0,0,16" />
+                <TextBlock Text="Geographic &amp; Regional Info" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+
+                <!-- Row 1: Country, State & County -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Country" 
+                             Text="{Binding Country, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="State / Province" 
+                             Text="{Binding State, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="4" 
+                             materialDesign:HintAssist.Hint="County / Parish" 
+                             Text="{Binding County, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                </Grid>
+
+                <!-- Row 2: Block, District, Region, Time Zone -->
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Block" 
+                             Text="{Binding Block, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="District" 
+                             Text="{Binding District, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="4" 
+                             materialDesign:HintAssist.Hint="Region" 
+                             Text="{Binding Region, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="6" 
+                             materialDesign:HintAssist.Hint="Time Zone" 
+                             Text="{Binding TimeZone, UpdateSourceTrigger=PropertyChanged}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                </Grid>
+
+                <!-- Group 3: Elevations & Water Depth -->
+                <Separator Margin="0,0,0,16" />
+                <TextBlock Text="Elevations &amp; Water Depth" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+
+                <Grid Margin="0,0,0,20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" 
+                             materialDesign:HintAssist.Hint="Wellhead Elevation" 
+                             Text="{Binding WellheadElevation, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="2" 
+                             materialDesign:HintAssist.Hint="Ground Elevation" 
+                             Text="{Binding GroundElevation, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                    <TextBox Grid.Column="4" 
+                             materialDesign:HintAssist.Hint="Water Depth" 
+                             Text="{Binding WaterDepth, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" 
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                             FontSize="14" />
+                </Grid>
+
+                <!-- Group 4: Comments -->
+                <Separator Margin="0,0,0,16" />
+                <TextBlock Text="Comments &amp; Remarks" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+
+                <TextBox materialDesign:HintAssist.Hint="Comments" 
+                         Text="{Binding Comments, UpdateSourceTrigger=PropertyChanged}" 
+                         Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
+                         FontSize="14" 
+                         TextWrapping="Wrap" 
+                         AcceptsReturn="True" 
+                         Height="70" 
+                         Margin="0,0,0,16" />
             </StackPanel>
+        </ScrollViewer>
 
-            <TextBlock Text="Specify the primary well details for this project." FontSize="13" Foreground="Gray" Margin="0,0,0,24" />
+        <!-- Footer / Action Buttons -->
+        <Border Grid.Row="2" Margin="0,16,0,0" Padding="0,12,0,0" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+            <Grid>
+                <!-- Error Message -->
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#F44336" FontWeight="SemiBold" VerticalAlignment="Center" Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}, FallbackValue=Collapsed}" />
 
-            <!-- Well Name -->
-            <TextBox materialDesign:HintAssist.Hint="Well Name *" 
-                     Text="{Binding WellName, UpdateSourceTrigger=PropertyChanged}" 
-                     Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
-                     FontSize="15" 
-                     Margin="0,0,0,20" 
-                     ToolTip="Enter the unique well identifier/name." />
-
-            <!-- Field Name -->
-            <TextBox materialDesign:HintAssist.Hint="Field Name" 
-                     Text="{Binding FieldName, UpdateSourceTrigger=PropertyChanged}" 
-                     Style="{StaticResource MaterialDesignFloatingHintTextBox}" 
-                     FontSize="15" 
-                     Margin="0,0,0,20" 
-                     ToolTip="Enter the field or block name." />
-
-            <!-- Error Message -->
-            <TextBlock Text="{Binding ErrorMessage}" Foreground="#F44336" FontWeight="SemiBold" Margin="0,0,0,16" Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}, FallbackValue=Collapsed}" />
-
-            <!-- Action Buttons -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                <Button Content="CANCEL" Command="{Binding CancelCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Width="100" Margin="0,0,12,0" IsCancel="True" />
-                <Button Content="SAVE WELL" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Width="120" IsDefault="True" />
-            </StackPanel>
-        </StackPanel>
-    </Border>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="CANCEL" Command="{Binding CancelCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Width="100" Margin="0,0,12,0" IsCancel="True" />
+                    <Button Content="SAVE WELL" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Width="130" IsDefault="True" IsEnabled="{Binding CanSave}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>
 

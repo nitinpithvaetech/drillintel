@@ -76,5 +76,7 @@ public interface IWellDataRepository
         UpdateMethodType updateMethod = UpdateMethodType.DateTimeComaparision,
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
+
+    Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 5000);
 }
 
