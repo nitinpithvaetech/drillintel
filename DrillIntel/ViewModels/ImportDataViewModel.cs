@@ -261,6 +261,8 @@ public partial class ImportDataViewModel : ObservableObject
     public bool ShowDateTimeSettings => TypeOfDataInput == ImportDataType.TimeLogData;
     public bool IsDepthLog => TypeOfDataInput == ImportDataType.DepthLogData;
     public bool IsTimeLog => TypeOfDataInput == ImportDataType.TimeLogData;
+    public bool ShowUpdateExistingLog => TypeOfDataInput != ImportDataType.DepthLogData && TypeOfDataInput != ImportDataType.TimeLogData;
+    public bool ShowOperationMode => ShowUpdateExistingLog;
 
     public ImportDataType TypeOfDataInput
     {
@@ -280,6 +282,8 @@ public partial class ImportDataViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowDateTimeSettings));
             OnPropertyChanged(nameof(IsDepthLog));
             OnPropertyChanged(nameof(IsTimeLog));
+            OnPropertyChanged(nameof(ShowOperationMode));
+            OnPropertyChanged(nameof(ShowUpdateExistingLog));
             OnPropertyChanged(nameof(IsDepthLogUpdating));
             OnPropertyChanged(nameof(IsTimeLogUpdating));
             OnPropertyChanged(nameof(SelectedExistingLogName));

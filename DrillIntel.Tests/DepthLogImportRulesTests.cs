@@ -63,6 +63,20 @@ public class DepthLogImportRulesTests : IDisposable
     }
 
     [Fact]
+    public void OperationMode_HiddenForDepthLogAndTimelog()
+    {
+        var vm = new ImportDataViewModel(_session);
+
+        vm.TypeOfDataInput = ImportDataType.TimeLogData;
+        Assert.False(vm.ShowUpdateExistingLog);
+        Assert.False(vm.ShowOperationMode);
+
+        vm.TypeOfDataInput = ImportDataType.DepthLogData;
+        Assert.False(vm.ShowUpdateExistingLog);
+        Assert.False(vm.ShowOperationMode);
+    }
+
+    [Fact]
     public void DepthLog_PopulateDefaultRows_WhenSelectingDepthLog()
     {
         var vm = new ImportDataViewModel(_session);

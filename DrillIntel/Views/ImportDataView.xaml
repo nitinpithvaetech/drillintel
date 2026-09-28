@@ -63,7 +63,8 @@
                         <TextBlock Text="Step 1 of 3: Select File" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,20" HorizontalAlignment="Center" />
                         
                         <!-- Operation Mode Selector -->
-                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16,12" Margin="0,0,0,20" BorderBrush="#E5E7EB" BorderThickness="1">
+                        <Border Background="#F9FAFB" CornerRadius="8" Padding="16,12" Margin="0,0,0,20" BorderBrush="#E5E7EB" BorderThickness="1"
+                                Visibility="{Binding ShowOperationMode, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel>
                                 <TextBlock Text="Operation Mode" FontSize="12" Foreground="Gray" FontWeight="Medium" Margin="0,0,0,8" />
                                 <Grid>
@@ -73,7 +74,9 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <RadioButton Grid.Column="0" Content="Create New Log" IsChecked="{Binding IsNewDataOperation}" FontWeight="Medium" Margin="0,0,20,0" GroupName="OperationTypeGroup" />
-                                    <RadioButton Grid.Column="1" Content="Update Existing Log" IsChecked="{Binding IsUpdateDataOperation}" FontWeight="Medium" Margin="0,0,16,0" GroupName="OperationTypeGroup" />
+                                    <RadioButton Grid.Column="1" Content="Update Existing Log" IsChecked="{Binding IsUpdateDataOperation}" 
+                                                 Visibility="{Binding ShowUpdateExistingLog, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 FontWeight="Medium" Margin="0,0,16,0" GroupName="OperationTypeGroup" />
                                     <ComboBox Grid.Column="2" 
                                               ItemsSource="{Binding ExistingDepthLogs}" 
                                               SelectedItem="{Binding SelectedExistingDepthLog}" 
