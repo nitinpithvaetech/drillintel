@@ -470,12 +470,37 @@ public class WellDataRepository : IWellDataRepository
 
         if (list.Count > 0)
         {
-            if (hasSummary > 0)
+            var wellMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasWellTable = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_WELL';");
+            if (hasWellTable > 0)
             {
-                var summaries = (await connection.QueryAsync<dynamic>(
-                    "SELECT * FROM VMX_TIME_LOG_SUMMARY;")).ToList();
+                var wellRows = await connection.QueryAsync<dynamic>("SELECT WELL_ID, WELL_NAME FROM VMX_WELL;");
+                foreach (var w in wellRows)
+                {
+                    var wDict = w as IDictionary<string, object>;
+                    if (wDict != null &&
+                        wDict.TryGetValue("WELL_ID", out var wId) && wId != null &&
+                        wDict.TryGetValue("WELL_NAME", out var wName) && wName != null)
+                    {
+                        wellMap[Convert.ToString(wId)!] = Convert.ToString(wName)!;
+                    }
+                }
+            }
 
-                foreach (var tl in list)
+            var summaries = hasSummary > 0
+                ? (await connection.QueryAsync<dynamic>("SELECT * FROM VMX_TIME_LOG_SUMMARY;")).ToList()
+                : new List<dynamic>();
+
+            foreach (var tl in list)
+            {
+                if (string.IsNullOrWhiteSpace(tl.nameWell) && !string.IsNullOrWhiteSpace(tl.WellID) && wellMap.TryGetValue(tl.WellID, out var mappedWellName))
+                {
+                    tl.nameWell = mappedWellName;
+                    tl.__WellName = mappedWellName;
+                }
+
+                if (summaries.Count > 0)
                 {
                     var match = summaries.FirstOrDefault(s =>
                     {
@@ -489,16 +514,26 @@ public class WellDataRepository : IWellDataRepository
                                (!string.IsNullOrWhiteSpace(sName) && sName == tl.nameLog);
                     });
 
-                    if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(tl.description))
+                    if (match is IDictionary<string, object> rowDict)
                     {
-                        if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
+                        if (string.IsNullOrWhiteSpace(tl.nameWell) && rowDict.TryGetValue("WellName", out var wellObj) && wellObj != null && wellObj != DBNull.Value)
                         {
-                            DateTime dt = DateTime.Now;
-                            if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
+                            var wName = Convert.ToString(wellObj)!;
+                            tl.nameWell = wName;
+                            tl.__WellName = wName;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(tl.description))
+                        {
+                            if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
                             {
-                                DateTime.TryParse(Convert.ToString(dateObj), out dt);
+                                DateTime dt = DateTime.Now;
+                                if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
+                                {
+                                    DateTime.TryParse(Convert.ToString(dateObj), out dt);
+                                }
+                                tl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
                             }
-                            tl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
                         }
                     }
                 }
@@ -988,7 +1023,7 @@ public class WellDataRepository : IWellDataRepository
             dateTimeOptions ??= new TimeLogDateTimeOptions();
 
             // Auto-detect separate Date & Time columns if not explicitly set
-            if (!dateTimeOptions.IsDatetimeInSeperatorColumn)
+            if (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue))
             {
                 if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
                 {
@@ -1000,11 +1035,38 @@ public class WellDataRepository : IWellDataRepository
 
             if (dateTimeOptions.IsDatetimeInSeperatorColumn)
             {
-                if (dateTimeOptions.DateColNo >= 0 && dateTimeOptions.DateColNo < sourceHeaders.Count)
-                    separateDateColHeader = sourceHeaders[dateTimeOptions.DateColNo];
-                if (dateTimeOptions.TimeColNo >= 0 && dateTimeOptions.TimeColNo < sourceHeaders.Count)
-                    separateTimeColHeader = sourceHeaders[dateTimeOptions.TimeColNo];
+                var sampleRows = reader.GetPreviewRows(filePath, importFromRow, 20, worksheetName, delimiter);
+                if (TimeLogDateTimeParser.TryResolveDateAndTimeHeaders(
+                    sourceHeaders, dateTimeOptions.DateColNo, dateTimeOptions.TimeColNo,
+                    out var resolvedDate, out var resolvedTime,
+                    out int resDIdx, out int resTIdx,
+                    sampleRows, dateTimeOptions.DateFormat))
+                {
+                    separateDateColHeader = resolvedDate;
+                    separateTimeColHeader = resolvedTime;
+                    dateTimeOptions.ResolvedDateColIdx = resDIdx;
+                    dateTimeOptions.ResolvedTimeColIdx = resTIdx;
+                }
             }
+        }
+
+        var excludedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        {
+            if (!string.IsNullOrEmpty(separateDateColHeader)) excludedHeaders.Add(separateDateColHeader);
+            if (!string.IsNullOrEmpty(separateTimeColHeader)) excludedHeaders.Add(separateTimeColHeader);
+            if (dateTimeOptions.ResolvedDateColIdx.HasValue && dateTimeOptions.ResolvedDateColIdx.Value >= 0 && dateTimeOptions.ResolvedDateColIdx.Value < sourceHeaders.Count)
+                excludedHeaders.Add(sourceHeaders[dateTimeOptions.ResolvedDateColIdx.Value]);
+            if (dateTimeOptions.ResolvedTimeColIdx.HasValue && dateTimeOptions.ResolvedTimeColIdx.Value >= 0 && dateTimeOptions.ResolvedTimeColIdx.Value < sourceHeaders.Count)
+                excludedHeaders.Add(sourceHeaders[dateTimeOptions.ResolvedTimeColIdx.Value]);
+
+            excludedHeaders.Add("DATE");
+            excludedHeaders.Add("TIME");
+            excludedHeaders.Add("DATE_TIME");
+            excludedHeaders.Add("LOGDATE");
+            excludedHeaders.Add("LOGTIME");
+            excludedHeaders.Add("LOG_DATE");
+            excludedHeaders.Add("LOG_TIME");
         }
 
         // 2. Determine columns and map to source headers
@@ -1021,14 +1083,28 @@ public class WellDataRepository : IWellDataRepository
             {
                 if (!map.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (separateDateColHeader != null && header.Equals(separateDateColHeader, StringComparison.OrdinalIgnoreCase))
+                    if (excludedHeaders.Contains(header) ||
+                        excludedHeaders.Contains(map.MappedVumaxChannel))
+                    {
                         continue;
-                    if (separateTimeColHeader != null && header.Equals(separateTimeColHeader, StringComparison.OrdinalIgnoreCase))
-                        continue;
+                    }
                 }
             }
 
             var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? header : map.MappedVumaxChannel;
+
+            // In split datetime mode for TimeLog, ensure targetChannel is never DATE or TIME
+            if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+            {
+                if (!targetChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) &&
+                    (excludedHeaders.Contains(targetChannel) ||
+                     TimeLogDateTimeParser.LooksLikeDateHeader(targetChannel) ||
+                     TimeLogDateTimeParser.LooksLikeTimeHeader(targetChannel)))
+                {
+                    continue;
+                }
+            }
+
             var safeName = SanitizeIdentifier(targetChannel, colIdx++);
 
             var finalName = safeName;
@@ -1050,6 +1126,53 @@ public class WellDataRepository : IWellDataRepository
                                    targetChannel.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
                                    targetChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase)
             });
+        }
+
+        // Map column plan source indices
+        for (int i = 0; i < columnPlans.Count; i++)
+        {
+            int idx = sourceHeaders.FindIndex(h => h.Equals(columnPlans[i].SourceHeader, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0)
+            {
+                if (columnPlans[i].SourceHeader.StartsWith("#") && int.TryParse(columnPlans[i].SourceHeader.Substring(1), out int numIdx))
+                {
+                    idx = numIdx;
+                }
+            }
+            columnPlans[i].SourceIndex = idx;
+        }
+
+        // Final safety filter for TimeLog split datetime mode: exclude split date & time columns from columnPlans
+        if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        {
+            columnPlans = columnPlans.Where(p =>
+            {
+                if (p.DbColumnName.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (excludedHeaders.Contains(p.SourceHeader) ||
+                    excludedHeaders.Contains(p.DbColumnName))
+                {
+                    return false;
+                }
+                if (dateTimeOptions.ResolvedDateColIdx.HasValue && p.SourceIndex == dateTimeOptions.ResolvedDateColIdx.Value)
+                    return false;
+                if (dateTimeOptions.ResolvedTimeColIdx.HasValue && p.SourceIndex == dateTimeOptions.ResolvedTimeColIdx.Value)
+                    return false;
+                return true;
+            }).ToList();
+        }
+
+        // Ensure primary DATETIME column plan is present for TimeLog tables
+        if (isTimeLog && !columnPlans.Any(p => p.DbColumnName.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)))
+        {
+            columnPlans.Insert(0, new ColumnPlan
+            {
+                SourceHeader = separateDateColHeader ?? "DATETIME",
+                DbColumnName = "DATETIME",
+                IsDateTimeColumn = true,
+                SourceIndex = -1
+            });
+            distinctNames.Add("DATETIME");
         }
 
         // 3. Check if table already exists (e.g. created by DepthLogService.AddDepthLog / TimeLogService.addTimeLog)
@@ -1074,7 +1197,7 @@ public class WellDataRepository : IWellDataRepository
             sb.Append("  [Id] INTEGER PRIMARY KEY AUTOINCREMENT");
             foreach (var plan in columnPlans)
             {
-                sb.Append($",\n  [{plan.DbColumnName}] NUMERIC");
+                sb.Append($",\n  [{plan.DbColumnName}] {(plan.IsDateTimeColumn ? "DATETIME" : "NUMERIC")}");
             }
             sb.AppendLine("\n);");
 
@@ -1101,6 +1224,14 @@ public class WellDataRepository : IWellDataRepository
             // Dynamically create any missing columns in target table
             foreach (var plan in columnPlans)
             {
+                if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+                {
+                    if (excludedHeaders.Contains(plan.DbColumnName))
+                    {
+                        continue;
+                    }
+                }
+
                 if (!existingTableCols.Contains(plan.DbColumnName))
                 {
                     using (var alterCmd = connection.CreateCommand())
@@ -1171,19 +1302,7 @@ public class WellDataRepository : IWellDataRepository
             cmdParams[i] = p;
         }
 
-        // Map column plan source indices
-        for (int i = 0; i < columnPlans.Count; i++)
-        {
-            int idx = sourceHeaders.FindIndex(h => h.Equals(columnPlans[i].SourceHeader, StringComparison.OrdinalIgnoreCase));
-            if (idx < 0)
-            {
-                if (columnPlans[i].SourceHeader.StartsWith("#") && int.TryParse(columnPlans[i].SourceHeader.Substring(1), out int numIdx))
-                {
-                    idx = numIdx;
-                }
-            }
-            columnPlans[i].SourceIndex = idx;
-        }
+
 
         if (isTimeLog && dateTimeOptions != null && dateTimeOptions.SingleDateTimeColIdx < 0)
         {
@@ -1821,7 +1940,7 @@ public class WellDataRepository : IWellDataRepository
         string? separateTimeColHeader = null;
         if (isDateTimeComparison)
         {
-            if (dateTimeOptions == null || !dateTimeOptions.IsDatetimeInSeperatorColumn)
+            if (dateTimeOptions == null || (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue)))
             {
                 if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
                 {
@@ -1834,10 +1953,14 @@ public class WellDataRepository : IWellDataRepository
 
             if (dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
             {
-                if (dateTimeOptions.DateColNo >= 0 && dateTimeOptions.DateColNo < sourceHeaders.Count)
-                    separateDateColHeader = sourceHeaders[dateTimeOptions.DateColNo];
-                if (dateTimeOptions.TimeColNo >= 0 && dateTimeOptions.TimeColNo < sourceHeaders.Count)
-                    separateTimeColHeader = sourceHeaders[dateTimeOptions.TimeColNo];
+                var sampleRows = reader.GetPreviewRows(filePath, importFromRow, 20, worksheetName, delimiter);
+                if (TimeLogDateTimeParser.TryResolveDateAndTimeHeaders(sourceHeaders, dateTimeOptions.DateColNo, dateTimeOptions.TimeColNo, out var resolvedDate, out var resolvedTime, out int resDIdx, out int resTIdx, sampleRows, dateTimeOptions.DateFormat))
+                {
+                    separateDateColHeader = resolvedDate;
+                    separateTimeColHeader = resolvedTime;
+                    dateTimeOptions.ResolvedDateColIdx = resDIdx;
+                    dateTimeOptions.ResolvedTimeColIdx = resTIdx;
+                }
             }
         }
 
@@ -1852,7 +1975,7 @@ public class WellDataRepository : IWellDataRepository
                 m.MappedVumaxChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase));
 
             bool hasValidSplitOptions = dateTimeOptions != null &&
-                ((dateTimeOptions.IsDatetimeInSeperatorColumn && dateTimeOptions.DateColNo >= 0 && dateTimeOptions.TimeColNo >= 0) ||
+                ((dateTimeOptions.IsDatetimeInSeperatorColumn && dateTimeOptions.DateColNo.HasValue && dateTimeOptions.TimeColNo.HasValue && dateTimeOptions.DateColNo.Value != dateTimeOptions.TimeColNo.Value) ||
                  !string.IsNullOrWhiteSpace(dateTimeOptions.DatetimeSeparator));
 
             if (keyMapping == null && !hasValidSplitOptions)
@@ -1888,6 +2011,16 @@ public class WellDataRepository : IWellDataRepository
                 if (separateDateColHeader != null && m.CsvColumnHeader.Equals(separateDateColHeader, StringComparison.OrdinalIgnoreCase))
                     return false;
                 if (separateTimeColHeader != null && m.CsvColumnHeader.Equals(separateTimeColHeader, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (dateTimeOptions.ResolvedDateColIdx.HasValue && dateTimeOptions.ResolvedDateColIdx.Value >= 0 && dateTimeOptions.ResolvedDateColIdx.Value < sourceHeaders.Count &&
+                    m.CsvColumnHeader.Equals(sourceHeaders[dateTimeOptions.ResolvedDateColIdx.Value], StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (dateTimeOptions.ResolvedTimeColIdx.HasValue && dateTimeOptions.ResolvedTimeColIdx.Value >= 0 && dateTimeOptions.ResolvedTimeColIdx.Value < sourceHeaders.Count &&
+                    m.CsvColumnHeader.Equals(sourceHeaders[dateTimeOptions.ResolvedTimeColIdx.Value], StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (m.MappedVumaxChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
+                    m.MappedVumaxChannel.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                    m.MappedVumaxChannel.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase))
                     return false;
                 return true;
             }).ToList();

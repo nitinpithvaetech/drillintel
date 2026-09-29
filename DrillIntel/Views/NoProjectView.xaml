@@ -72,7 +72,7 @@
                 <Border Background="#0D1976D2" CornerRadius="16" Padding="16,6" HorizontalAlignment="Center" Margin="0,0,0,10">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <materialDesign:PackIcon Kind="Brain" Foreground="#1976D2" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBlock Text="The rig's second brain — drill smarter, not harder" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" VerticalAlignment="Center" />
+                        <TextBlock Text="The rig's quick brain — drill smarter, not harder" FontSize="13" FontWeight="SemiBold" Foreground="#1976D2" VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
 

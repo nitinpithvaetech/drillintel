@@ -8,11 +8,11 @@
         xmlns:converters="clr-namespace:DrillIntel.Converters"
         d:DataContext="{d:DesignInstance Type=viewmodels:WellInformationViewModel}"
         mc:Ignorable="d"
-        Title="Well Information — VMX_WELL" 
-        Width="680" 
-        Height="650"
-        MinWidth="550"
-        MinHeight="450"
+        Title="Well Information" 
+        Width="920" 
+        Height="760"
+        MinWidth="750"
+        MinHeight="550"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
@@ -30,31 +30,31 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <Border Grid.Row="0" Margin="0,0,0,16" Padding="14,10" Background="#F4F6F9" CornerRadius="8" BorderBrush="#E0E6ED" BorderThickness="1">
+        <Border Grid.Row="0" Margin="0,0,0,16" Padding="16,12" Background="#F4F6F9" CornerRadius="8" BorderBrush="#E0E6ED" BorderThickness="1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="32" Height="32" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="36" Height="36" VerticalAlignment="Center" Margin="0,0,14,0" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="Well Information (VMX_WELL)" FontSize="18" FontWeight="Bold" Foreground="#1976D2" />
-                    <TextBlock Text="Edit well-level attributes and parameters bound to the VMX_WELL table." FontSize="12" Foreground="Gray" Margin="0,2,0,0" />
+                    <TextBlock Text="Well Information" FontSize="20" FontWeight="Bold" Foreground="#1976D2" />
+                    <TextBlock Text="Edit well-level attributes and parameters." FontSize="12.5" Foreground="#616161" Margin="0,3,0,0" />
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- Scrollable Form Fields -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,0,10,0">
             <StackPanel>
                 <!-- Group 1: General Identification -->
-                <TextBlock Text="General Identification" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+                <TextBlock Text="General Identification" FontSize="14.5" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
 
                 <!-- Row 1: Well Name & Legal Name -->
                 <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -75,7 +75,7 @@
                 <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -96,9 +96,9 @@
                 <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -125,9 +125,9 @@
                 <Grid Margin="0,0,0,20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -152,15 +152,15 @@
 
                 <!-- Group 2: Geographic & Regional -->
                 <Separator Margin="0,0,0,16" />
-                <TextBlock Text="Geographic &amp; Regional Info" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+                <TextBlock Text="Geographic &amp; Regional Info" FontSize="14.5" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
 
                 <!-- Row 1: Country, State & County -->
                 <Grid Margin="0,0,0,14">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -184,11 +184,11 @@
                 <Grid Margin="0,0,0,20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -215,14 +215,14 @@
 
                 <!-- Group 3: Elevations & Water Depth -->
                 <Separator Margin="0,0,0,16" />
-                <TextBlock Text="Elevations &amp; Water Depth" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+                <TextBlock Text="Elevations &amp; Water Depth" FontSize="14.5" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
 
                 <Grid Margin="0,0,0,20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="20" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <TextBox Grid.Column="0" 
@@ -244,7 +244,7 @@
 
                 <!-- Group 4: Comments -->
                 <Separator Margin="0,0,0,16" />
-                <TextBlock Text="Comments &amp; Remarks" FontSize="14" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
+                <TextBlock Text="Comments &amp; Remarks" FontSize="14.5" FontWeight="SemiBold" Foreground="#1976D2" Margin="0,0,0,12" />
 
                 <TextBox materialDesign:HintAssist.Hint="Comments" 
                          Text="{Binding Comments, UpdateSourceTrigger=PropertyChanged}" 
@@ -252,20 +252,21 @@
                          FontSize="14" 
                          TextWrapping="Wrap" 
                          AcceptsReturn="True" 
-                         Height="70" 
+                         VerticalScrollBarVisibility="Auto"
+                         Height="95" 
                          Margin="0,0,0,16" />
             </StackPanel>
         </ScrollViewer>
 
         <!-- Footer / Action Buttons -->
-        <Border Grid.Row="2" Margin="0,16,0,0" Padding="0,12,0,0" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+        <Border Grid.Row="2" Margin="0,16,0,0" Padding="0,14,0,0" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
             <Grid>
                 <!-- Error Message -->
                 <TextBlock Text="{Binding ErrorMessage}" Foreground="#F44336" FontWeight="SemiBold" VerticalAlignment="Center" Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}, FallbackValue=Collapsed}" />
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="CANCEL" Command="{Binding CancelCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Width="100" Margin="0,0,12,0" IsCancel="True" />
-                    <Button Content="SAVE WELL" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Width="130" IsDefault="True" IsEnabled="{Binding CanSave}" />
+                    <Button Content="CANCEL" Command="{Binding CancelCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Width="110" Height="36" Margin="0,0,12,0" IsCancel="True" />
+                    <Button Content="SAVE WELL" Command="{Binding SaveCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Width="140" Height="36" IsDefault="True" IsEnabled="{Binding CanSave}" />
                 </StackPanel>
             </Grid>
         </Border>

@@ -139,24 +139,24 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                 {
                     rigState? rigRigStateSetup = null;
 
-                    if (!string.IsNullOrWhiteSpace(objWell.RigName))
-                    {
-                        rigRigStateSetup = rigState.LoadRigRigStateSetup(objDataService, objWell.RigName);
-                    }
+                    //if (!string.IsNullOrWhiteSpace(objWell.RigName))
+                    //{
+                    //    rigRigStateSetup = rigState.LoadRigRigStateSetup(objDataService, objWell.RigName);
+                    //}
 
-                    if (rigRigStateSetup != null)
-                    {
-                        rigState.SaveWellRigStateSetup(objDataService, objWell.ObjectID, rigRigStateSetup, "");
-                    }
-                    else
-                    {
-                        rigState? objRigState = rigState.LoadCommonRigStateSetup(objDataService);
+                    //if (rigRigStateSetup != null)
+                    //{
+                    //    rigState.SaveWellRigStateSetup(objDataService, objWell.ObjectID, rigRigStateSetup, "");
+                    //}
+                    //else
+                    //{
+                    //    rigState? objRigState = rigState.LoadCommonRigStateSetup(objDataService);
 
-                        if (objRigState != null)
-                        {
-                            rigState.SaveWellRigStateSetup(objDataService, objWell.ObjectID, objRigState, "");
-                        }
-                    }
+                    //    if (objRigState != null)
+                    //    {
+                    //        rigState.SaveWellRigStateSetup(objDataService, objWell.ObjectID, objRigState, "");
+                    //    }
+                    //}
 
                     // Create a table to store alarm history
                     Well.CreateAlarmHistoryTable(objDataService, objWell.ObjectID, AlarmHistoryTable);

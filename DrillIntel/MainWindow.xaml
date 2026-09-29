@@ -17,7 +17,9 @@
         TextOptions.TextRenderingMode="Auto"
         Background="{DynamicResource MaterialDesignPaper}"
         FontFamily="{DynamicResource MaterialDesignFont}"
-        Title="{Binding WindowTitle, FallbackValue='DrillIntel — The rig\'s second brain — drill smarter, not harder'}" Height="900" Width="1400"
+        Title="{Binding WindowTitle, FallbackValue='DrillIntel — The rig\'s second brain — drill smarter, not harder'}"
+        WindowState="Maximized"
+        Height="900" Width="1400"
         WindowStartupLocation="CenterScreen"
         Icon="pack://application:,,,/DrillIntel;component/Assets/app_icon.png">
     <Grid>
@@ -33,6 +35,11 @@
             <!-- Project Tab -->
             <Fluent:RibbonTabItem Header="Project">
                 <Fluent:RibbonGroupBox Header="Project Actions">
+                    <!--<Fluent:Button Header="Well Edtor" Command="{Binding IsProjectOpen}">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="Edit" Foreground="#4CAF50" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>11
+                    </Fluent:Button>-->
                     <Fluent:Button Header="New Project" Command="{Binding NewProjectCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FolderPlus" Foreground="#4CAF50" Width="32" Height="32" />

@@ -22,39 +22,39 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         // Threshold Values
         public string UnknownName { get; set; } = "Unknown";
         public float UnknownNumber { get; set; } = 15;
-        public double UnknownColor { get; set; } = 0;
-        public string UnknownColorHex { get; set; } = "";
-        public double HookloadCutOff { get; set; } = 0;
-        public double RPMCutOff { get; set; } = 0;
-        public double CIRCCutOff { get; set; } = 0;
-        public double Sensitivity { get; set; } = 0;
+        public double UnknownColor { get; set; } = -2818048;
+        public string UnknownColorHex { get; set; } = "#D50000";
+        public double HookloadCutOff { get; set; } = 90;
+        public double RPMCutOff { get; set; } = 1;
+        public double CIRCCutOff { get; set; } = 1;
+        public double Sensitivity { get; set; } = 1;
         public double PumpPressureCutOff { get; set; } = 0;
-        public double DepthComparisonSens { get; set; } = 2;
+        public double DepthComparisonSens { get; set; } = 0.3;
         public bool DetectAutoSlideDrilling { get; set; } = false;
         public bool DetectAirDrilling { get; set; } = false;
         public double AirPressure { get; set; } = 0;
         public double TorqueCutOff { get; set; } = 0;
         public double MistFlowCutOff { get; set; } = 0;
 
-        public double TorqueMin { get; set; } = 0;
-        public double TorqueMax { get; set; } = 0;
-        public int CalibrationRows { get; set; } = 2;
-        public double MinTorqueDifference { get; set; } = 0;
+        public double TorqueMin { get; set; } = 1;
+        public double TorqueMax { get; set; } = 12000;
+        public int CalibrationRows { get; set; } = 20;
+        public double MinTorqueDifference { get; set; } = 500;
         public double MinRPM { get; set; } = 0;
-        public double MaxRPM { get; set; } = 0;
+        public double MaxRPM { get; set; } = 50;
 
         public int SelectedSet { get; set; } = 0;
 
         public double TorqueMin2 { get; set; } = 0;
-        public double TorqueMax2 { get; set; } = 0;
-        public int CalibrationRows2 { get; set; } = 2;
-        public double MinTorqueDifference2 { get; set; } = 0;
+        public double TorqueMax2 { get; set; } = 15000;
+        public int CalibrationRows2 { get; set; } = 50;
+        public double MinTorqueDifference2 { get; set; } = 1;
         public double MinRPM2 { get; set; } = 0;
-        public double MaxRPM2 { get; set; } = 0;
+        public double MaxRPM2 { get; set; } = 44;
 
         public double TorqueMin3 { get; set; } = 0;
         public double TorqueMax3 { get; set; } = 0;
-        public int CalibrationRows3 { get; set; } = 2;
+        public int CalibrationRows3 { get; set; } = 0;
         public double MinTorqueDifference3 { get; set; } = 0;
         public double MinRPM3 { get; set; } = 0;
         public double MaxRPM3 { get; set; } = 0;
@@ -77,14 +77,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         public Dictionary<int, AutoSlideSettings> autoSlideSetupList { get; set; } = new Dictionary<int, AutoSlideSettings>();
 
         public int TorqueCycles { get; set; } = 0;
-        public int CalibrationTime { get; set; } = 2;
-        public double PercentWindow { get; set; } = 20;
+        public int CalibrationTime { get; set; } = 0;
+        public double PercentWindow { get; set; } = 0;
 
         public bool __doLogSaveErrors { get; set; } = false;
         public string __logFileName { get; set; } = "";
 
         public bool DetectPipeMovement { get; set; } = false;
-        public double PipeMovementThreshold { get; set; } = 15;
+        public double PipeMovementThreshold { get; set; } = 0;
 
         public enum enumDirection
         {
@@ -94,6 +94,71 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         }
 
         #endregion
+
+        /// <summary>
+        /// Applies standard default values from the setup template.
+        /// </summary>
+        public void SetDefaultValues()
+        {
+            UnknownName = "Unknown";
+            UnknownNumber = 15;
+            UnknownColor = -2818048;
+            UnknownColorHex = "#D50000";
+            HookloadCutOff = 90;
+            RPMCutOff = 1;
+            CIRCCutOff = 1;
+            Sensitivity = 1;
+            PumpPressureCutOff = 0;
+            DepthComparisonSens = 0.3;
+            DetectAutoSlideDrilling = false;
+
+            // Set 1
+            TorqueMin = 1;
+            TorqueMax = 12000;
+            CalibrationRows = 20;
+            MinTorqueDifference = 500;
+            MinRPM = 0;
+            MaxRPM = 50;
+            SelectedSet = 0;
+
+            // Set 2
+            TorqueMin2 = 0;
+            TorqueMax2 = 15000;
+            CalibrationRows2 = 50;
+            MinTorqueDifference2 = 1;
+            MinRPM2 = 0;
+            MaxRPM2 = 44;
+
+            // Set 3
+            TorqueMin3 = 0;
+            TorqueMax3 = 0;
+            CalibrationRows3 = 0;
+            MinTorqueDifference3 = 0;
+            MinRPM3 = 0;
+            MaxRPM3 = 0;
+
+            DetectAirDrilling = false;
+            AirPressure = 0;
+            TorqueCutOff = 0;
+            MistFlowCutOff = 0;
+            TorqueCycles = 0;
+            CalibrationTime = 0;
+            PercentWindow = 0;
+            DetectPipeMovement = false;
+            PipeMovementThreshold = 0;
+
+            rigStates = Services.RigStateService.GetDefaultRigStateItems();
+        }
+
+        /// <summary>
+        /// Creates a new rigState instance pre-populated with standard setup defaults.
+        /// </summary>
+        public static rigState CreateDefault()
+        {
+            var setup = new rigState();
+            setup.SetDefaultValues();
+            return setup;
+        }
 
         public rigState? GetCopy()
         {
@@ -206,40 +271,44 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             }
         }
 
-        public static rigState? LoadRigRigStateSetup(IDataServiceDIntel objDataService, string rigName)
-        {
-            try
-            {
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
+        //public static rigState? LoadRigRigStateSetup(IDataServiceDIntel objDataService, string rigName)
+        //{
+        //    try
+        //    {
+        //        return null;
+        //    }
+        //    catch
+        //    {
+        //        return null;
+        //    }
+        //}
 
-        public static bool SaveWellRigStateSetup(IDataServiceDIntel objDataService, string wellID, rigState objRigState, string remarks = "")
-        {
-            try
-            {
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        //public static bool SaveWellRigStateSetup(IDataServiceDIntel objDataService, string wellID, rigState objRigState, string remarks = "")
+        //{
+        //    try
+        //    {
+        //        return true;
+        //    }
+        //    catch
+        //    {
+        //        return false;
+        //    }
+        //}
 
         public static rigState? LoadCommonRigStateSetup(IDataServiceDIntel objDataService)
         {
-            try
-            {
-                return null;
-            }
-            catch
-            {
-                return null;
-            }
+            return Services.RigStateService.LoadCommonRigStateSetup(objDataService);
+        }
+
+        public static string LastError
+        {
+            get => Services.RigStateService.LastError;
+            set => Services.RigStateService.LastError = value;
+        }
+
+        public static bool SaveCommonRigStateSetup(IDataServiceDIntel objDataService, rigState objRigState)
+        {
+            return Services.RigStateService.SaveCommonRigStateSetup(objDataService, objRigState);
         }
     }
 }

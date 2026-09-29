@@ -51,4 +51,8 @@
     <ProjectReference Include="..\DrillIntel.Data.Objects\DrillIntel.Data.Objects.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="DrillIntel.Tests" />
+  </ItemGroup>
+
 </Project>

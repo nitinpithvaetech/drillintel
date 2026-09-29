@@ -162,8 +162,8 @@ public class ImportSettings
     public int? ColumnHeadingRow { get; set; } = 1;
     public bool IsDatetimeInSeperatorColumn { get; set; }
     public string DatetimeSeparator { get; set; } = string.Empty;
-    public int DateColNo { get; set; }
-    public int TimeColNo { get; set; }
+    public int? DateColNo { get; set; }
+    public int? TimeColNo { get; set; }
     public DateFormatType DateFormat { get; set; } = DateFormatType.ISOFormat;
     public List<UpdateMappingInfo> UpdateMappingList { get; set; } = new();
 

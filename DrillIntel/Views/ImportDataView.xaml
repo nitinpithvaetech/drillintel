@@ -212,10 +212,10 @@
                                             <TextBox Width="50" Text="{Binding DatetimeSeparator}" VerticalAlignment="Center" />
                                             
                                             <TextBlock Text="Date Col No:" VerticalAlignment="Center" Margin="16,0,8,0" />
-                                            <TextBox Width="50" Text="{Binding DateColNo}" VerticalAlignment="Center" />
+                                            <TextBox Width="50" Text="{Binding DateColNo, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" VerticalAlignment="Center" />
                                             
                                             <TextBlock Text="Time Col No:" VerticalAlignment="Center" Margin="16,0,8,0" />
-                                            <TextBox Width="50" Text="{Binding TimeColNo}" VerticalAlignment="Center" />
+                                            <TextBox Width="50" Text="{Binding TimeColNo, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" VerticalAlignment="Center" />
                                         </StackPanel>
 
                                         <!-- Note -->

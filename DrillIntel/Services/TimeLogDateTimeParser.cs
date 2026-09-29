@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace DrillIntel.Services;
 
@@ -14,8 +15,10 @@ public class TimeLogDateTimeOptions
 {
     public bool IsDatetimeInSeperatorColumn { get; set; }
     public string DatetimeSeparator { get; set; } = string.Empty;
-    public int DateColNo { get; set; } = 0;
-    public int TimeColNo { get; set; } = 1;
+    public int? DateColNo { get; set; }
+    public int? TimeColNo { get; set; }
+    public int? ResolvedDateColIdx { get; set; }
+    public int? ResolvedTimeColIdx { get; set; }
     public DateFormatType DateFormat { get; set; } = DateFormatType.ISOFormat;
     public int SingleDateTimeColIdx { get; set; } = -1;
     public string? DateColHeader { get; set; }
@@ -180,20 +183,38 @@ public static class TimeLogDateTimeParser
         // 1. Separate Date and Time columns (IsDatetimeInSeperatorColumn)
         if (options.IsDatetimeInSeperatorColumn)
         {
-            int dateIdx = options.DateColNo;
-            int timeIdx = options.TimeColNo;
-
-            // 1. Try 0-based indexing first
-            if (dateIdx >= 0 && dateIdx < tokens.Length && timeIdx >= 0 && timeIdx < tokens.Length)
+            if (options.ResolvedDateColIdx.HasValue && options.ResolvedTimeColIdx.HasValue)
             {
-                if (TryMergeRowTokens(tokens[dateIdx], tokens[timeIdx], options.DateFormat, out parsedDate))
+                int rD = options.ResolvedDateColIdx.Value;
+                int rT = options.ResolvedTimeColIdx.Value;
+                if (rD >= 0 && rD < tokens.Length && rT >= 0 && rT < tokens.Length)
                 {
-                    formattedDate = FormatDateTime(parsedDate);
-                    return true;
+                    if (TryMergeRowTokens(tokens[rD], tokens[rT], options.DateFormat, out parsedDate))
+                    {
+                        formattedDate = FormatDateTime(parsedDate);
+                        return true;
+                    }
+                    var d = tokens[rD]?.Trim().Trim('"', '\'') ?? "";
+                    var t = tokens[rT]?.Trim().Trim('"', '\'') ?? "";
+                    if (!string.IsNullOrWhiteSpace(d) && !string.IsNullOrWhiteSpace(t))
+                    {
+                        if (TryParseDateTimeInternal($"{d} {t}", options.DateFormat, out parsedDate))
+                        {
+                            formattedDate = FormatDateTime(parsedDate);
+                            return true;
+                        }
+                    }
                 }
             }
 
-            // 2. If 0-based did not match, try 1-based indexing fallback (dateIdx - 1, timeIdx - 1)
+            if (!options.DateColNo.HasValue || !options.TimeColNo.HasValue)
+                return false;
+
+            int dateIdx = options.DateColNo.Value;
+            int timeIdx = options.TimeColNo.Value;
+
+            // When user enters 1-based column numbers (e.g. dateIdx >= 1):
+            // 1. Try 1-based indexing fallback (dateIdx - 1, timeIdx - 1)
             if (dateIdx - 1 >= 0 && dateIdx - 1 < tokens.Length && timeIdx - 1 >= 0 && timeIdx - 1 < tokens.Length)
             {
                 if (TryMergeRowTokens(tokens[dateIdx - 1], tokens[timeIdx - 1], options.DateFormat, out parsedDate))
@@ -201,17 +222,31 @@ public static class TimeLogDateTimeParser
                     formattedDate = FormatDateTime(parsedDate);
                     return true;
                 }
+                var d1 = tokens[dateIdx - 1]?.Trim().Trim('"', '\'') ?? "";
+                var t1 = tokens[timeIdx - 1]?.Trim().Trim('"', '\'') ?? "";
+                if (!string.IsNullOrWhiteSpace(d1) && !string.IsNullOrWhiteSpace(t1))
+                {
+                    if (TryParseDateTimeInternal($"{d1} {t1}", options.DateFormat, out parsedDate))
+                    {
+                        formattedDate = FormatDateTime(parsedDate);
+                        return true;
+                    }
+                }
             }
 
-            // 3. Candidate fallback: try raw string combination $"{d} {t}"
+            // 2. Try 0-based indexing
             if (dateIdx >= 0 && dateIdx < tokens.Length && timeIdx >= 0 && timeIdx < tokens.Length)
             {
-                var d = tokens[dateIdx]?.Trim().Trim('"', '\'') ?? "";
-                var t = tokens[timeIdx]?.Trim().Trim('"', '\'') ?? "";
-                if (!string.IsNullOrWhiteSpace(d) && !string.IsNullOrWhiteSpace(t))
+                if (TryMergeRowTokens(tokens[dateIdx], tokens[timeIdx], options.DateFormat, out parsedDate))
                 {
-                    string cand = $"{d} {t}";
-                    if (TryParseDateTimeInternal(cand, options.DateFormat, out parsedDate))
+                    formattedDate = FormatDateTime(parsedDate);
+                    return true;
+                }
+                var d0 = tokens[dateIdx]?.Trim().Trim('"', '\'') ?? "";
+                var t0 = tokens[timeIdx]?.Trim().Trim('"', '\'') ?? "";
+                if (!string.IsNullOrWhiteSpace(d0) && !string.IsNullOrWhiteSpace(t0))
+                {
+                    if (TryParseDateTimeInternal($"{d0} {t0}", options.DateFormat, out parsedDate))
                     {
                         formattedDate = FormatDateTime(parsedDate);
                         return true;
@@ -226,7 +261,7 @@ public static class TimeLogDateTimeParser
             // Single column containing date and time
             int colIdx = options.SingleDateTimeColIdx >= 0 && options.SingleDateTimeColIdx < tokens.Length
                 ? options.SingleDateTimeColIdx
-                : (options.DateColNo >= 0 && options.DateColNo < tokens.Length ? options.DateColNo : -1);
+                : (options.DateColNo.HasValue && options.DateColNo.Value >= 0 && options.DateColNo.Value < tokens.Length ? options.DateColNo.Value : -1);
 
             if (colIdx < 0)
                 return false;
@@ -418,38 +453,357 @@ public static class TimeLogDateTimeParser
             if (string.IsNullOrEmpty(h)) continue;
 
             // Date match
-            if (dateColIdx < 0)
+            if (dateColIdx < 0 && HasStandardDateKeyword(h))
             {
-                if (h.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("LOGDATE", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("LOG_DATE", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("DATE_UTC", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("RECORD_DATE", StringComparison.OrdinalIgnoreCase) ||
-                    (h.Contains("DATE", StringComparison.OrdinalIgnoreCase) && !h.Contains("TIME", StringComparison.OrdinalIgnoreCase)))
-                {
-                    dateColIdx = i;
-                    continue;
-                }
+                dateColIdx = i;
+                continue;
             }
 
             // Time match
-            if (timeColIdx < 0)
+            if (timeColIdx < 0 && HasStandardTimeKeyword(h))
             {
-                if (h.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("LOGTIME", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("LOG_TIME", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("TIME_UTC", StringComparison.OrdinalIgnoreCase) ||
-                    h.Equals("RECORD_TIME", StringComparison.OrdinalIgnoreCase) ||
-                    (h.Contains("TIME", StringComparison.OrdinalIgnoreCase) && !h.Contains("DATE", StringComparison.OrdinalIgnoreCase)))
-                {
-                    timeColIdx = i;
-                    continue;
-                }
+                timeColIdx = i;
+                continue;
             }
         }
 
         return dateColIdx >= 0 && timeColIdx >= 0 && dateColIdx != timeColIdx;
     }
+
+    public static bool HasStandardDateKeyword(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var h = name.Trim();
+        if (h.Contains("TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("DURATION", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        return h.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("LOGDATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("LOG_DATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("DATE_UTC", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("RECORD_DATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("START_DATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("END_DATE", StringComparison.OrdinalIgnoreCase) ||
+               h.Contains("DATE", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool HasStandardTimeKeyword(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var h = name.Trim();
+        if (h.Contains("DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("DURATION", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        return h.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("LOGTIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("LOG_TIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("TIME_UTC", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("RECORD_TIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("START_TIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Equals("END_TIME", StringComparison.OrdinalIgnoreCase) ||
+               h.Contains("TIME", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool LooksLikeDateHeader(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var h = name.Trim();
+
+        // Must not contain TIME, UPDATE, or DURATION
+        if (h.Contains("TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("UPDATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("DURATION", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Standard keywords
+        if (h.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("LOGDATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("LOG_DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("DATE_UTC", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("RECORD_DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("START_DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("END_DATE", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Any header containing "DATE" (e.g. Date1, Date_1, Date-1, LogDate1, Date 1)
+        if (h.Contains("DATE", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Common industry abbreviations: D1, D2, D_1, D-1, DT, DT1, DT_1, DAT, DAT1, DAT_1
+        if (Regex.IsMatch(h, @"^(DT|DAT)(\d+|[_\-\s]\d+)?$", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (Regex.IsMatch(h, @"^D(\d+|[_\-\s]\d+)$", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (h.Equals("D", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool LooksLikeTimeHeader(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        var h = name.Trim();
+
+        // Must not contain DATE or DURATION
+        if (h.Contains("DATE", StringComparison.OrdinalIgnoreCase) ||
+            h.Contains("DURATION", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Standard keywords
+        if (h.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("LOGTIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("LOG_TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("TIME_UTC", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("RECORD_TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("START_TIME", StringComparison.OrdinalIgnoreCase) ||
+            h.Equals("END_TIME", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Any header containing "TIME" (e.g. Time1, Time_1, Time-1, LogTime1, Time 1)
+        if (h.Contains("TIME", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Common industry abbreviations: T1, T2, T_1, T-1, TM, TM1, TM_1, TIM, TIM1, TIM_1
+        if (Regex.IsMatch(h, @"^(TM|TIM)(\d+|[_\-\s]\d+)?$", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (Regex.IsMatch(h, @"^T(\d+|[_\-\s]\d+)$", RegexOptions.IgnoreCase))
+        {
+            return true;
+        }
+
+        if (h.Equals("T", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool CanBeDateValue(string? val, DateFormatType format)
+    {
+        if (string.IsNullOrWhiteSpace(val) || val == "-999.25" || val == "-9999") return false;
+        return TryExtractDate(val.Trim().Trim('"', '\''), format, out _);
+    }
+
+    public static bool CanBeTimeValue(string? val)
+    {
+        if (string.IsNullOrWhiteSpace(val) || val == "-999.25" || val == "-9999") return false;
+        return TryExtractTime(val.Trim().Trim('"', '\''), out _);
+    }
+
+    public static bool IsPureNumeric(string? val)
+    {
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        val = val.Trim().Trim('"', '\'');
+        return double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
+            && !val.Contains(":") && !val.Contains("-") && !val.Contains("/");
+    }
+
+    /// <summary>
+    /// Resolves the actual Date and Time column headers from a list of source headers,
+    /// disambiguating between 0-based and 1-based indexing for DateColNo and TimeColNo,
+    /// and returning the resolved 0-based indices.
+    /// </summary>
+    public static bool TryResolveDateAndTimeHeaders(
+        IList<string> headers,
+        int? dateColNo,
+        int? timeColNo,
+        out string? dateHeader,
+        out string? timeHeader,
+        out int resolvedDateIdx,
+        out int resolvedTimeIdx,
+        IEnumerable<IList<string>>? sampleRows = null,
+        DateFormatType dateFormat = DateFormatType.ISOFormat)
+    {
+        dateHeader = null;
+        timeHeader = null;
+        resolvedDateIdx = -1;
+        resolvedTimeIdx = -1;
+
+        if (headers == null || headers.Count == 0)
+            return false;
+
+        if (!dateColNo.HasValue || !timeColNo.HasValue)
+        {
+            if (TryDetectSeparateDateTimeColumns(headers, out int autoD, out int autoT))
+            {
+                dateHeader = headers[autoD];
+                timeHeader = headers[autoT];
+                resolvedDateIdx = autoD;
+                resolvedTimeIdx = autoT;
+                return true;
+            }
+            return false;
+        }
+
+        int dCol = dateColNo.Value;
+        int tCol = timeColNo.Value;
+
+        // 1. If dCol is 0, it can only be 0-based
+        if (dCol == 0)
+        {
+            if (tCol >= 0 && tCol < headers.Count)
+            {
+                dateHeader = headers[0];
+                timeHeader = headers[tCol];
+                resolvedDateIdx = 0;
+                resolvedTimeIdx = tCol;
+                return true;
+            }
+        }
+
+        // 2. Disambiguate between 0-based and 1-based indexing
+        bool canBeZeroBased = dCol >= 0 && dCol < headers.Count && tCol >= 0 && tCol < headers.Count;
+        bool canBeOneBased = dCol - 1 >= 0 && dCol - 1 < headers.Count && tCol - 1 >= 0 && tCol - 1 < headers.Count;
+
+        if (canBeOneBased && canBeZeroBased)
+        {
+            int zeroHeaderScore = 0;
+            if (LooksLikeDateHeader(headers[dCol])) zeroHeaderScore += 2;
+            if (LooksLikeTimeHeader(headers[tCol])) zeroHeaderScore += 2;
+
+            int oneHeaderScore = 0;
+            if (LooksLikeDateHeader(headers[dCol - 1])) oneHeaderScore += 2;
+            if (LooksLikeTimeHeader(headers[tCol - 1])) oneHeaderScore += 2;
+
+            // Check sample data rows if available
+            int zeroDataScore = 0;
+            int oneDataScore = 0;
+            if (sampleRows != null)
+            {
+                foreach (var row in sampleRows.Take(20))
+                {
+                    if (dCol < row.Count && tCol < row.Count)
+                    {
+                        var zd = row[dCol];
+                        var zt = row[tCol];
+                        if (CanBeDateValue(zd, dateFormat)) zeroDataScore += 2;
+                        else if (IsPureNumeric(zd)) zeroDataScore -= 2;
+
+                        if (CanBeTimeValue(zt)) zeroDataScore += 2;
+                        else if (IsPureNumeric(zt)) zeroDataScore -= 2;
+                    }
+
+                    if (dCol - 1 < row.Count && tCol - 1 < row.Count)
+                    {
+                        var od = row[dCol - 1];
+                        var ot = row[tCol - 1];
+                        if (CanBeDateValue(od, dateFormat)) oneDataScore += 2;
+                        else if (IsPureNumeric(od)) oneDataScore -= 2;
+
+                        if (CanBeTimeValue(ot)) oneDataScore += 2;
+                        else if (IsPureNumeric(ot)) oneDataScore -= 2;
+                    }
+                }
+            }
+
+            // Auto-detection alignment check
+            if (TryDetectSeparateDateTimeColumns(headers, out int autoD, out int autoT))
+            {
+                if (autoD == dCol && autoT == tCol) zeroHeaderScore += 1;
+                if (autoD == dCol - 1 && autoT == tCol - 1) oneHeaderScore += 1;
+            }
+
+            int totalZero = zeroHeaderScore + zeroDataScore;
+            int totalOne = oneHeaderScore + oneDataScore;
+
+            if (totalOne > totalZero)
+            {
+                dateHeader = headers[dCol - 1];
+                timeHeader = headers[tCol - 1];
+                resolvedDateIdx = dCol - 1;
+                resolvedTimeIdx = tCol - 1;
+                return true;
+            }
+            else
+            {
+                // Default to 0-based indexing matching UI prompt "(Note: Column nos. start from 0)"
+                dateHeader = headers[dCol];
+                timeHeader = headers[tCol];
+                resolvedDateIdx = dCol;
+                resolvedTimeIdx = tCol;
+                return true;
+            }
+        }
+        else if (canBeOneBased)
+        {
+            dateHeader = headers[dCol - 1];
+            timeHeader = headers[tCol - 1];
+            resolvedDateIdx = dCol - 1;
+            resolvedTimeIdx = tCol - 1;
+            return true;
+        }
+        else if (canBeZeroBased)
+        {
+            dateHeader = headers[dCol];
+            timeHeader = headers[tCol];
+            resolvedDateIdx = dCol;
+            resolvedTimeIdx = tCol;
+            return true;
+        }
+
+        // 3. Fallback to auto-detection
+        if (TryDetectSeparateDateTimeColumns(headers, out int dIdx, out int tIdx))
+        {
+            dateHeader = headers[dIdx];
+            timeHeader = headers[tIdx];
+            resolvedDateIdx = dIdx;
+            resolvedTimeIdx = tIdx;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool TryResolveDateAndTimeHeaders(
+        IList<string> headers,
+        int? dateColNo,
+        int? timeColNo,
+        out string? dateHeader,
+        out string? timeHeader)
+    {
+        return TryResolveDateAndTimeHeaders(headers, dateColNo, timeColNo, out dateHeader, out timeHeader, out _, out _);
+    }
+
+    public static bool TryResolveDateAndTimeHeaders(
+        IList<string> headers,
+        int dateColNo,
+        int timeColNo,
+        out string? dateHeader,
+        out string? timeHeader)
+    {
+        return TryResolveDateAndTimeHeaders(headers, (int?)dateColNo, (int?)timeColNo, out dateHeader, out timeHeader, out _, out _);
+    }
+
 
     /// <summary>
     /// Inspects sample date values from a file to auto-detect the DateFormatType.
@@ -606,9 +960,10 @@ public static class TimeLogDateTimeParser
                 }
 
                 // Check if date changed in tokens but was improperly repeated
-                if (options.IsDatetimeInSeperatorColumn && options.DateColNo >= 0 && options.DateColNo < tokens.Length)
+                int checkDateIdx = options.ResolvedDateColIdx ?? (options.DateColNo ?? -1);
+                if (options.IsDatetimeInSeperatorColumn && checkDateIdx >= 0 && checkDateIdx < tokens.Length)
                 {
-                    var currentDateStr = tokens[options.DateColNo]?.Trim() ?? "";
+                    var currentDateStr = tokens[checkDateIdx]?.Trim() ?? "";
                     if (!string.IsNullOrEmpty(prevDateStr) && !string.IsNullOrEmpty(currentDateStr))
                     {
                         if (currentDateStr != prevDateStr)
