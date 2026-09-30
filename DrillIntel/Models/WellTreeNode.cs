@@ -31,9 +31,7 @@ public partial class WellTreeNode : ObservableObject
 
     public bool IsWellNode => Type == WellTreeNodeType.Well;
 
-    public bool IsDepthLogNode =>
-        (Type == WellTreeNodeType.Folder && Name.Equals("Depthlogs", System.StringComparison.OrdinalIgnoreCase)) ||
-        Type == WellTreeNodeType.DepthLog;
+    public bool IsDepthLogNode => Type == WellTreeNodeType.DepthLog;
 
     public bool IsTimeLogNode => Type == WellTreeNodeType.TimeLog;
 
