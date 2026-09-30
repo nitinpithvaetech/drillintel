@@ -1,11 +1,12 @@
 using System.Windows;
+using System.Windows.Controls;
 using DrillIntel.ViewModels;
 
 namespace DrillIntel.Views;
 
-public partial class WellInformationWindow : Window
+public partial class WellInformationView : UserControl
 {
-    public WellInformationWindow()
+    public WellInformationView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
@@ -14,10 +15,9 @@ public partial class WellInformationWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (DataContext is WellInformationViewModel vm)
+        if (DataContext == null)
         {
-            vm.RequestClose -= OnRequestClose;
-            vm.RequestClose += OnRequestClose;
+            DataContext = new WellInformationViewModel();
         }
     }
 
@@ -37,21 +37,19 @@ public partial class WellInformationWindow : Window
 
     private void OnRequestClose(bool success)
     {
-        try
+        var win = Window.GetWindow(this);
+        if (win != null && win.IsLoaded)
         {
-            DialogResult = success;
-        }
-        catch
-        {
-            // If shown as non-modal
-        }
-
-        try
-        {
-            Close();
-        }
-        catch
-        {
+            try
+            {
+                win.DialogResult = success;
+            }
+            catch { }
+            try
+            {
+                win.Close();
+            }
+            catch { }
         }
     }
 }
