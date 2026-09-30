@@ -365,10 +365,10 @@ public class WellTreeImportDisplayRulesTests : IDisposable
             Assert.False(wellNode.IsTimeLogNode);
             Assert.False(wellNode.IsLogNode);
 
-            // Validation: Timelogs node MUST have context menu, is a log node, but not a well node
-            Assert.True(timeFolder.HasContextMenu);
-            Assert.True(timeFolder.IsTimeLogNode);
-            Assert.True(timeFolder.IsLogNode);
+            // Validation: Timelogs parent node MUST NOT have context menu, and is not a log node
+            Assert.False(timeFolder.HasContextMenu);
+            Assert.False(timeFolder.IsTimeLogNode);
+            Assert.False(timeFolder.IsLogNode);
             Assert.False(timeFolder.IsWellNode);
             Assert.False(timeFolder.IsDepthLogNode);
 
@@ -446,8 +446,9 @@ public class WellTreeImportDisplayRulesTests : IDisposable
             // ROOT WELL NODE -> MUST BE Collapsed
             Assert.Equal(Visibility.Collapsed, boolConverter.Convert(wellNode.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
 
-            // CHILD NODES -> MUST BE Visible
-            Assert.Equal(Visibility.Visible, boolConverter.Convert(timeFolder.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+            // Timelogs parent node -> MUST BE Collapsed
+            Assert.Equal(Visibility.Collapsed, boolConverter.Convert(timeFolder.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+            // Depthlogs folder and child log items -> MUST BE Visible
             Assert.Equal(Visibility.Visible, boolConverter.Convert(depthFolder.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
             Assert.Equal(Visibility.Visible, boolConverter.Convert(timeChild.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
             Assert.Equal(Visibility.Visible, boolConverter.Convert(depthChild.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
@@ -626,6 +627,7 @@ public class WellTreeImportDisplayRulesTests : IDisposable
 
         var wellNode = dashboard.WellTree[0];
         var timeFolder = wellNode.Children.First(c => c.Name == "Timelogs");
+        var timeChild = timeFolder.Children[0];
 
         bool dialogOpened = false;
         dashboard.OpenViewDataDialogHandler = (vm) =>
@@ -638,7 +640,12 @@ public class WellTreeImportDisplayRulesTests : IDisposable
             return true;
         };
 
+        // Parent node: does NOT open View Data dialog
         await dashboard.ViewDataAsync(timeFolder);
+        Assert.False(dialogOpened);
+
+        // Child item node: opens View Data dialog
+        await dashboard.ViewDataAsync(timeChild);
 
         Assert.True(dialogOpened);
         Assert.NotNull(dashboard.LastLoadedLogData);

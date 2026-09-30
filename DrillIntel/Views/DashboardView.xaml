@@ -118,6 +118,7 @@
                                 <Setter Property="Padding" Value="4,2" />
                                 <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}" />
                                 <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown" />
+                                <EventSetter Event="ContextMenuOpening" Handler="TreeViewItem_ContextMenuOpening" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasContextMenu}" Value="True">
                                         <Setter Property="ContextMenu" Value="{StaticResource TreeItemContextMenu}" />

@@ -31,9 +31,26 @@ public partial class DashboardView : UserControl
                 item.IsSelected = true;
                 if (DataContext is DashboardViewModel vm && item.DataContext is WellTreeNode node)
                 {
-                    vm.ContextSelectedNode = node;
+                    vm.ContextSelectedNode = node.HasContextMenu ? node : null;
                     vm.OnTreeNodeSelected(node);
                 }
+            }
+        }
+    }
+
+    private void TreeViewItem_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is TreeViewItem item)
+        {
+            var clickedItem = FindVisualParent<TreeViewItem>(e.OriginalSource as DependencyObject);
+            if (clickedItem == null && item.IsFocused)
+            {
+                clickedItem = item;
+            }
+
+            if (clickedItem == item && item.DataContext is WellTreeNode node && !node.HasContextMenu)
+            {
+                e.Handled = true;
             }
         }
     }
