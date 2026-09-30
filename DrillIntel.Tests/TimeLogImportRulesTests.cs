@@ -1668,6 +1668,188 @@ public class TimeLogImportRulesTests : IDisposable
         Assert.DoesNotContain("D1", columns, StringComparer.OrdinalIgnoreCase);
         Assert.DoesNotContain("T1", columns, StringComparer.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task ApplySettingsCommand_CanExecute_And_RefreshesSettingsCorrectly()
+    {
+        var vm = new ImportDataViewModel(_session)
+        {
+            SuppressMessageBoxes = true,
+            TypeOfDataInput = ImportDataType.TimeLogData,
+            OperationType = OperationType.NewData,
+            NewWellName = "Well_ApplyCommandTest",
+            LogName = "Log_ApplyCommandTest"
+        };
+
+        // Before file uploaded, ApplySettingsCommand cannot execute
+        Assert.False(vm.ApplySettingsCommand.CanExecute(null));
+
+        string csvPath = Path.Combine(Path.GetTempPath(), $"timelog_apply_test_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(csvPath,
+                "DEPTH,Date1,Time1,HKLD\n" +
+                "100.5,2024-05-01,10:00:00,50.2\n" +
+                "101.0,2024-05-01,10:00:10,52.4\n");
+
+            await vm.ProcessFileAsync(csvPath);
+
+            // Once file is loaded, command is enabled
+            Assert.True(vm.ApplySettingsCommand.CanExecute(null));
+
+            // Set split mode without col numbers
+            vm.IsDatetimeInSeperatorColumn = true;
+            vm.DateColNo = null;
+            vm.TimeColNo = null;
+            await vm.ApplySettingsAsync();
+            while (vm.IsLoading) await Task.Delay(50);
+
+            Assert.DoesNotContain("DATETIME", vm.PreviewColumns, StringComparer.OrdinalIgnoreCase);
+
+            // Set settings and apply explicitly via command
+            vm.DateColNo = 1;
+            vm.TimeColNo = 2;
+            vm.DateFormat = DateFormatType.ISOFormat;
+
+            await vm.ApplySettingsCommand.ExecuteAsync(null);
+            while (vm.IsLoading) await Task.Delay(50);
+
+            Assert.Contains("DATETIME", vm.PreviewColumns, StringComparer.OrdinalIgnoreCase);
+            Assert.NotNull(vm.PreviewRows);
+            Assert.True(vm.PreviewRows.Columns.Contains("DATETIME"));
+            Assert.Equal("01-May-2024 10:00:00", vm.PreviewRows.Rows[0]["DATETIME"].ToString());
+        }
+        finally
+        {
+            if (File.Exists(csvPath)) File.Delete(csvPath);
+        }
+    }
+
+    [Fact]
+    public async Task RequestRefreshPreviewAsync_RapidSettingsChanges_CoalescesWithoutDroppingUpdates()
+    {
+        var vm = new ImportDataViewModel(_session)
+        {
+            SuppressMessageBoxes = true,
+            TypeOfDataInput = ImportDataType.TimeLogData,
+            OperationType = OperationType.NewData,
+            NewWellName = "Well_RapidSettings",
+            LogName = "Log_RapidSettings"
+        };
+
+        string csvPath = Path.Combine(Path.GetTempPath(), $"timelog_rapid_test_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(csvPath,
+                "HEADER_LINE_TO_SKIP\n" +
+                "DEPTH,DateVal,TimeVal,ROP\n" +
+                "500.0,2024-06-15,14:30:00,25.0\n" +
+                "501.0,2024-06-15,14:30:05,26.0\n");
+
+            await vm.ProcessFileAsync(csvPath);
+
+            // Rapid consecutive property assignments simulating multiple settings being updated
+            vm.ColumnHeadingRow = 2;
+            vm.ImportFromRow = 3;
+            vm.IsDatetimeInSeperatorColumn = true;
+            vm.DateColNo = 1;
+            vm.TimeColNo = 2;
+            vm.DateFormat = DateFormatType.ISOFormat;
+
+            // Wait for coalesced execution to complete
+            while (vm.IsLoading) await Task.Delay(50);
+
+            // Verify the final state reflects all settings correctly
+            Assert.Equal(2, vm.ColumnHeadingRow);
+            Assert.Equal(3, vm.ImportFromRow);
+            Assert.Equal(1, vm.DateColNo);
+            Assert.Equal(2, vm.TimeColNo);
+            Assert.Contains("DATETIME", vm.PreviewColumns, StringComparer.OrdinalIgnoreCase);
+            Assert.Equal("15-Jun-2024 14:30:00", vm.PreviewRows.Rows[0]["DATETIME"].ToString());
+        }
+        finally
+        {
+            if (File.Exists(csvPath)) File.Delete(csvPath);
+        }
+    }
+
+    [Fact]
+    public async Task ViewModel_SplitDateTime_WhenCheckboxNotChecked_EnteringDateColNoAndTimeColNo_ExcludesDateAndTimeColumnsFromTableAndMetadata()
+    {
+        var vm = new ImportDataViewModel(_session)
+        {
+            SuppressMessageBoxes = true,
+            TypeOfDataInput = ImportDataType.TimeLogData,
+            OperationType = OperationType.NewData,
+            NewWellName = "Well_SplitCheckboxUnchecked",
+            LogName = "Log_SplitCheckboxUnchecked"
+        };
+
+        string csvPath = Path.Combine(Path.GetTempPath(), $"timelog_split_no_check_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(csvPath,
+                "DEPTH,Date,Time,HKLD,RPM\n" +
+                "100.5,2024-05-01,10:00:00,50.2,60.0\n" +
+                "101.0,2024-05-01,10:00:10,52.4,62.0\n");
+
+            await vm.ProcessFileAsync(csvPath);
+
+            // User does NOT check "Date Time in separate columns" checkbox (it is false)
+            vm.IsDatetimeInSeperatorColumn = false;
+            while (vm.IsLoading) await Task.Delay(50);
+
+            // User defines DateTime Settings by entering Date Col No and Time Col No only
+            vm.DateColNo = 2; // column 2: Date
+            vm.TimeColNo = 3; // column 3: Time
+            while (vm.IsLoading) await Task.Delay(50);
+
+            // Assert that IsDatetimeInSeperatorColumn was automatically activated
+            Assert.True(vm.IsDatetimeInSeperatorColumn);
+
+            // Execute SaveAsync
+            await vm.SaveAsync();
+
+            var timeLogs = await _repo.GetTimeLogsAsync();
+            var timeLog = timeLogs.FirstOrDefault(l => l.nameWell == "Well_SplitCheckboxUnchecked" || l.nameLog == "Log_SplitCheckboxUnchecked");
+            Assert.NotNull(timeLog);
+            string tableName = timeLog.__dataTableName;
+            Assert.False(string.IsNullOrEmpty(tableName));
+
+            // Verify SQLite table columns: MUST contain DATETIME, DEPTH, HKLD, RPM
+            // MUST NOT contain Date or Time
+            var columns = await _repo.GetTableColumnsAsync(tableName);
+            Assert.Contains("DATETIME", columns, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("DEPTH", columns, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("HKLD", columns, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("RPM", columns, StringComparer.OrdinalIgnoreCase);
+
+            Assert.DoesNotContain("Date", columns, StringComparer.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Time", columns, StringComparer.OrdinalIgnoreCase);
+
+            // Verify VMX_TIME_LOG_COLUMNS
+            var conn = _session.GetConnection();
+            var curveRows = (await conn.QueryAsync<string>("SELECT MNEMONIC FROM VMX_TIME_LOG_COLUMNS WHERE LOG_ID = @id;", new { id = timeLog.ObjectID })).AsList();
+            if (curveRows.Count > 0)
+            {
+                Assert.Contains("DATETIME", curveRows, StringComparer.OrdinalIgnoreCase);
+                Assert.DoesNotContain("Date", curveRows, StringComparer.OrdinalIgnoreCase);
+                Assert.DoesNotContain("Time", curveRows, StringComparer.OrdinalIgnoreCase);
+            }
+
+            // Verify rows in table
+            var rows = (await conn.QueryAsync<dynamic>($"SELECT DATETIME, DEPTH, HKLD, RPM FROM [{tableName}] ORDER BY DATETIME ASC;")).AsList();
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("01-May-2024 10:00:00", (string)rows[0].DATETIME);
+            Assert.Equal(100.5, (double)rows[0].DEPTH);
+            Assert.Equal(50.2, (double)rows[0].HKLD);
+            Assert.Equal(60.0, (double)rows[0].RPM);
+        }
+        finally
+        {
+            if (File.Exists(csvPath)) File.Delete(csvPath);
+        }
+    }
 }
 
 

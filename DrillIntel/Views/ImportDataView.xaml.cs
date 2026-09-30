@@ -40,5 +40,32 @@ namespace DrillIntel.Views
             // Do nothing, required for routing if we kept the handler in XAML, 
             // but we can just leave it empty or remove it from XAML.
         }
+
+        private void ImportSettingsPanel_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                if (Keyboard.FocusedElement is TextBox textBox)
+                {
+                    var binding = textBox.GetBindingExpression(TextBox.TextProperty);
+                    binding?.UpdateSource();
+                }
+
+                if (ViewModel?.ApplySettingsCommand.CanExecute(null) == true)
+                {
+                    ViewModel.ApplySettingsCommand.Execute(null);
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void ApplySettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (Keyboard.FocusedElement is TextBox textBox)
+            {
+                var binding = textBox.GetBindingExpression(TextBox.TextProperty);
+                binding?.UpdateSource();
+            }
+        }
     }
 }

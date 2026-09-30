@@ -383,8 +383,11 @@ public partial class ImportDataViewModel : ObservableObject
         get => _isFileUploaded;
         set
         {
-            SetProperty(ref _isFileUploaded, value);
-            NextStepCommand?.NotifyCanExecuteChanged();
+            if (SetProperty(ref _isFileUploaded, value))
+            {
+                NextStepCommand?.NotifyCanExecuteChanged();
+                ApplySettingsCommand?.NotifyCanExecuteChanged();
+            }
         }
     }
 
@@ -412,9 +415,9 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.ImportFromRow == value) return;
             Settings.ImportFromRow = value;
             OnPropertyChanged();
-            if (IsFileUploaded && !IsLoading && value.HasValue && value.Value >= 1)
+            if (IsFileUploaded && value.HasValue && value.Value >= 1)
             {
-                _ = RefreshPreviewAsync(reloadWorksheets: false);
+                _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
             }
         }
     }
@@ -427,9 +430,9 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.ColumnHeadingRow == value) return;
             Settings.ColumnHeadingRow = value;
             OnPropertyChanged();
-            if (IsFileUploaded && !IsLoading && value.HasValue && value.Value >= 1)
+            if (IsFileUploaded && value.HasValue && value.Value >= 1)
             {
-                _ = RefreshPreviewAsync(reloadWorksheets: false);
+                _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
             }
         }
     }
@@ -445,9 +448,9 @@ public partial class ImportDataViewModel : ObservableObject
             {
                 Settings.IsDatetimeInSeperatorColumn = value;
                 OnPropertyChanged();
-                if (IsFileUploaded && !IsLoading)
+                if (IsFileUploaded)
                 {
-                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                    _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
                 }
             }
         }
@@ -462,9 +465,9 @@ public partial class ImportDataViewModel : ObservableObject
             {
                 Settings.DatetimeSeparator = value;
                 OnPropertyChanged();
-                if (IsFileUploaded && !IsLoading)
+                if (IsFileUploaded)
                 {
-                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                    _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
                 }
             }
         }
@@ -478,10 +481,15 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.DateColNo != value)
             {
                 Settings.DateColNo = value;
-                OnPropertyChanged();
-                if (IsFileUploaded && !IsLoading)
+                if (value.HasValue && Settings.TimeColNo.HasValue && !Settings.IsDatetimeInSeperatorColumn)
                 {
-                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                    Settings.IsDatetimeInSeperatorColumn = true;
+                    OnPropertyChanged(nameof(IsDatetimeInSeperatorColumn));
+                }
+                OnPropertyChanged();
+                if (IsFileUploaded)
+                {
+                    _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
                 }
             }
         }
@@ -495,10 +503,15 @@ public partial class ImportDataViewModel : ObservableObject
             if (Settings.TimeColNo != value)
             {
                 Settings.TimeColNo = value;
-                OnPropertyChanged();
-                if (IsFileUploaded && !IsLoading)
+                if (value.HasValue && Settings.DateColNo.HasValue && !Settings.IsDatetimeInSeperatorColumn)
                 {
-                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                    Settings.IsDatetimeInSeperatorColumn = true;
+                    OnPropertyChanged(nameof(IsDatetimeInSeperatorColumn));
+                }
+                OnPropertyChanged();
+                if (IsFileUploaded)
+                {
+                    _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
                 }
             }
         }
@@ -513,15 +526,59 @@ public partial class ImportDataViewModel : ObservableObject
             {
                 Settings.DateFormat = value;
                 OnPropertyChanged();
-                if (IsFileUploaded && !IsLoading)
+                if (IsFileUploaded)
                 {
-                    _ = RefreshPreviewAsync(reloadWorksheets: false);
+                    _ = RequestRefreshPreviewAsync(reloadWorksheets: false);
                 }
             }
         }
     }
 
     private readonly SemaphoreSlim _previewLock = new(1, 1);
+    private bool _isRefreshInProgress;
+    private bool _refreshQueued;
+    private bool _refreshWorksheetsQueued;
+
+    public async Task ApplySettingsAsync()
+    {
+        if (IsFileUploaded)
+        {
+            await RequestRefreshPreviewAsync(reloadWorksheets: false);
+        }
+    }
+
+    internal async Task RequestRefreshPreviewAsync(bool reloadWorksheets = false)
+    {
+        if (string.IsNullOrEmpty(FileName) || !IsFileUploaded) return;
+
+        if (_isRefreshInProgress)
+        {
+            _refreshQueued = true;
+            if (reloadWorksheets) _refreshWorksheetsQueued = true;
+            return;
+        }
+
+        _isRefreshInProgress = true;
+        try
+        {
+            do
+            {
+                _refreshQueued = false;
+                bool doReloadWorksheets = reloadWorksheets || _refreshWorksheetsQueued;
+                _refreshWorksheetsQueued = false;
+                reloadWorksheets = false;
+
+                await RefreshPreviewAsync(doReloadWorksheets);
+            } while (_refreshQueued);
+        }
+        finally
+        {
+            IsLoading = false;
+            ImportProgressStatus = string.Empty;
+            _isRefreshInProgress = false;
+        }
+    }
+
     public ObservableCollection<string> PreviewColumns { get; } = new();
     private DataTable _previewRows = new();
     public DataTable PreviewRows
@@ -762,6 +819,7 @@ public partial class ImportDataViewModel : ObservableObject
                 SaveCommand?.NotifyCanExecuteChanged();
                 NextStepCommand?.NotifyCanExecuteChanged();
                 PreviousStepCommand?.NotifyCanExecuteChanged();
+                ApplySettingsCommand?.NotifyCanExecuteChanged();
             }
         }
     }
@@ -789,6 +847,7 @@ public partial class ImportDataViewModel : ObservableObject
     public RelayCommand<string> DropFileCommand { get; private set; } = null!;
     public AsyncRelayCommand SaveCommand { get; private set; } = null!;
     public RelayCommand UploadMappingFileCommand { get; private set; } = null!;
+    public AsyncRelayCommand ApplySettingsCommand { get; private set; } = null!;
 
     private void InitializeCommands()
     {
@@ -798,6 +857,7 @@ public partial class ImportDataViewModel : ObservableObject
         DropFileCommand = new RelayCommand<string>(ProcessFile);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsLoading && IsFileUploaded);
         UploadMappingFileCommand = new RelayCommand(UploadMappingFile, () => !IsLoading);
+        ApplySettingsCommand = new AsyncRelayCommand(ApplySettingsAsync, () => !IsLoading && IsFileUploaded);
     }
     
     private void NextStep()
@@ -1020,7 +1080,12 @@ public partial class ImportDataViewModel : ObservableObject
             // Auto-detect separate Date & Time columns for TimeLog if not explicitly configured
             if (TypeOfDataInput == ImportDataType.TimeLogData)
             {
-                if (!IsDatetimeInSeperatorColumn && (!DateColNo.HasValue || !TimeColNo.HasValue))
+                if (DateColNo.HasValue && TimeColNo.HasValue && !IsDatetimeInSeperatorColumn)
+                {
+                    Settings.IsDatetimeInSeperatorColumn = true;
+                    OnPropertyChanged(nameof(IsDatetimeInSeperatorColumn));
+                }
+                else if (!IsDatetimeInSeperatorColumn && (!DateColNo.HasValue || !TimeColNo.HasValue))
                 {
                     if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(headers, out int dIdx, out int tIdx))
                     {
@@ -1047,8 +1112,9 @@ public partial class ImportDataViewModel : ObservableObject
             int resolvedDateIdx = -1;
             int resolvedTimeIdx = -1;
 
+            bool isSplitDtActive = IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue);
             bool isTimeLogWithSplitDt = TypeOfDataInput == ImportDataType.TimeLogData &&
-                                        IsDatetimeInSeperatorColumn &&
+                                        isSplitDtActive &&
                                         DateColNo.HasValue && TimeColNo.HasValue &&
                                         DateColNo.Value != TimeColNo.Value &&
                                         TimeLogDateTimeParser.TryResolveDateAndTimeHeaders(
@@ -1254,8 +1320,11 @@ public partial class ImportDataViewModel : ObservableObject
         }
         finally
         {
-            IsLoading = false;
-            ImportProgressStatus = string.Empty;
+            if (!_refreshQueued)
+            {
+                IsLoading = false;
+                ImportProgressStatus = string.Empty;
+            }
             _previewLock.Release();
         }
     }
@@ -1664,9 +1733,10 @@ public partial class ImportDataViewModel : ObservableObject
                 string updateTargetTableName = SelectedExistingTimeLog.__dataTableName;
                 var existingCols = new HashSet<string>(await _repository.GetTableColumnsAsync(updateTargetTableName), StringComparer.OrdinalIgnoreCase);
 
+                bool isUpdateSplitDt = IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue);
                 var updateTimeLogDtOptions = new TimeLogDateTimeOptions
                 {
-                    IsDatetimeInSeperatorColumn = IsDatetimeInSeperatorColumn,
+                    IsDatetimeInSeperatorColumn = isUpdateSplitDt,
                     DatetimeSeparator = DatetimeSeparator,
                     DateColNo = DateColNo,
                     TimeColNo = TimeColNo,
@@ -1697,7 +1767,7 @@ public partial class ImportDataViewModel : ObservableObject
                             MappedVumaxChannel = "DATETIME"
                         });
                     }
-                    else if (!IsDatetimeInSeperatorColumn)
+                    else if (!isUpdateSplitDt)
                     {
                         var matchedDt = PreviewColumns.FirstOrDefault(h =>
                             h.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
@@ -1738,7 +1808,7 @@ public partial class ImportDataViewModel : ObservableObject
                         continue;
                     }
 
-                    if (IsDatetimeInSeperatorColumn &&
+                    if (isUpdateSplitDt &&
                         (vuCol.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
                          vuCol.Equals("TIME", StringComparison.OrdinalIgnoreCase)))
                     {
@@ -1876,7 +1946,11 @@ public partial class ImportDataViewModel : ObservableObject
                     ? _rawFileHeaders
                     : PreviewColumns.Where(c => !c.Equals("DATETIME", StringComparison.OrdinalIgnoreCase)).ToList();
 
-                if (!IsDatetimeInSeperatorColumn && (!DateColNo.HasValue || !TimeColNo.HasValue))
+                if (DateColNo.HasValue && TimeColNo.HasValue && !IsDatetimeInSeperatorColumn)
+                {
+                    IsDatetimeInSeperatorColumn = true;
+                }
+                else if (!IsDatetimeInSeperatorColumn && (!DateColNo.HasValue || !TimeColNo.HasValue))
                 {
                     if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int autoD, out int autoT))
                     {
@@ -1886,7 +1960,9 @@ public partial class ImportDataViewModel : ObservableObject
                     }
                 }
 
-                if (IsDatetimeInSeperatorColumn)
+                bool isSplitDt = IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue);
+
+                if (isSplitDt)
                 {
                     var sampleRows = PreviewRows?.Rows.Cast<DataRow>()
                         .Take(20)
@@ -1972,7 +2048,7 @@ public partial class ImportDataViewModel : ObservableObject
                     continue;
 
                 // For TimeLog in split datetime mode, skip the separate Date and Time columns
-                if (!isDepthLog && IsDatetimeInSeperatorColumn)
+                if (!isDepthLog && (IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue)))
                 {
                     if (excludedHeaders.Contains(col) ||
                         TimeLogDateTimeParser.LooksLikeDateHeader(col) ||
@@ -1989,7 +2065,7 @@ public partial class ImportDataViewModel : ObservableObject
                 });
             }
 
-            if (!isDepthLog && IsDatetimeInSeperatorColumn)
+            if (!isDepthLog && (IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue)))
             {
                 activeMappings = activeMappings.Where(m =>
                 {
@@ -2133,7 +2209,7 @@ public partial class ImportDataViewModel : ObservableObject
                     }
 
                     // In split datetime mode, never create separate DATE or TIME curves
-                    if (IsDatetimeInSeperatorColumn)
+                    if (IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue))
                     {
                         if (excludedHeaders.Contains(targetChannel) ||
                             excludedHeaders.Contains(safeMnemonic) ||
@@ -2217,7 +2293,7 @@ public partial class ImportDataViewModel : ObservableObject
             // --- [NEW LOGIC (StreamImportDataAsync with active TimeLogDateTimeOptions)] ---
             var timeLogDtOptions = isDepthLog ? null : new TimeLogDateTimeOptions
             {
-                IsDatetimeInSeperatorColumn = IsDatetimeInSeperatorColumn,
+                IsDatetimeInSeperatorColumn = IsDatetimeInSeperatorColumn || (DateColNo.HasValue && TimeColNo.HasValue),
                 DatetimeSeparator = DatetimeSeparator,
                 DateColNo = DateColNo,
                 TimeColNo = TimeColNo,

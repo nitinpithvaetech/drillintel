@@ -1022,8 +1022,12 @@ public class WellDataRepository : IWellDataRepository
         {
             dateTimeOptions ??= new TimeLogDateTimeOptions();
 
+            if (!dateTimeOptions.IsDatetimeInSeperatorColumn && dateTimeOptions.DateColNo.HasValue && dateTimeOptions.TimeColNo.HasValue)
+            {
+                dateTimeOptions.IsDatetimeInSeperatorColumn = true;
+            }
             // Auto-detect separate Date & Time columns if not explicitly set
-            if (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue))
+            else if (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue))
             {
                 if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
                 {
@@ -1050,12 +1054,13 @@ public class WellDataRepository : IWellDataRepository
             }
         }
 
+        bool isSplit = isTimeLog && dateTimeOptions != null && (dateTimeOptions.IsDatetimeInSeperatorColumn || (dateTimeOptions.DateColNo.HasValue && dateTimeOptions.TimeColNo.HasValue));
         var excludedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        if (isSplit)
         {
             if (!string.IsNullOrEmpty(separateDateColHeader)) excludedHeaders.Add(separateDateColHeader);
             if (!string.IsNullOrEmpty(separateTimeColHeader)) excludedHeaders.Add(separateTimeColHeader);
-            if (dateTimeOptions.ResolvedDateColIdx.HasValue && dateTimeOptions.ResolvedDateColIdx.Value >= 0 && dateTimeOptions.ResolvedDateColIdx.Value < sourceHeaders.Count)
+            if (dateTimeOptions!.ResolvedDateColIdx.HasValue && dateTimeOptions.ResolvedDateColIdx.Value >= 0 && dateTimeOptions.ResolvedDateColIdx.Value < sourceHeaders.Count)
                 excludedHeaders.Add(sourceHeaders[dateTimeOptions.ResolvedDateColIdx.Value]);
             if (dateTimeOptions.ResolvedTimeColIdx.HasValue && dateTimeOptions.ResolvedTimeColIdx.Value >= 0 && dateTimeOptions.ResolvedTimeColIdx.Value < sourceHeaders.Count)
                 excludedHeaders.Add(sourceHeaders[dateTimeOptions.ResolvedTimeColIdx.Value]);
@@ -1079,12 +1084,16 @@ public class WellDataRepository : IWellDataRepository
             var header = map.CsvColumnHeader;
 
             // In split datetime mode for TimeLog, skip separate raw Date and Time columns so they don't become numeric columns
-            if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+            if (isSplit)
             {
                 if (!map.MappedVumaxChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))
                 {
                     if (excludedHeaders.Contains(header) ||
-                        excludedHeaders.Contains(map.MappedVumaxChannel))
+                        excludedHeaders.Contains(map.MappedVumaxChannel) ||
+                        TimeLogDateTimeParser.LooksLikeDateHeader(header) ||
+                        TimeLogDateTimeParser.LooksLikeDateHeader(map.MappedVumaxChannel) ||
+                        TimeLogDateTimeParser.LooksLikeTimeHeader(header) ||
+                        TimeLogDateTimeParser.LooksLikeTimeHeader(map.MappedVumaxChannel))
                     {
                         continue;
                     }
@@ -1094,7 +1103,7 @@ public class WellDataRepository : IWellDataRepository
             var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? header : map.MappedVumaxChannel;
 
             // In split datetime mode for TimeLog, ensure targetChannel is never DATE or TIME
-            if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+            if (isSplit)
             {
                 if (!targetChannel.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) &&
                     (excludedHeaders.Contains(targetChannel) ||
@@ -1143,7 +1152,7 @@ public class WellDataRepository : IWellDataRepository
         }
 
         // Final safety filter for TimeLog split datetime mode: exclude split date & time columns from columnPlans
-        if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        if (isSplit)
         {
             columnPlans = columnPlans.Where(p =>
             {
@@ -1154,7 +1163,14 @@ public class WellDataRepository : IWellDataRepository
                 {
                     return false;
                 }
-                if (dateTimeOptions.ResolvedDateColIdx.HasValue && p.SourceIndex == dateTimeOptions.ResolvedDateColIdx.Value)
+                if (TimeLogDateTimeParser.LooksLikeDateHeader(p.SourceHeader) ||
+                    TimeLogDateTimeParser.LooksLikeDateHeader(p.DbColumnName) ||
+                    TimeLogDateTimeParser.LooksLikeTimeHeader(p.SourceHeader) ||
+                    TimeLogDateTimeParser.LooksLikeTimeHeader(p.DbColumnName))
+                {
+                    return false;
+                }
+                if (dateTimeOptions!.ResolvedDateColIdx.HasValue && p.SourceIndex == dateTimeOptions.ResolvedDateColIdx.Value)
                     return false;
                 if (dateTimeOptions.ResolvedTimeColIdx.HasValue && p.SourceIndex == dateTimeOptions.ResolvedTimeColIdx.Value)
                     return false;
@@ -1224,7 +1240,7 @@ public class WellDataRepository : IWellDataRepository
             // Dynamically create any missing columns in target table
             foreach (var plan in columnPlans)
             {
-                if (isTimeLog && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+                if (isSplit)
                 {
                     if (excludedHeaders.Contains(plan.DbColumnName))
                     {
@@ -1940,7 +1956,11 @@ public class WellDataRepository : IWellDataRepository
         string? separateTimeColHeader = null;
         if (isDateTimeComparison)
         {
-            if (dateTimeOptions == null || (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue)))
+            if (dateTimeOptions != null && !dateTimeOptions.IsDatetimeInSeperatorColumn && dateTimeOptions.DateColNo.HasValue && dateTimeOptions.TimeColNo.HasValue)
+            {
+                dateTimeOptions.IsDatetimeInSeperatorColumn = true;
+            }
+            else if (dateTimeOptions == null || (!dateTimeOptions.IsDatetimeInSeperatorColumn && (!dateTimeOptions.DateColNo.HasValue || !dateTimeOptions.TimeColNo.HasValue)))
             {
                 if (TimeLogDateTimeParser.TryDetectSeparateDateTimeColumns(sourceHeaders, out int dIdx, out int tIdx))
                 {
@@ -2004,7 +2024,7 @@ public class WellDataRepository : IWellDataRepository
                         existingTableCols.Contains(m.MappedVumaxChannel))
             .ToList();
 
-        if (isDateTimeComparison && dateTimeOptions != null && dateTimeOptions.IsDatetimeInSeperatorColumn)
+        if (isDateTimeComparison && dateTimeOptions != null && (dateTimeOptions.IsDatetimeInSeperatorColumn || (dateTimeOptions.DateColNo.HasValue && dateTimeOptions.TimeColNo.HasValue)))
         {
             validCurveMappings = validCurveMappings.Where(m =>
             {
@@ -2020,7 +2040,11 @@ public class WellDataRepository : IWellDataRepository
                     return false;
                 if (m.MappedVumaxChannel.Equals("DATE", StringComparison.OrdinalIgnoreCase) ||
                     m.MappedVumaxChannel.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
-                    m.MappedVumaxChannel.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase))
+                    m.MappedVumaxChannel.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                    TimeLogDateTimeParser.LooksLikeDateHeader(m.CsvColumnHeader) ||
+                    TimeLogDateTimeParser.LooksLikeDateHeader(m.MappedVumaxChannel) ||
+                    TimeLogDateTimeParser.LooksLikeTimeHeader(m.CsvColumnHeader) ||
+                    TimeLogDateTimeParser.LooksLikeTimeHeader(m.MappedVumaxChannel))
                     return false;
                 return true;
             }).ToList();
