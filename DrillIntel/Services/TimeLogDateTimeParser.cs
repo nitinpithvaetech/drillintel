@@ -668,7 +668,7 @@ public static class TimeLogDateTimeParser
         int dCol = dateColNo.Value;
         int tCol = timeColNo.Value;
 
-        // 1. If dCol is 0, it can only be 0-based
+        // 1. If dCol is 0 or tCol is 0, it can only be 0-based
         if (dCol == 0)
         {
             if (tCol >= 0 && tCol < headers.Count)
@@ -677,6 +677,17 @@ public static class TimeLogDateTimeParser
                 timeHeader = headers[tCol];
                 resolvedDateIdx = 0;
                 resolvedTimeIdx = tCol;
+                return true;
+            }
+        }
+        else if (tCol == 0)
+        {
+            if (dCol >= 0 && dCol < headers.Count)
+            {
+                dateHeader = headers[dCol];
+                timeHeader = headers[0];
+                resolvedDateIdx = dCol;
+                resolvedTimeIdx = 0;
                 return true;
             }
         }
