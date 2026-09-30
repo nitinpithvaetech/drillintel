@@ -376,22 +376,22 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         #region First and Last Index (SQLite)
 
         /// <summary>
-        /// Retrieves the first index (MIN_DATE) as an OADate double from VMX_TIME_LOG for this time log.
+        /// Retrieves the first index(MIN_DATE) as an OADate double from VMX_TIME_LOG for this time log.
         /// Converted from legacy VB getFirstIndexOptimized.
         /// </summary>
-        //public double getFirstIndexOptimized(IDataServiceDIntel objDataService)
-        //{
-        //    return TimeLogService.getFirstIndexOptimized(objDataService, this.WellID, this.WellboreID, this.ObjectID);
-        //}
+        public double getFirstIndexOptimized(IDataServiceDIntel objDataService)
+        {
+            return TimeLogService.getFirstIndexOptimized(objDataService, this.WellID, this.WellboreID, this.ObjectID);
+        }
 
-        ///// <summary>
-        ///// Retrieves the last index (MAX_DATE) as an OADate double from VMX_TIME_LOG for this time log.
-        ///// Converted from legacy VB getLastIndexOptimized.
-        ///// </summary>
-        //public double getLastIndexOptimized(IDataServiceDIntel objDataService)
-        //{
-        //    return TimeLogService.getLastIndexOptimized(objDataService, this.WellID, this.WellboreID, this.ObjectID);
-        //}
+        /// <summary>
+        /// Retrieves the last index (MAX_DATE) as an OADate double from VMX_TIME_LOG for this time log.
+        /// Converted from legacy VB getLastIndexOptimized.
+        /// </summary>
+        public double getLastIndexOptimized(IDataServiceDIntel objDataService)
+        {
+            return TimeLogService.getLastIndexOptimized(objDataService, this.WellID, this.WellboreID, this.ObjectID);
+        }
 
         #endregion
 

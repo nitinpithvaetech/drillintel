@@ -577,6 +577,123 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
             return 0;
         }
 
+
+        #region First and Last Index Optimized (SQLite)
+
+        /// <summary>
+        /// Retrieves the first index (MIN_DATE) as an OADate double from VMX_TIME_LOG for the specified time log.
+        /// Converted from legacy VB getFirstIndexOptimized using SQLite.
+        /// </summary>
+        public static double getFirstIndexOptimized(IDataServiceDIntel objDataService, string wellID, string wellboreID, string logID)
+        {
+            try
+            {
+                if (objDataService == null || string.IsNullOrWhiteSpace(wellID) || string.IsNullOrWhiteSpace(wellboreID) || string.IsNullOrWhiteSpace(logID))
+                {
+                    return new DateTime().ToOADate();
+                }
+
+                string sql = "SELECT MIN_DATE, DATA_TABLE_NAME FROM VMX_TIME_LOG WHERE WELL_ID='" + wellID.Replace("'", "''") +
+                             "' AND WELLBORE_ID='" + wellboreID.Replace("'", "''") +
+                             "' AND LOG_ID='" + logID.Replace("'", "''") + "';";
+
+                using (DataTable objData = objDataService.GetTable(sql))
+                {
+                    if (objData != null && objData.Rows.Count > 0)
+                    {
+                        DateTime dtValue = DataService.checkNull(objData.Rows[0]["MIN_DATE"], new DateTime());
+                        if (dtValue == DateTime.MinValue || dtValue == default)
+                        {
+                            string dataTableName = DataService.checkNull(objData.Rows[0]["DATA_TABLE_NAME"], "");
+                            if (!string.IsNullOrWhiteSpace(dataTableName))
+                            {
+                                dtValue = RigStateService.GetMinDateFromTable(objDataService, dataTableName);
+                                if (dtValue != DateTime.MinValue)
+                                {
+                                    try
+                                    {
+                                        string updateSql = $"UPDATE VMX_TIME_LOG SET MIN_DATE = '{dtValue:dd-MMM-yyyy HH:mm:ss}' WHERE WELL_ID='{wellID.Replace("'", "''")}' AND WELLBORE_ID='{wellboreID.Replace("'", "''")}' AND LOG_ID='{logID.Replace("'", "''")}';";
+                                        objDataService.ExecuteNonQuery(updateSql);
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                        return dtValue.ToOADate();
+                    }
+                    else
+                    {
+                        return new DateTime().ToOADate();
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return new DateTime().ToOADate();
+            }
+        }
+
+        /// <summary>
+        /// Retrieves the last index (MAX_DATE) as an OADate double from VMX_TIME_LOG for the specified time log.
+        /// Converted from legacy VB getLastIndexOptimized using SQLite.
+        /// If MAX_DATE is missing or corrupted, falls back to the data table and auto-heals VMX_TIME_LOG.
+        /// </summary>
+        public static double getLastIndexOptimized(IDataServiceDIntel objDataService, string wellID, string wellboreID, string logID)
+        {
+            try
+            {
+                if (objDataService == null || string.IsNullOrWhiteSpace(wellID) || string.IsNullOrWhiteSpace(wellboreID) || string.IsNullOrWhiteSpace(logID))
+                {
+                    return new DateTime().ToOADate();
+                }
+
+                string sql = "SELECT MAX_DATE, DATA_TABLE_NAME FROM VMX_TIME_LOG WHERE WELL_ID='" + wellID.Replace("'", "''") +
+                             "' AND WELLBORE_ID='" + wellboreID.Replace("'", "''") +
+                             "' AND LOG_ID='" + logID.Replace("'", "''") + "';";
+
+                using (DataTable objData = objDataService.GetTable(sql))
+                {
+                    if (objData != null && objData.Rows.Count > 0)
+                    {
+                        DateTime dtValue = DataService.checkNull(objData.Rows[0]["MAX_DATE"], new DateTime());
+                        if (dtValue == DateTime.MinValue || dtValue == default)
+                        {
+                            string dataTableName = DataService.checkNull(objData.Rows[0]["DATA_TABLE_NAME"], "");
+                            if (!string.IsNullOrWhiteSpace(dataTableName))
+                            {
+                                dtValue = RigStateService.GetMaxDateFromTable(objDataService, dataTableName);
+                                if (dtValue != DateTime.MinValue)
+                                {
+                                    try
+                                    {
+                                        string updateSql = $"UPDATE VMX_TIME_LOG SET MAX_DATE = '{dtValue:dd-MMM-yyyy HH:mm:ss}' WHERE WELL_ID='{wellID.Replace("'", "''")}' AND WELLBORE_ID='{wellboreID.Replace("'", "''")}' AND LOG_ID='{logID.Replace("'", "''")}';";
+                                        objDataService.ExecuteNonQuery(updateSql);
+                                    }
+                                    catch { }
+                                }
+                            }
+                        }
+                        return dtValue.ToOADate();
+                    }
+                    else
+                    {
+                        return new DateTime().ToOADate();
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return new DateTime().ToOADate();
+            }
+        }
+
+        #endregion
+
+
+
+
+
+
     }//Class
 }//namespace
 

@@ -79,3 +79,35 @@ public class StringToVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+public class HexToBrushConverter : IValueConverter
+{
+    private static readonly System.Windows.Media.BrushConverter _brushConverter = new();
+
+    public object Convert(object? value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string hex && !string.IsNullOrWhiteSpace(hex))
+        {
+            try
+            {
+                string h = hex.Trim();
+                if (!h.StartsWith("#", StringComparison.Ordinal) && (h.Length == 6 || h.Length == 8))
+                {
+                    h = "#" + h;
+                }
+                var brush = (System.Windows.Media.Brush?)_brushConverter.ConvertFromString(h);
+                if (brush != null)
+                {
+                    if (brush.CanFreeze) brush.Freeze();
+                    return brush;
+                }
+            }
+            catch { }
+        }
+        return System.Windows.Media.Brushes.Transparent;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+

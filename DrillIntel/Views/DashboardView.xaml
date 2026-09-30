@@ -15,6 +15,7 @@
     <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+        <converters:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
 
         <ContextMenu x:Key="TreeItemContextMenu" x:Shared="False">
             <MenuItem Header="Edit Object" 
@@ -29,6 +30,14 @@
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                 <MenuItem.Icon>
                     <materialDesign:PackIcon Kind="TableEye" Width="18" Height="18" Foreground="#4CAF50" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Recalculate Rig State" 
+                      Command="{Binding PlacementTarget.Tag.RecalculateRigStateCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.Type, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=TimeLog}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="CalculatorVariantOutline" Width="18" Height="18" Foreground="#512DA8" />
                 </MenuItem.Icon>
             </MenuItem>
         </ContextMenu>

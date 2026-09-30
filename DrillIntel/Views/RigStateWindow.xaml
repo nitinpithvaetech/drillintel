@@ -1,0 +1,16 @@
+<Window x:Class="DrillIntel.Views.RigStateWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DrillIntel.Views"
+        mc:Ignorable="d"
+        Title="{Binding Title, FallbackValue='Rig State Master Configuration'}" 
+        Height="820" Width="1100"
+        MinHeight="600" MinWidth="850"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <local:RigStateView />
+    </Grid>
+</Window>
+

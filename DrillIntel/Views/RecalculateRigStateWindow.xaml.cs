@@ -3,9 +3,9 @@ using DrillIntel.ViewModels;
 
 namespace DrillIntel.Views;
 
-public partial class WellInformationWindow : Window
+public partial class RecalculateRigStateWindow : Window
 {
-    public WellInformationWindow()
+    public RecalculateRigStateWindow()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
@@ -14,7 +14,7 @@ public partial class WellInformationWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (DataContext is WellInformationViewModel vm)
+        if (DataContext is RecalculateRigStateViewModel vm)
         {
             vm.RequestClose -= OnRequestClose;
             vm.RequestClose += OnRequestClose;
@@ -23,14 +23,13 @@ public partial class WellInformationWindow : Window
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.OldValue is WellInformationViewModel oldVm)
+        if (e.OldValue is RecalculateRigStateViewModel oldVm)
         {
             oldVm.RequestClose -= OnRequestClose;
         }
 
-        if (e.NewValue is WellInformationViewModel newVm)
+        if (e.NewValue is RecalculateRigStateViewModel newVm)
         {
-            newVm.RequestClose -= OnRequestClose;
             newVm.RequestClose += OnRequestClose;
         }
     }
@@ -40,20 +39,11 @@ public partial class WellInformationWindow : Window
         try
         {
             DialogResult = success;
-            return;
-        }
-        catch
-        {
-            // If shown non-modally or if DialogResult is already set / window is closing
-        }
-
-        try
-        {
-            Close();
         }
         catch
         {
         }
+        Close();
     }
 }
 

@@ -35,11 +35,7 @@
             <!-- Project Tab -->
             <Fluent:RibbonTabItem Header="Project">
                 <Fluent:RibbonGroupBox Header="Project Actions">
-                    <!--<Fluent:Button Header="Well Edtor" Command="{Binding IsProjectOpen}">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="Edit" Foreground="#4CAF50" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon>11
-                    </Fluent:Button>-->
+                    
                     <Fluent:Button Header="New Project" Command="{Binding NewProjectCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FolderPlus" Foreground="#4CAF50" Width="32" Height="32" />
@@ -50,6 +46,14 @@
                             <materialDesign:PackIcon Kind="FolderOpen" Foreground="#FF9800" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+
+                    <Fluent:Button Header="Well Edtor" Command="{Binding IsProjectOpen}">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="Edit" Foreground="#4CAF50" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon> 
+                    </Fluent:Button>
+
+
                     <Fluent:DropDownButton Header="Recent" ToolTip="Open a recently used project" ItemsSource="{Binding RecentProjects}">
                         <Fluent:DropDownButton.LargeIcon>
                             <materialDesign:PackIcon Kind="History" Foreground="#2196F3" Width="32" Height="32" />
@@ -131,7 +135,7 @@
             <!-- Data Processing Tab -->
             <Fluent:RibbonTabItem Header="Processing" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Algorithms">
-                    <Fluent:Button Header="Identify Rig States">
+                    <Fluent:Button Header="Identify Rig States" Command="{Binding IdentifyRigStatesCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="RobotOutline" Foreground="#00BCD4" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
@@ -175,12 +179,12 @@
             <!-- Masters Tab -->
             <Fluent:RibbonTabItem Header="Masters" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Configuration">
-                    <Fluent:Button Header="Rig State Master">
+                    <Fluent:Button Header="Rig State Master" Command="{Binding OpenRigStateMasterCommand}">
                         <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="CogOutline" Foreground="#607D8B" Width="32" Height="32" />
+                            <materialDesign:PackIcon Kind="CogSyncOutline" Foreground="#673AB7" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Broomstick Settings">
+                    <Fluent:Button Header="Broomstick Settings" IsEnabled="{Binding IsProjectOpen}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="TuneVariant" Foreground="#607D8B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>

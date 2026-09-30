@@ -14,7 +14,7 @@ using DrillIntel.Services.Readers;
 
 namespace DrillIntel.Services;
 
-public class ImportDepthLogService : IImportDepthLogService
+public class ImportDepthLogService
 {
     private readonly List<IDepthLogFormatReader> _readers;
     private readonly MappingFileReader _mappingFileReader;

@@ -353,10 +353,6 @@ public partial class DashboardViewModel : ObservableObject
                 DataContext = vm,
                 Owner = System.Windows.Application.Current?.MainWindow
             };
-            vm.RequestClose += (saved) =>
-            {
-                window.DialogResult = saved;
-            };
             result = window.ShowDialog();
         }
 
@@ -500,6 +496,34 @@ public partial class DashboardViewModel : ObservableObject
             viewLogVm.RequestClose += () => window.Close();
             window.ShowDialog();
         }
+    }
+
+    [RelayCommand]
+    public void RecalculateRigState(WellTreeNode? node)
+    {
+        var targetNode = node ?? SelectedNode;
+        if (targetNode == null) return;
+
+        TimeLog? timeLog = null;
+        if (targetNode.Tag is TimeLog tl)
+        {
+            timeLog = tl;
+        }
+
+        if (timeLog == null || _session == null || !_session.IsProjectOpen)
+        {
+            System.Windows.MessageBox.Show("Please select a valid Timelog from an open project to recalculate rig states.",
+                "Recalculate Rig State", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var vm = new RecalculateRigStateViewModel(_session, timeLog);
+        var window = new DrillIntel.Views.RecalculateRigStateWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
     }
 }
 

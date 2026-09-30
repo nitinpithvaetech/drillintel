@@ -789,9 +789,7 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
 
             try
             {
-                SchemaInitializer.CreateDatabase(dintelFilePath);
-
-                // Prompt user for initial Well Information
+                // Prompt user for initial Well Information first
                 var defaultWellName = Path.GetFileNameWithoutExtension(dintelFilePath);
                 var vm = new DrillIntel.ViewModels.WellInformationViewModel(defaultWellName, "General Field");
                 var win = new DrillIntel.Views.WellInformationWindow
@@ -808,10 +806,11 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                 bool? dialogResult = win.ShowDialog();
                 if (dialogResult != true)
                 {
-                    // User cancelled well info dialog; cancel project creation
-                    TryDeleteFile(dintelFilePath);
+                    // User cancelled well info dialog; cleanly abort project creation without creating file
                     return false;
                 }
+
+                SchemaInitializer.CreateDatabase(dintelFilePath);
 
                 string chosenWellName = !string.IsNullOrWhiteSpace(vm.WellName) ? vm.WellName.Trim() : defaultWellName;
                 string chosenField = !string.IsNullOrWhiteSpace(vm.FieldName) ? vm.FieldName.Trim() : "General Field";
@@ -866,6 +865,7 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                     System.Windows.MessageBoxImage.Error);
 
                 _session.Close();
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
                 TryDeleteFile(dintelFilePath);
                 return false;
             }

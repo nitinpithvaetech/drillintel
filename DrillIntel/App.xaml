@@ -23,6 +23,8 @@
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
             <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
+            <conv:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+            <conv:HexToBrushConverter x:Key="HexToBrushConverter" />
 
             <!-- Wizard Shared Styles -->
             <Style x:Key="CardBox" TargetType="Border">
@@ -69,6 +71,10 @@
             <DataTemplate DataType="{x:Type viewmodels:NoProjectViewModel}">
                 <views:NoProjectView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:RigStateViewModel}">
+                <views:RigStateView />
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
+

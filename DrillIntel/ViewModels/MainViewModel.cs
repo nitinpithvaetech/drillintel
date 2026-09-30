@@ -1,12 +1,13 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Models;
+using DrillIntel.Projects;
+using DrillIntel.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using DrillIntel.Models;
-using DrillIntel.Projects;
-using DrillIntel.Services;
 
 namespace DrillIntel.ViewModels;
 
@@ -77,6 +78,41 @@ public partial class MainViewModel : ObservableObject
         _projectService.OpenProject(project.FilePath);
     }
 
+    private void OpenWellEditor(RecentProject? project)
+    {
+        //if (_session?.IsProjectOpen != true ) return;
+        //var currentWell = await _repository.GetProjectWellAsync();
+        //var vm = new WellInformationViewModel(currentWell ?? new Well());
+        //LastEditWellViewModel = vm;
+
+        //bool? result = false;
+        //if (OpenEditWellDialogHandler != null)
+        //{
+        //    result = OpenEditWellDialogHandler(vm);
+        //}
+        //else if (System.Windows.Application.Current != null)
+        //{
+        //    var window = new DrillIntel.Views.WellInformationWindow
+        //    {
+        //        DataContext = vm,
+        //        Owner = System.Windows.Application.Current?.MainWindow
+        //    };
+        //    result = window.ShowDialog();
+        //}
+
+        //if (result == true)
+        //{
+        //    var wellToSave = currentWell ?? new Well();
+        //    vm.ApplyToWell(wellToSave);
+        //    if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
+        //    {
+        //        wellToSave.ObjectID = Guid.NewGuid().ToString();
+        //    }
+        //    await _repository.SaveProjectWellAsync(wellToSave);
+        //    await RefreshAsync();
+        //}
+    }
+
     private void OnProjectStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsProjectOpen));
@@ -85,6 +121,8 @@ public partial class MainViewModel : ObservableObject
         NavigateToImportTimelogCommand.NotifyCanExecuteChanged();
         NavigateToImportDepthlogCommand.NotifyCanExecuteChanged();
         CloseProjectCommand.NotifyCanExecuteChanged();
+        IdentifyRigStatesCommand.NotifyCanExecuteChanged();
+        OpenRigStateMasterCommand.NotifyCanExecuteChanged();
 
         if (_session.IsProjectOpen)
         {
@@ -251,6 +289,62 @@ public partial class MainViewModel : ObservableObject
     private void CloseProject()
     {
         _session.Close();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void OpenRigStateMaster()
+    {
+        DrillIntel.Data.IDataServiceDIntel dataService;
+        string contextName;
+
+        if (_session.IsProjectOpen)
+        {
+            dataService = _session.GetDataService();
+            contextName = $"Project: {_session.ProjectName}";
+        }
+        else
+        {
+            string appDataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DrillIntel");
+            System.IO.Directory.CreateDirectory(appDataDir);
+            string masterDbPath = System.IO.Path.Combine(appDataDir, "MasterSetup.dintel");
+            if (!System.IO.File.Exists(masterDbPath))
+            {
+                DrillIntel.Projects.SchemaInitializer.CreateDatabase(masterDbPath);
+            }
+            dataService = new DrillIntel.Data.DataServiceDIntel(masterDbPath);
+            contextName = "Global Master Template";
+        }
+
+        var vm = new RigStateViewModel(dataService, contextName);
+        var window = new DrillIntel.Views.RigStateWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task IdentifyRigStates()
+    {
+        if (!_session.IsProjectOpen) return;
+        var repo = new DrillIntel.Data.WellDataRepository(_session);
+        var timeLogs = await repo.GetTimeLogsAsync();
+        var tl = timeLogs.FirstOrDefault();
+        if (tl != null)
+        {
+            var vm = new RecalculateRigStateViewModel(_session, tl);
+            var window = new DrillIntel.Views.RecalculateRigStateWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            window.ShowDialog();
+        }
+        else
+        {
+            OpenRigStateMaster();
+        }
     }
 }
 

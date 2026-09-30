@@ -23,7 +23,7 @@ public partial class ImportDataViewModel : ObservableObject
     private readonly CsvImportService _importService;
     private readonly IWellDataRepository _repository;
     private readonly ProjectSession _session;
-    private readonly IImportDepthLogService _depthLogService;
+    private readonly ImportDepthLogService _depthLogService;
 
     public event EventHandler? RequestClose;
 

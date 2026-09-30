@@ -710,7 +710,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     arrRigState[r] = DataService.checkNull(row["RIG_STATE"], 0);
                 }
 
-              //  var bulkExecutor = new BulkCommandExecutor(objDataService, 500);
+                var bulkExecutor = new BulkCommandExecutor(objDataService, 500);
                 int moveInColor = GetRigStateColor(objRigState, 27);
                 int moveOutColor = GetRigStateColor(objRigState, 28);
 
@@ -743,7 +743,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                                 {
                                     string updateSql = $"UPDATE [{dataTableName}] SET RIG_STATE=27, RIG_STATE_COLOR={moveInColor} " +
                                                        $"WHERE [{indexColName}] >= {startIdx} AND [{indexColName}] <= {endIdx};";
-                                 //   bulkExecutor.ExecuteCommand(updateSql);
+                                    bulkExecutor.ExecuteCommand(updateSql);
                                 }
 
                                 i = j - 1;
@@ -776,7 +776,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                                 {
                                     string updateSql = $"UPDATE [{dataTableName}] SET RIG_STATE=28, RIG_STATE_COLOR={moveOutColor} " +
                                                        $"WHERE [{indexColName}] >= {startIdx} AND [{indexColName}] <= {endIdx};";
-                                    //bulkExecutor.ExecuteCommand(updateSql);
+                                    bulkExecutor.ExecuteCommand(updateSql);
                                 }
 
                                 i = j - 1;
@@ -786,7 +786,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     }
                 }
 
-               // bulkExecutor.FlushBuffer();
+                bulkExecutor.FlushBuffer();
             }
             catch (Exception ex)
             {
@@ -941,7 +941,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
             rigState.enumDirection bitDirection = rigState.enumDirection.Stall;
             rigState.enumDirection lastBitDirection = rigState.enumDirection.Stall;
             rigState.enumDirection currentBitDirection = rigState.enumDirection.Stall;
-           // var objBulkExecutor = new BulkCommandExecutor(objDataService, 500);
+            var objBulkExecutor = new BulkCommandExecutor(objDataService, 500);
 
             try
             {
@@ -1678,14 +1678,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                             bool isWithinDepthRange = objRigState.autoSlideSetupList == null || objRigState.autoSlideSetupList.Count <= 0;
                             if (objRigState.autoSlideSetupList != null)
                             {
-                                //foreach (AutoSlideSettings objItem in objRigState.autoSlideSetupList.Values)
-                                //{
-                                //    if (lnDepth >= objItem.FromDepth && lnDepth <= objItem.ToDepth)
-                                //    {
-                                //        isWithinDepthRange = true;
-                                //        break;
-                                //    }
-                                //}
+                                foreach (AutoSlideSettings objItem in objRigState.autoSlideSetupList.Values)
+                                {
+                                    if (lnDepth >= objItem.FromDepth && lnDepth <= objItem.ToDepth)
+                                    {
+                                        isWithinDepthRange = true;
+                                        break;
+                                    }
+                                }
                             }
                             if (isWithinDepthRange)
                             {
@@ -1775,17 +1775,17 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         ? $"[{indexColName}]={dataIndexVal}"
                         : (objData.Columns.Contains("DATETIME") ? $"DATETIME='{FormatDateForDb(dtDateTime)}'" : $"rowid={dataRowIndex + 1}");
                     string updateSql = $"UPDATE [{dataTableName}] SET RIG_STATE={currentRigState}, RIG_STATE_COLOR={rigColor} WHERE {whereClause};";
-                    //objBulkExecutor.ExecuteCommand(updateSql);
+                    objBulkExecutor.ExecuteCommand(updateSql);
 
                     rowIndex++;
                 }
 
                 // ''Flush the buffer
-                //if (!objBulkExecutor.FlushBuffer())
-                //{
-                //    LastError = objBulkExecutor.LastError;
-                //    return false;
-                //}
+                if (!objBulkExecutor.FlushBuffer())
+                {
+                    LastError = objBulkExecutor.LastError;
+                    return false;
+                }
                 return true;
             }
             catch (Exception ex)
