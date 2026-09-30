@@ -2274,7 +2274,7 @@ public class WellDataRepository : IWellDataRepository
         };
     }
 
-    public async Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 5000)
+    public async Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 1000)
     {
         if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(tableName))
             return new DataTable();

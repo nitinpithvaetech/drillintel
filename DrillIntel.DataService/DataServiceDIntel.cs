@@ -403,7 +403,15 @@ namespace DrillIntel.Data
                 AddParameters(cmd, parameters);
                 using var reader = cmd.ExecuteReader();
                 var table = new DataTable();
-                table.Load(reader);
+                table.BeginLoadData();
+                try
+                {
+                    table.Load(reader);
+                }
+                finally
+                {
+                    table.EndLoadData();
+                }
                 return table;
             }, new DataTable());
 
@@ -454,7 +462,15 @@ namespace DrillIntel.Data
             AddParameters(cmd, parameters);
             using var reader = await cmd.ExecuteReaderAsync(ct);
             var table = new DataTable();
-            table.Load(reader);
+            table.BeginLoadData();
+            try
+            {
+                table.Load(reader);
+            }
+            finally
+            {
+                table.EndLoadData();
+            }
             return table;
         }
 

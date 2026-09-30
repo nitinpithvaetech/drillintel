@@ -77,6 +77,6 @@ public interface IWellDataRepository
         IProgress<ImportProgressReport>? progress = null,
         CancellationToken cancellationToken = default);
 
-    Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 5000);
+    Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 1000);
 }
 

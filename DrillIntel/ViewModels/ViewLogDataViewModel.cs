@@ -44,16 +44,18 @@ public partial class ViewLogDataViewModel : ObservableObject
 
     public ViewLogDataViewModel(DataTable table, string logType, string logName, string tableName, string wellName)
     {
-        _rawTable = table;
+        _rawTable = table ?? new DataTable();
         LogType = logType;
         LogName = logName;
         TableName = tableName;
         WellName = wellName;
         Title = $"{logType} Data — {logName}";
-        RecordCount = table.Rows.Count;
-        ColumnCount = table.Columns.Count;
-        RecordCountText = $"{RecordCount:N0} records • {ColumnCount} channels";
-        DataView = table.DefaultView;
+        RecordCount = _rawTable.Rows.Count;
+        ColumnCount = _rawTable.Columns.Count;
+        RecordCountText = RecordCount >= 1000
+            ? $"First {RecordCount:N0} records • {ColumnCount} channels"
+            : $"{RecordCount:N0} records • {ColumnCount} channels";
+        DataView = _rawTable.DefaultView;
     }
 
     [RelayCommand]
@@ -70,7 +72,9 @@ public partial class ViewLogDataViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(value))
             {
                 DataView.RowFilter = string.Empty;
-                RecordCountText = $"{RecordCount:N0} records • {ColumnCount} channels";
+                RecordCountText = RecordCount >= 1000
+                    ? $"First {RecordCount:N0} records • {ColumnCount} channels"
+                    : $"{RecordCount:N0} records • {ColumnCount} channels";
             }
             else
             {

@@ -422,22 +422,13 @@ public partial class DashboardViewModel : ObservableObject
 
         if (isDepthLog)
         {
-            var depthLogs = await _repository.GetDepthLogsAsync();
-            DepthLog? targetLog = null;
-            if (node.Tag is DepthLog directDl)
+            DepthLog? targetLog = node.Tag as DepthLog
+                ?? SelectedNode?.Tag as DepthLog
+                ?? (node.Children.Count > 0 ? node.Children[0].Tag as DepthLog : null);
+
+            if (targetLog == null)
             {
-                targetLog = directDl;
-            }
-            else if (SelectedNode?.Tag is DepthLog selectedDl)
-            {
-                targetLog = selectedDl;
-            }
-            else if (node.Children.Count > 0 && node.Children[0].Tag is DepthLog firstChildDl)
-            {
-                targetLog = firstChildDl;
-            }
-            else
-            {
+                var depthLogs = await _repository.GetDepthLogsAsync();
                 targetLog = depthLogs.FirstOrDefault();
             }
 
@@ -453,22 +444,13 @@ public partial class DashboardViewModel : ObservableObject
         }
         else if (isTimeLog)
         {
-            var timeLogs = await _repository.GetTimeLogsAsync();
-            TimeLog? targetLog = null;
-            if (node.Tag is TimeLog directTl)
+            TimeLog? targetLog = node.Tag as TimeLog
+                ?? SelectedNode?.Tag as TimeLog
+                ?? (node.Children.Count > 0 ? node.Children[0].Tag as TimeLog : null);
+
+            if (targetLog == null)
             {
-                targetLog = directTl;
-            }
-            else if (SelectedNode?.Tag is TimeLog selectedTl)
-            {
-                targetLog = selectedTl;
-            }
-            else if (node.Children.Count > 0 && node.Children[0].Tag is TimeLog firstChildTl)
-            {
-                targetLog = firstChildTl;
-            }
-            else
-            {
+                var timeLogs = await _repository.GetTimeLogsAsync();
                 targetLog = timeLogs.FirstOrDefault();
             }
 
@@ -500,7 +482,7 @@ public partial class DashboardViewModel : ObservableObject
             return;
         }
 
-        var dataTable = await _repository.GetLogDataTableAsync(targetTableName);
+        var dataTable = await _repository.GetLogDataTableAsync(targetTableName, limitRows: 1000);
         LastLoadedLogData = dataTable;
         LastLoadedLogType = logType;
         LastLoadedLogName = logName;
