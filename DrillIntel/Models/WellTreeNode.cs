@@ -16,14 +16,20 @@ public partial class WellTreeNode : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDepthLogNode))]
     [NotifyPropertyChangedFor(nameof(IsTimeLogNode))]
+    [NotifyPropertyChangedFor(nameof(IsWellNode))]
+    [NotifyPropertyChangedFor(nameof(IsLogNode))]
     [NotifyPropertyChangedFor(nameof(HasContextMenu))]
     private string _name = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDepthLogNode))]
     [NotifyPropertyChangedFor(nameof(IsTimeLogNode))]
+    [NotifyPropertyChangedFor(nameof(IsWellNode))]
+    [NotifyPropertyChangedFor(nameof(IsLogNode))]
     [NotifyPropertyChangedFor(nameof(HasContextMenu))]
     private WellTreeNodeType _type;
+
+    public bool IsWellNode => Type == WellTreeNodeType.Well;
 
     public bool IsDepthLogNode =>
         (Type == WellTreeNodeType.Folder && Name.Equals("Depthlogs", System.StringComparison.OrdinalIgnoreCase)) ||
@@ -33,7 +39,9 @@ public partial class WellTreeNode : ObservableObject
         (Type == WellTreeNodeType.Folder && Name.Equals("Timelogs", System.StringComparison.OrdinalIgnoreCase)) ||
         Type == WellTreeNodeType.TimeLog;
 
-    public bool HasContextMenu => IsDepthLogNode || IsTimeLogNode;
+    public bool IsLogNode => IsDepthLogNode || IsTimeLogNode;
+
+    public bool HasContextMenu => IsWellNode || IsDepthLogNode || IsTimeLogNode;
 
     [ObservableProperty]
     private string _iconKind = "File";

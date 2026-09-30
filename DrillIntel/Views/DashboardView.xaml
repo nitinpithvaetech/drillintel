@@ -18,16 +18,18 @@
         <converters:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
 
         <ContextMenu x:Key="TreeItemContextMenu" x:Shared="False">
-            <MenuItem Header="Edit Object" 
-                      Command="{Binding PlacementTarget.Tag.EditObjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+            <MenuItem Header="Edit Well" 
+                      Command="{Binding PlacementTarget.Tag.EditWellCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.Type, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Well}">
                 <MenuItem.Icon>
                     <materialDesign:PackIcon Kind="PencilOutline" Width="18" Height="18" Foreground="#2196F3" />
                 </MenuItem.Icon>
             </MenuItem>
             <MenuItem Header="View Data" 
                       Command="{Binding PlacementTarget.Tag.ViewDataCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsLogNode, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}">
                 <MenuItem.Icon>
                     <materialDesign:PackIcon Kind="TableEye" Width="18" Height="18" Foreground="#4CAF50" />
                 </MenuItem.Icon>

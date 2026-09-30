@@ -4,12 +4,14 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Dapper;
+using DrillIntel.Converters;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Models;
 using DrillIntel.Projects;
 using DrillIntel.Services;
 using DrillIntel.ViewModels;
+using System.Windows;
 using Xunit;
 
 namespace DrillIntel.Tests;
@@ -329,7 +331,7 @@ public class WellTreeImportDisplayRulesTests : IDisposable
     }
 
     [Fact]
-    public async Task ContextMenu_AppearsOnlyOnDepthlogsAndTimelogsNodes()
+    public async Task ContextMenu_AppearsOnWellNodeAndLogNodes()
     {
         await _repo.EnsureWellAsync("Etech4");
 
@@ -356,29 +358,151 @@ public class WellTreeImportDisplayRulesTests : IDisposable
             var depthFolder = wellNode.Children.First(c => c.Name == "Depthlogs");
             var depthChild = depthFolder.Children[0];
 
-            // Validation: Well node MUST NOT have context menu
-            Assert.False(wellNode.HasContextMenu);
+            // Validation: Well node MUST have context menu (for Edit Well) and is marked as Well node
+            Assert.True(wellNode.HasContextMenu);
+            Assert.True(wellNode.IsWellNode);
             Assert.False(wellNode.IsDepthLogNode);
             Assert.False(wellNode.IsTimeLogNode);
+            Assert.False(wellNode.IsLogNode);
 
-            // Validation: Timelogs node MUST have context menu
+            // Validation: Timelogs node MUST have context menu, is a log node, but not a well node
             Assert.True(timeFolder.HasContextMenu);
             Assert.True(timeFolder.IsTimeLogNode);
+            Assert.True(timeFolder.IsLogNode);
+            Assert.False(timeFolder.IsWellNode);
             Assert.False(timeFolder.IsDepthLogNode);
 
-            // Validation: Depthlogs node MUST have context menu
+            // Validation: Depthlogs node MUST have context menu, is a log node, but not a well node
             Assert.True(depthFolder.HasContextMenu);
             Assert.True(depthFolder.IsDepthLogNode);
+            Assert.True(depthFolder.IsLogNode);
+            Assert.False(depthFolder.IsWellNode);
             Assert.False(depthFolder.IsTimeLogNode);
 
-            // Validation: DepthLog item child node MUST have context menu
+            // Validation: DepthLog item child node MUST have context menu, is a log node, but not a well node
             Assert.True(depthChild.HasContextMenu);
             Assert.True(depthChild.IsDepthLogNode);
+            Assert.True(depthChild.IsLogNode);
+            Assert.False(depthChild.IsWellNode);
         }
         finally
         {
             if (File.Exists(depthCsv)) File.Delete(depthCsv);
         }
+    }
+
+    [Fact]
+    public async Task ContextMenu_EditWell_VisibilityRules_DisplaysOnlyOnRootWellNode_AndHiddenOnChildNodes()
+    {
+        await _repo.EnsureWellAsync("TestWell", "TestField");
+
+        // Add a TimeLog and DepthLog
+        var timeLog = new TimeLog
+        {
+            ObjectID = Guid.NewGuid().ToString(),
+            nameLog = "Run1_Time",
+            nameWell = "TestWell",
+            __WellName = "TestWell"
+        };
+        await _repo.LogTimeLogAsync(timeLog);
+
+        string depthCsv = Path.Combine(Path.GetTempPath(), $"cm_rules_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(depthCsv, "DEPTH,GR\n100.0,50.0\n");
+            var options = new DepthLogImportOptions
+            {
+                LogName = "Run1_Depth",
+                WellName = "TestWell",
+                ColumnHeadingRow = 1,
+                ImportFromRow = 2,
+                ColumnMappings = new Dictionary<string, string> { ["DEPTH"] = "DEPTH" }
+            };
+            await _depthLogService.ImportFromFileAsync(depthCsv, options);
+
+            var dashboard = new DashboardViewModel(_session, _repo);
+            await dashboard.LoadDataAsync();
+
+            var wellNode = dashboard.WellTree[0];
+            var timeFolder = wellNode.Children.First(c => c.Name == "Timelogs");
+            var depthFolder = wellNode.Children.First(c => c.Name == "Depthlogs");
+            var timeChild = timeFolder.Children[0];
+            var depthChild = depthFolder.Children[0];
+
+            var enumConverter = new EnumToVisibilityConverter();
+            var boolConverter = new BoolToVisibilityConverter();
+
+            // 1. "Edit Well" menu item visibility: ConverterParameter="Well"
+            // ROOT WELL NODE -> MUST BE Visible
+            Assert.Equal(Visibility.Visible, enumConverter.Convert(wellNode.Type, typeof(Visibility), "Well", System.Globalization.CultureInfo.InvariantCulture));
+
+            // CHILD NODES (Folders & Items) -> MUST BE Collapsed
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(timeFolder.Type, typeof(Visibility), "Well", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(depthFolder.Type, typeof(Visibility), "Well", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(timeChild.Type, typeof(Visibility), "Well", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(depthChild.Type, typeof(Visibility), "Well", System.Globalization.CultureInfo.InvariantCulture));
+
+            // 2. "View Data" menu item visibility: Bound to IsLogNode
+            // ROOT WELL NODE -> MUST BE Collapsed
+            Assert.Equal(Visibility.Collapsed, boolConverter.Convert(wellNode.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+
+            // CHILD NODES -> MUST BE Visible
+            Assert.Equal(Visibility.Visible, boolConverter.Convert(timeFolder.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Visible, boolConverter.Convert(depthFolder.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Visible, boolConverter.Convert(timeChild.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Visible, boolConverter.Convert(depthChild.IsLogNode, typeof(Visibility), null!, System.Globalization.CultureInfo.InvariantCulture));
+
+            // 3. "Recalculate Rig State" menu item visibility: ConverterParameter="TimeLog"
+            // ONLY TimeLog item child node -> Visible
+            Assert.Equal(Visibility.Visible, enumConverter.Convert(timeChild.Type, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture));
+            // All others -> Collapsed
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(wellNode.Type, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(timeFolder.Type, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(depthFolder.Type, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(Visibility.Collapsed, enumConverter.Convert(depthChild.Type, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            if (File.Exists(depthCsv)) File.Delete(depthCsv);
+        }
+    }
+
+    [Fact]
+    public async Task EditWellCommand_OnWellNode_OpensDialogAndSavesWell()
+    {
+        await _repo.EnsureWellAsync("WellAlpha", "FieldAlpha");
+
+        var dashboard = new DashboardViewModel(_session, _repo);
+        await dashboard.LoadDataAsync();
+
+        var wellNode = dashboard.WellTree[0];
+
+        // Simulate user clicking "Edit Well" on root well node
+        bool dialogOpened = false;
+        dashboard.OpenEditWellDialogHandler = (vm) =>
+        {
+            dialogOpened = true;
+            Assert.Equal("WellAlpha", vm.WellName);
+            Assert.Equal("FieldAlpha", vm.FieldName);
+
+            vm.OperatorName = "Alpha Petroleum";
+            vm.Country = "USA";
+            vm.Status = "Producing";
+            vm.Comments = "Edited via Edit Well context menu";
+            return true; // Click Save
+        };
+
+        await dashboard.EditWellCommand.ExecuteAsync(wellNode);
+
+        Assert.True(dialogOpened);
+
+        // Verify changes were persisted in the database
+        var savedWell = await _repo.GetProjectWellAsync();
+        Assert.NotNull(savedWell);
+        Assert.Equal("Alpha Petroleum", savedWell.operatorName);
+        Assert.Equal("USA", savedWell.country);
+        Assert.Equal("Producing", savedWell.statusWell);
+        Assert.Equal("Edited via Edit Well context menu", savedWell.Comments);
     }
 
     [Fact]

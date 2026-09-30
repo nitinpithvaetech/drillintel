@@ -47,7 +47,10 @@
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
 
-                    <Fluent:Button Header="Well Edtor" Command="{Binding IsProjectOpen}">
+                    <Fluent:Button Header="Edit Well" 
+                                   Command="{Binding OpenWellEditorCommand}" 
+                                   IsEnabled="{Binding IsProjectOpen}"
+                                   ToolTip="Edit Well Information">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="Edit" Foreground="#4CAF50" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon> 
@@ -71,7 +74,9 @@
                             </DataTemplate>
                         </Fluent:DropDownButton.ItemTemplate>
                     </Fluent:DropDownButton>
-                    <Fluent:Button Header="Close Project" Command="{Binding CloseProjectCommand}">
+                    <Fluent:Button Header="Close Project" 
+                                   Command="{Binding CloseProjectCommand}"
+                                   IsEnabled="{Binding IsProjectOpen}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FolderRemove" Foreground="#E91E63" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>

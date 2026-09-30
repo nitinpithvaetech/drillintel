@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Models;
 using DrillIntel.Projects;
@@ -7,6 +8,7 @@ using DrillIntel.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace DrillIntel.ViewModels;
@@ -78,39 +80,89 @@ public partial class MainViewModel : ObservableObject
         _projectService.OpenProject(project.FilePath);
     }
 
-    private void OpenWellEditor(RecentProject? project)
+    public WellInformationViewModel? LastEditWellViewModel { get; private set; }
+    public Func<WellInformationViewModel, bool?>? OpenEditWellDialogHandler { get; set; }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenWellEditor()
     {
-        //if (_session?.IsProjectOpen != true ) return;
-        //var currentWell = await _repository.GetProjectWellAsync();
-        //var vm = new WellInformationViewModel(currentWell ?? new Well());
-        //LastEditWellViewModel = vm;
+        if (!_session.IsProjectOpen) return;
 
-        //bool? result = false;
-        //if (OpenEditWellDialogHandler != null)
-        //{
-        //    result = OpenEditWellDialogHandler(vm);
-        //}
-        //else if (System.Windows.Application.Current != null)
-        //{
-        //    var window = new DrillIntel.Views.WellInformationWindow
-        //    {
-        //        DataContext = vm,
-        //        Owner = System.Windows.Application.Current?.MainWindow
-        //    };
-        //    result = window.ShowDialog();
-        //}
+        var repo = new WellDataRepository(_session);
+        var currentWell = await repo.GetProjectWellAsync();
+        WellInformationViewModel vm;
+        if (currentWell != null)
+        {
+            vm = new WellInformationViewModel(currentWell);
+        }
+        else
+        {
+            string suggestedWellName = _session.ProjectName ?? "New Well";
+            var timeLogs = await repo.GetTimeLogsAsync();
+            var depthLogs = await repo.GetDepthLogsAsync();
+            suggestedWellName = timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.nameWell))?.nameWell
+                             ?? timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.__WellName))?.__WellName
+                             ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.nameWell))?.nameWell
+                             ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.__WellName))?.__WellName
+                             ?? suggestedWellName;
+            vm = new WellInformationViewModel(suggestedWellName, "General Field");
+        }
+        LastEditWellViewModel = vm;
 
-        //if (result == true)
-        //{
-        //    var wellToSave = currentWell ?? new Well();
-        //    vm.ApplyToWell(wellToSave);
-        //    if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
-        //    {
-        //        wellToSave.ObjectID = Guid.NewGuid().ToString();
-        //    }
-        //    await _repository.SaveProjectWellAsync(wellToSave);
-        //    await RefreshAsync();
-        //}
+        bool? result = false;
+        if (OpenEditWellDialogHandler != null)
+        {
+            result = OpenEditWellDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new DrillIntel.Views.WellInformationWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            var wellToSave = currentWell ?? new Well();
+            vm.ApplyToWell(wellToSave);
+            if (string.IsNullOrWhiteSpace(wellToSave.ObjectID))
+            {
+                wellToSave.ObjectID = Guid.NewGuid().ToString();
+            }
+            if (wellToSave.wellbores.Count == 0)
+            {
+                var wellboreId = Guid.NewGuid().ToString();
+                var wellbore = new Wellbore
+                {
+                    ObjectID = wellboreId,
+                    WellID = wellToSave.ObjectID,
+                    nameWell = wellToSave.name,
+                    name = wellToSave.name
+                };
+                wellToSave.wellbores[wellboreId] = wellbore;
+                wellToSave.__timeLogWellboreID = wellboreId;
+            }
+            await repo.SaveProjectWellAsync(wellToSave);
+            if (!string.IsNullOrWhiteSpace(_session.ProjectFilePath))
+            {
+                _recentProjectsService?.AddOrUpdate(_session.ProjectFilePath, wellToSave.name, wellToSave.field);
+            }
+            _session.NotifyDataChanged();
+
+            if (CurrentViewModel is DashboardViewModel dashboard)
+            {
+                await dashboard.RefreshAsync();
+            }
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task EditWell()
+    {
+        await OpenWellEditor();
     }
 
     private void OnProjectStateChanged(object? sender, EventArgs e)
@@ -123,6 +175,20 @@ public partial class MainViewModel : ObservableObject
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenWellEditorCommand.NotifyCanExecuteChanged();
+        EditWellCommand.NotifyCanExecuteChanged();
+
+        if (Application.Current?.Dispatcher != null)
+        {
+            if (Application.Current.Dispatcher.CheckAccess())
+            {
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            }
+            else
+            {
+                Application.Current.Dispatcher.InvokeAsync(System.Windows.Input.CommandManager.InvalidateRequerySuggested);
+            }
+        }
 
         if (_session.IsProjectOpen)
         {

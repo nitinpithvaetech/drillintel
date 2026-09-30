@@ -338,7 +338,23 @@ public partial class DashboardViewModel : ObservableObject
     {
         if (_session?.IsProjectOpen != true || _repository == null) return;
         var currentWell = await _repository.GetProjectWellAsync();
-        var vm = new WellInformationViewModel(currentWell ?? new Well());
+        WellInformationViewModel vm;
+        if (currentWell != null)
+        {
+            vm = new WellInformationViewModel(currentWell);
+        }
+        else
+        {
+            string suggestedWellName = _session.ProjectName ?? "New Well";
+            var timeLogs = await _repository.GetTimeLogsAsync();
+            var depthLogs = await _repository.GetDepthLogsAsync();
+            suggestedWellName = timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.nameWell))?.nameWell
+                             ?? timeLogs.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.__WellName))?.__WellName
+                             ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.nameWell))?.nameWell
+                             ?? depthLogs.FirstOrDefault(d => !string.IsNullOrWhiteSpace(d.__WellName))?.__WellName
+                             ?? suggestedWellName;
+            vm = new WellInformationViewModel(suggestedWellName, "General Field");
+        }
         LastEditWellViewModel = vm;
 
         bool? result = false;
@@ -364,15 +380,29 @@ public partial class DashboardViewModel : ObservableObject
             {
                 wellToSave.ObjectID = Guid.NewGuid().ToString();
             }
+            if (wellToSave.wellbores.Count == 0)
+            {
+                var wellboreId = Guid.NewGuid().ToString();
+                var wellbore = new Wellbore
+                {
+                    ObjectID = wellboreId,
+                    WellID = wellToSave.ObjectID,
+                    nameWell = wellToSave.name,
+                    name = wellToSave.name
+                };
+                wellToSave.wellbores[wellboreId] = wellbore;
+                wellToSave.__timeLogWellboreID = wellboreId;
+            }
             await _repository.SaveProjectWellAsync(wellToSave);
+            _session?.NotifyDataChanged();
             await RefreshAsync();
         }
     }
 
     [RelayCommand]
-    private async Task EditWellAsync()
+    public async Task EditWellAsync(WellTreeNode? targetNode = null)
     {
-        await EditObjectAsync();
+        await EditObjectAsync(targetNode);
     }
 
     [RelayCommand]

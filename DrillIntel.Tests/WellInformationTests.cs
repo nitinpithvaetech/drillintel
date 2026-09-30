@@ -1,5 +1,9 @@
 using System;
+using System.IO;
+using System.Threading.Tasks;
+using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Projects;
 using DrillIntel.ViewModels;
 using Xunit;
 
@@ -91,6 +95,61 @@ public class WellInformationTests
 
         Assert.Equal("Discovery Well #1 - Updated", well.name);
         Assert.Equal("North Sea", well.field);
+    }
+
+    [Fact]
+    public async Task MainViewModel_OpenWellEditorCommand_CanExecute_And_SavesWell()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"main_well_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+
+        try
+        {
+            var session = new ProjectSession();
+            var dummyProjectService = new DummyProjectService();
+            var mainVm = new MainViewModel(session, dummyProjectService);
+
+            // Initially no project open
+            Assert.False(mainVm.OpenWellEditorCommand.CanExecute(null));
+            Assert.False(mainVm.EditWellCommand.CanExecute(null));
+
+            // Load project
+            session.Load(tempDb);
+            Assert.True(mainVm.OpenWellEditorCommand.CanExecute(null));
+            Assert.True(mainVm.EditWellCommand.CanExecute(null));
+
+            // Setup dialog handler
+            mainVm.OpenEditWellDialogHandler = vm =>
+            {
+                vm.WellName = "Alpha Drill Site #1";
+                vm.FieldName = "Deep Sea Field";
+                return true;
+            };
+
+            await mainVm.OpenWellEditorCommand.ExecuteAsync(null);
+
+            var repo = new WellDataRepository(session);
+            var savedWell = await repo.GetProjectWellAsync();
+            Assert.NotNull(savedWell);
+            Assert.Equal("Alpha Drill Site #1", savedWell.name);
+            Assert.Equal("Deep Sea Field", savedWell.field);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    private class DummyProjectService : IProjectService
+    {
+        public bool CreateNewProject() => true;
+        public Task<bool> CreateNewProjectAsync() => Task.FromResult(true);
+        public bool OpenProject() => true;
+        public bool OpenProject(string filePath) => true;
     }
 }
 
