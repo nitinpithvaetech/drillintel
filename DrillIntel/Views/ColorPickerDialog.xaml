@@ -1,0 +1,248 @@
+<Window x:Class="DrillIntel.Views.ColorPickerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        mc:Ignorable="d"
+        Title="Select Color"
+        Height="600" Width="500"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{DynamicResource MaterialDesignFont}">
+
+    <Window.Resources>
+        <!-- Style for quick palette buttons -->
+        <Style x:Key="PaletteSwatchStyle" TargetType="Button">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="2,3" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#A0A0A0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="SwatchBorder" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SwatchBorder" Property="BorderBrush" Value="#212121" />
+                                <Setter TargetName="SwatchBorder" Property="BorderThickness" Value="2" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <!-- 0: Header -->
+            <RowDefinition Height="Auto" />
+            <!-- 1: Live Preview -->
+            <RowDefinition Height="Auto" />
+            <!-- 2: Palette Swatches -->
+            <RowDefinition Height="Auto" />
+            <!-- 3: RGB & Hex Tuning -->
+            <RowDefinition Height="*" />
+            <!-- 4: Action Buttons -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 0: Header Banner -->
+        <Border Grid.Row="0" Background="#F4F3F8" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <materialDesign:PackIcon Grid.Column="0" Kind="Palette" Width="30" Height="30" Foreground="{DynamicResource PrimaryHueMidBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Select Rig State Color" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" />
+                    <TextBlock Text="Choose a preset palette color or customize RGB and Hex values." Foreground="#616161" FontSize="11" Margin="0,2,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 1: Live Preview & Comparison Card -->
+        <materialDesign:Card Grid.Row="1" UniformCornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Original Color -->
+                <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                    <TextBlock Text="Original" FontSize="11" Foreground="Gray" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                    <Border x:Name="BorderOriginal" Width="80" Height="32" CornerRadius="4" BorderBrush="#888888" BorderThickness="1"
+                            Cursor="Hand" ToolTip="Click to restore original color" MouseLeftButtonDown="RevertToOriginal_Click">
+                        <Border.Background>
+                            <SolidColorBrush x:Name="BrushOriginal" Color="#000000" />
+                        </Border.Background>
+                    </Border>
+                    <TextBlock x:Name="TxtOriginalHex" Text="#000000" FontSize="11" FontFamily="Consolas" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- Arrow -->
+                <materialDesign:PackIcon Grid.Column="1" Kind="ArrowRightBold" Width="22" Height="22" Foreground="#888888" VerticalAlignment="Center" Margin="10,0" />
+
+                <!-- Selected Color -->
+                <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                    <TextBlock Text="Selected" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryHueMidBrush}" HorizontalAlignment="Center" Margin="0,0,0,4" />
+                    <Border x:Name="BorderSelected" Width="80" Height="32" CornerRadius="4" BorderBrush="#333333" BorderThickness="2">
+                        <Border.Background>
+                            <SolidColorBrush x:Name="BrushSelected" Color="#000000" />
+                        </Border.Background>
+                    </Border>
+                    <TextBlock x:Name="TxtSelectedHex" Text="#000000" FontSize="12" FontWeight="Bold" FontFamily="Consolas" Foreground="{DynamicResource PrimaryHueMidBrush}" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                </StackPanel>
+
+                <!-- Revert Button -->
+                <Button Grid.Column="3" Content="Revert" 
+                        Style="{DynamicResource MaterialDesignOutlinedButton}" 
+                        Height="28" Padding="8,0" 
+                        VerticalAlignment="Center" Margin="10,0,0,0" 
+                        Click="RevertToOriginal_Click" 
+                        ToolTip="Revert to original color" />
+            </Grid>
+        </materialDesign:Card>
+
+        <!-- 2: Palette Swatches Group -->
+        <GroupBox Grid.Row="2" Header="Standard Oilfield Palettes" materialDesign:ElevationAssist.Elevation="Dp1" Padding="8" Margin="0,0,0,12">
+            <UniformGrid Columns="8" Rows="5">
+                <!-- Row 1: Greens (Drilling, Slide, Rotation) -->
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00FF00" Tag="#00FF00" ToolTip="Lime Green (#00FF00)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00E676" Tag="#00E676" ToolTip="Spring Green (#00E676)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00C853" Tag="#00C853" ToolTip="Emerald (#00C853)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#2E7D32" Tag="#2E7D32" ToolTip="Dark Green (#2E7D32)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#1B5E20" Tag="#1B5E20" ToolTip="Forest Green (#1B5E20)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#004D40" Tag="#004D40" ToolTip="Dark Teal (#004D40)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00BFA5" Tag="#00BFA5" ToolTip="Teal Accent (#00BFA5)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#1DE9B6" Tag="#1DE9B6" ToolTip="Aqua (#1DE9B6)" Click="PaletteSwatch_Click" />
+
+                <!-- Row 2: Cyans & Blues (Trips, Ream, Circulation) -->
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00FFFF" Tag="#00FFFF" ToolTip="Cyan (#00FFFF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00E5FF" Tag="#00E5FF" ToolTip="Sky Blue (#00E5FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#00B0FF" Tag="#00B0FF" ToolTip="Light Blue (#00B0FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#2979FF" Tag="#2979FF" ToolTip="Electric Blue (#2979FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#0000FF" Tag="#0000FF" ToolTip="Pure Blue (#0000FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#1565C0" Tag="#1565C0" ToolTip="Cobalt (#1565C0)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#0D47A1" Tag="#0D47A1" ToolTip="Deep Blue (#0D47A1)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#1A237E" Tag="#1A237E" ToolTip="Midnight Navy (#1A237E)" Click="PaletteSwatch_Click" />
+
+                <!-- Row 3: Purples & Magentas (Trip In, Rotate In, Packed) -->
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#8000FF" Tag="#8000FF" ToolTip="Purple (#8000FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#7C4DFF" Tag="#7C4DFF" ToolTip="Deep Purple (#7C4DFF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#651FFF" Tag="#651FFF" ToolTip="Indigo Accent (#651FFF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#AA00FF" Tag="#AA00FF" ToolTip="Violet (#AA00FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#D500F9" Tag="#D500F9" ToolTip="Magenta Accent (#D500F9)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#E040FB" Tag="#E040FB" ToolTip="Fuchsia (#E040FB)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF00FF" Tag="#FF00FF" ToolTip="Pure Magenta (#FF00FF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#C2185B" Tag="#C2185B" ToolTip="Berry Pink (#C2185B)" Click="PaletteSwatch_Click" />
+
+                <!-- Row 4: Reds & Oranges (Warnings, Slips, Packed Off) -->
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF0000" Tag="#FF0000" ToolTip="Pure Red (#FF0000)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#D50000" Tag="#D50000" ToolTip="Crimson Red (#D50000)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#B71C1C" Tag="#B71C1C" ToolTip="Dark Red (#B71C1C)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF1744" Tag="#FF1744" ToolTip="Vibrant Coral (#FF1744)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF5722" Tag="#FF5722" ToolTip="Deep Orange (#FF5722)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF6D00" Tag="#FF6D00" ToolTip="Orange (#FF6D00)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FF9100" Tag="#FF9100" ToolTip="Amber (#FF9100)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FFAB00" Tag="#FFAB00" ToolTip="Gold Orange (#FFAB00)" Click="PaletteSwatch_Click" />
+
+                <!-- Row 5: Yellows, Neutrals & Monochromes (Air Drilling, Slips, Stationary) -->
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FFD600" Tag="#FFD600" ToolTip="Yellow Amber (#FFD600)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FFFF00" Tag="#FFFF00" ToolTip="Pure Yellow (#FFFF00)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#AEEA00" Tag="#AEEA00" ToolTip="Chartreuse (#AEEA00)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#795548" Tag="#795548" ToolTip="Brown (#795548)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#FFFFFF" Tag="#FFFFFF" ToolTip="White (#FFFFFF)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#9E9E9E" Tag="#9E9E9E" ToolTip="Light Gray (#9E9E9E)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#757575" Tag="#757575" ToolTip="Medium Gray (#757575)" Click="PaletteSwatch_Click" />
+                <Button Style="{StaticResource PaletteSwatchStyle}" Background="#000000" Tag="#000000" ToolTip="Black (#000000)" Click="PaletteSwatch_Click" />
+            </UniformGrid>
+        </GroupBox>
+
+        <!-- 3: RGB & Hex Tuning Group -->
+        <GroupBox Grid.Row="3" Header="Custom RGB &amp; Hex" materialDesign:ElevationAssist.Elevation="Dp1" Padding="10,8" Margin="0,0,0,14">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="65" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="55" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Red Slider -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Red (R):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#D32F2F" FontSize="12" />
+                <Slider Grid.Row="0" Grid.Column="1" x:Name="SliderR" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16" 
+                        VerticalAlignment="Center" Margin="8,0" ValueChanged="Slider_ValueChanged" />
+                <TextBox Grid.Row="0" Grid.Column="2" x:Name="TxtR" Width="48" HorizontalAlignment="Right" VerticalAlignment="Center" 
+                         TextAlignment="Center" MaxLength="3" TextChanged="RgbText_TextChanged" FontSize="12" />
+
+                <!-- Green Slider -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Green (G):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#388E3C" FontSize="12" Margin="0,6,0,0" />
+                <Slider Grid.Row="1" Grid.Column="1" x:Name="SliderG" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16" 
+                        VerticalAlignment="Center" Margin="8,6,8,0" ValueChanged="Slider_ValueChanged" />
+                <TextBox Grid.Row="1" Grid.Column="2" x:Name="TxtG" Width="48" HorizontalAlignment="Right" VerticalAlignment="Center" 
+                         TextAlignment="Center" MaxLength="3" Margin="0,6,0,0" TextChanged="RgbText_TextChanged" FontSize="12" />
+
+                <!-- Blue Slider -->
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Blue (B):" VerticalAlignment="Center" FontWeight="SemiBold" Foreground="#1976D2" FontSize="12" Margin="0,6,0,0" />
+                <Slider Grid.Row="2" Grid.Column="1" x:Name="SliderB" Minimum="0" Maximum="255" SmallChange="1" LargeChange="16" 
+                        VerticalAlignment="Center" Margin="8,6,8,0" ValueChanged="Slider_ValueChanged" />
+                <TextBox Grid.Row="2" Grid.Column="2" x:Name="TxtB" Width="48" HorizontalAlignment="Right" VerticalAlignment="Center" 
+                         TextAlignment="Center" MaxLength="3" Margin="0,6,0,0" TextChanged="RgbText_TextChanged" FontSize="12" />
+
+                <!-- Hex Input Row -->
+                <Grid Grid.Row="3" Grid.ColumnSpan="3" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Enter Hex Code directly:" VerticalAlignment="Center" Foreground="#666666" FontSize="11" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Hex:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0" FontSize="12" />
+                        <TextBox x:Name="TxtHex" Width="90" FontFamily="Consolas" FontWeight="Bold" FontSize="13" 
+                                 VerticalAlignment="Center" TextAlignment="Center" MaxLength="7" 
+                                 TextChanged="TxtHex_TextChanged" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </GroupBox>
+
+        <!-- 4: Bottom Action Buttons -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" IsCancel="True" 
+                    Style="{DynamicResource MaterialDesignOutlinedButton}" 
+                    Width="95" Margin="0,0,10,0" Click="Cancel_Click" />
+            <Button IsDefault="True" 
+                    Style="{DynamicResource MaterialDesignRaisedButton}" 
+                    Width="130" Click="Select_Click">
+                <Button.Content>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Check" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Select Color" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button.Content>
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>

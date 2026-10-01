@@ -33,11 +33,18 @@ public partial class MainViewModel : ObservableObject
 
     public ObservableCollection<RecentProject> RecentProjects { get; } = new();
 
-    public MainViewModel(ProjectSession session, IProjectService projectService, IRecentProjectsService? recentProjectsService = null)
+    private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
+
+    public MainViewModel(
+        ProjectSession session,
+        IProjectService projectService,
+        IRecentProjectsService? recentProjectsService = null,
+        DrillIntel.Data.IAppDatabaseService? appDatabaseService = null)
     {
         _session = session;
         _projectService = projectService;
         _recentProjectsService = recentProjectsService ?? App.RecentProjectsService;
+        _appDatabaseService = appDatabaseService;
 
         _session.ProjectChanged += OnProjectStateChanged;
         _recentProjectsService.RecentProjectsChanged += OnRecentProjectsChanged;
@@ -392,7 +399,7 @@ public partial class MainViewModel : ObservableObject
         _session.Close();
     }
 
-    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    [RelayCommand]
     private void OpenRigStateMaster()
     {
         DrillIntel.Data.IDataServiceDIntel dataService;
@@ -405,15 +412,9 @@ public partial class MainViewModel : ObservableObject
         }
         else
         {
-            string appDataDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DrillIntel");
-            System.IO.Directory.CreateDirectory(appDataDir);
-            string masterDbPath = System.IO.Path.Combine(appDataDir, "MasterSetup.dintel");
-            if (!System.IO.File.Exists(masterDbPath))
-            {
-                DrillIntel.Projects.SchemaInitializer.CreateDatabase(masterDbPath);
-            }
-            dataService = new DrillIntel.Data.DataServiceDIntel(masterDbPath);
-            contextName = "Global Master Template";
+            var appDb = _appDatabaseService ?? App.AppDatabaseService;
+            dataService = appDb.GetDataService();
+            contextName = "Application Master Template (Default for New Projects)";
         }
 
         var vm = new RigStateViewModel(dataService, contextName);

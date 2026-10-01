@@ -10,6 +10,6 @@ public partial class MainWindow : RibbonWindow
     {
         InitializeComponent();
         WindowState = WindowState.Maximized;
-        DataContext = new MainViewModel(App.Session, App.ProjectService, App.RecentProjectsService);
+        DataContext = new MainViewModel(App.Session, App.ProjectService, App.RecentProjectsService, App.AppDatabaseService);
     }
 }

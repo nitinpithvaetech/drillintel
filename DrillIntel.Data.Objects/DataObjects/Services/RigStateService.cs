@@ -72,7 +72,22 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
         }
 
         /// <summary>
-        /// Loads the common rig state setup from VMX_COMMON_RIGSTATE_SETUP and VMX_COMMON_RIGSTATE_ITEMS.
+        public static string ResolveSetupTableName(IDataServiceDIntel objDataService)
+        {
+            if (objDataService != null && objDataService.TableExists("APP_RIGSTATE_COMMON_SETUP"))
+                return "APP_RIGSTATE_COMMON_SETUP";
+            return "VMX_COMMON_RIGSTATE_SETUP";
+        }
+
+        public static string ResolveItemsTableName(IDataServiceDIntel objDataService)
+        {
+            if (objDataService != null && objDataService.TableExists("APP_RIGSTATE_COMMON_ITEMS"))
+                return "APP_RIGSTATE_COMMON_ITEMS";
+            return "VMX_COMMON_RIGSTATE_ITEMS";
+        }
+
+        /// <summary>
+        /// Loads the common rig state setup from APP_RIGSTATE_COMMON_SETUP/VMX_COMMON_RIGSTATE_SETUP and ITEMS.
         /// If no setup record exists, auto-seeds default values and standard rig state items into the database.
         /// </summary>
         /// <param name="objDataService">Database service implementing IDataServiceDIntel</param>
@@ -88,7 +103,10 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     return null;
                 }
 
-                DataTable objData = objDataService.GetTable("SELECT * FROM VMX_COMMON_RIGSTATE_SETUP;");
+                string setupTable = ResolveSetupTableName(objDataService);
+                string itemsTable = ResolveItemsTableName(objDataService);
+
+                DataTable objData = objDataService.GetTable($"SELECT * FROM [{setupTable}];");
 
                 if (objData != null && objData.Rows.Count > 0)
                 {
@@ -157,8 +175,8 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     objRigStateSetup.DetectPipeMovement = DataService.checkNull(objRow["DETECT_PIPE_MOVE"], 0) == 1;
                     objRigStateSetup.PipeMovementThreshold = DataService.checkNull(objRow["PIPE_MOVE_THRESHOLD"], 0.0);
 
-                    // Load Items from VMX_COMMON_RIGSTATE_ITEMS
-                    DataTable objItemsData = objDataService.GetTable("SELECT * FROM VMX_COMMON_RIGSTATE_ITEMS;");
+                    // Load Items from items table
+                    DataTable objItemsData = objDataService.GetTable($"SELECT * FROM [{itemsTable}];");
 
                     if (objItemsData != null && objItemsData.Rows.Count > 0)
                     {
@@ -263,19 +281,22 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     return false;
                 }
 
+                string setupTable = ResolveSetupTableName(objDataService);
+                string itemsTable = ResolveItemsTableName(objDataService);
+
                 string strSQL = "";
-                if (!objDataService.IsRecordExist("SELECT * FROM VMX_COMMON_RIGSTATE_SETUP "))
+                if (!objDataService.IsRecordExist($"SELECT * FROM [{setupTable}] "))
                 {
-                    strSQL = "INSERT INTO VMX_COMMON_RIGSTATE_SETUP (UNKNOWN_NAME) VALUES('Unknown');";
+                    strSQL = $"INSERT INTO [{setupTable}] (UNKNOWN_NAME) VALUES('Unknown');";
                     objDataService.ExecuteNonQuery(strSQL);
                 }
 
-                bool hasMistCutOff = IsColumnAvailable(objDataService, "VMX_COMMON_RIGSTATE_SETUP", "MIST_CUTOFF");
+                bool hasMistCutOff = IsColumnAvailable(objDataService, setupTable, "MIST_CUTOFF");
 
                 string userName = (objDataService.UserName ?? "").Replace("'", "''");
                 string modifiedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss");
 
-                strSQL = "UPDATE VMX_COMMON_RIGSTATE_SETUP SET "
+                strSQL = $"UPDATE [{setupTable}] SET "
                     + " UNKNOWN_NAME='" + (objRigState.UnknownName ?? "").Replace("'", "''") + "',"
                     + " UNKNOWN_NUMBER=" + objRigState.UnknownNumber.ToString(CultureInfo.InvariantCulture) + ","
                     + " UNKNOWN_COLOR=" + objRigState.UnknownColor.ToString(CultureInfo.InvariantCulture) + ","
@@ -321,14 +342,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                     + " DETECT_PIPE_MOVE=" + (objRigState.DetectPipeMovement ? 1 : 0).ToString() + ","
                     + " PIPE_MOVE_THRESHOLD=" + objRigState.PipeMovementThreshold.ToString(CultureInfo.InvariantCulture) + " ";
 
-                if (IsColumnAvailable(objDataService, "VMX_COMMON_RIGSTATE_SETUP", "SELECTED_SET"))
+                if (IsColumnAvailable(objDataService, setupTable, "SELECTED_SET"))
                 {
                     strSQL += ", SELECTED_SET=" + objRigState.SelectedSet.ToString(CultureInfo.InvariantCulture) + " ";
                 }
 
                 if (objDataService.ExecuteNonQuery(strSQL))
                 {
-                    objDataService.ExecuteNonQuery("DELETE FROM VMX_COMMON_RIGSTATE_ITEMS;");
+                    objDataService.ExecuteNonQuery($"DELETE FROM [{itemsTable}];");
 
                     if (objRigState.rigStates != null)
                     {
@@ -336,7 +357,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         {
                             if (objItem == null) continue;
 
-                            string itemSQL = "INSERT INTO VMX_COMMON_RIGSTATE_ITEMS (RIG_STATE_NUMBER,RIG_STATE_NAME,RIG_STATE_COLOR,CREATED_BY,CREATED_DATE,MODIFIED_BY,MODIFIED_DATE) VALUES("
+                            string itemSQL = $"INSERT INTO [{itemsTable}] (RIG_STATE_NUMBER,RIG_STATE_NAME,RIG_STATE_COLOR,CREATED_BY,CREATED_DATE,MODIFIED_BY,MODIFIED_DATE) VALUES("
                                 + objItem.Number.ToString(CultureInfo.InvariantCulture) + ","
                                 + "'" + (objItem.Name ?? "").Replace("'", "''") + "',"
                                 + objItem.Color.ToString(CultureInfo.InvariantCulture) + ","

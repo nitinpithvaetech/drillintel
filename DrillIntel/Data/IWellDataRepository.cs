@@ -15,13 +15,10 @@ namespace DrillIntel.Data;
 public interface IWellDataRepository
 {
     Task InitializeDictionaryAsync();
+    Task<List<AppChannelMapping>> GetChannelMappingsAsync();
     Task<List<VmxCurveDictionary>> GetCurveDictionariesAsync();
     Task LogTimeLogAsync(TimeLog log);
-    Task LogVmxTimeLogAsync(TimeLog log);
-    Task LogVmxTimeLogAsync(VmxTimeLog log);
     Task LogDepthLogAsync(DepthLog log);
-    Task LogVmxDepthLogAsync(DepthLog log);
-    Task LogVmxDepthLogAsync(VmxDepthLog log);
     Task<List<TimeLog>> GetTimeLogsAsync();
     Task<List<DepthLog>> GetDepthLogsAsync();
     Task<Well?> GetProjectWellAsync();

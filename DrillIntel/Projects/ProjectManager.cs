@@ -761,11 +761,16 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
     {
         private readonly ProjectSession _session;
         private readonly DrillIntel.Services.IRecentProjectsService? _recentProjectsService;
+        private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
 
-        public ProjectService(ProjectSession session, DrillIntel.Services.IRecentProjectsService? recentProjectsService = null)
+        public ProjectService(
+            ProjectSession session,
+            DrillIntel.Services.IRecentProjectsService? recentProjectsService = null,
+            DrillIntel.Data.IAppDatabaseService? appDatabaseService = null)
         {
             _session = session;
             _recentProjectsService = recentProjectsService;
+            _appDatabaseService = appDatabaseService;
         }
 
         public bool CreateNewProject() => CreateNewProjectAsync().GetAwaiter().GetResult();
@@ -818,6 +823,9 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                 // Load project into session first (opens database connection)
                 _session.Load(dintelFilePath);
                 _recentProjectsService?.AddOrUpdate(dintelFilePath, chosenWellName, chosenField);
+
+                // Copy master RigState setup and items from Application Database into the new project
+                CopyMasterSetupToProject(_session.GetDataService());
 
                 // Save well and linked wellbore information through the repository
                 var repo = new DrillIntel.Data.WellDataRepository(_session);
@@ -913,6 +921,31 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                     System.Windows.MessageBoxImage.Error);
 
                 return false;
+            }
+        }
+
+        private void CopyMasterSetupToProject(IDataServiceDIntel projectDataService)
+        {
+            try
+            {
+                var appDbService = _appDatabaseService ?? (Application.Current != null ? App.AppDatabaseService : null);
+                if (appDbService != null)
+                {
+                    var appDataService = appDbService.GetDataService();
+                    if (appDataService != null)
+                    {
+                        var masterSetup = RigStateService.LoadCommonRigStateSetup(appDataService);
+                        if (masterSetup != null)
+                        {
+                            RigStateService.SaveCommonRigStateSetup(projectDataService, masterSetup);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: log for diagnostics so well creation proceeds even if master DB access fails
+                System.Diagnostics.Debug.WriteLine($"Failed to copy master setup to new project: {ex.Message}");
             }
         }
 

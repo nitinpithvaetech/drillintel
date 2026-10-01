@@ -318,10 +318,6 @@ public partial class DashboardViewModel : ObservableObject
             var wellName = !string.IsNullOrWhiteSpace(timeLog.nameWell) ? timeLog.nameWell : timeLog.__WellName;
             SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(wellName, StringComparison.OrdinalIgnoreCase));
         }
-        else if (node.Tag is VmxTimeLog vmxTimeLog)
-        {
-            SelectedWell = AvailableWells.FirstOrDefault(w => w.WellName.Equals(vmxTimeLog.WellName, StringComparison.OrdinalIgnoreCase));
-        }
         else if (node.Tag is DepthLog depthLog)
         {
             var wellName = !string.IsNullOrWhiteSpace(depthLog.nameWell) ? depthLog.nameWell : depthLog.__WellName;

@@ -48,19 +48,29 @@ public partial class RigStateView : UserControl
         }
     }
 
-    private void PresetUnknownColor_Click(object sender, RoutedEventArgs e)
+    private void PickUnknownColor_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string hex && DataContext is RigStateViewModel vm)
+        if (DataContext is RigStateViewModel vm)
         {
-            vm.UnknownColorHex = hex;
+            var parentWin = Window.GetWindow(this);
+            var (success, hex) = ColorPickerDialog.Show(parentWin, vm.UnknownColorHex);
+            if (success)
+            {
+                vm.UnknownColorHex = hex;
+            }
         }
     }
 
-    private void ItemColorPreset_Click(object sender, RoutedEventArgs e)
+    private void ItemColorSwatch_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string hex && btn.DataContext is RigStateItemModel item)
+        if (sender is FrameworkElement elem && elem.DataContext is RigStateItemModel item)
         {
-            item.ColorHex = hex;
+            var parentWin = Window.GetWindow(this);
+            var (success, hex) = ColorPickerDialog.Show(parentWin, item.ColorHex);
+            if (success)
+            {
+                item.ColorHex = hex;
+            }
         }
     }
 }

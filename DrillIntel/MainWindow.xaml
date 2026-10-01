@@ -56,15 +56,6 @@
                         </Fluent:Button.LargeIcon> 
                     </Fluent:Button>
 
-                    <Fluent:Button Header="Edit Timelog" 
-                                   Command="{Binding OpenTimelogEditorCommand}" 
-                                   IsEnabled="{Binding IsProjectOpen}"
-                                   ToolTip="Edit Timelog and Channels">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="FileDocumentEditOutline" Foreground="#FF9800" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon> 
-                    </Fluent:Button>
-
 
                     <Fluent:DropDownButton Header="Recent" ToolTip="Open a recently used project" ItemsSource="{Binding RecentProjects}">
                         <Fluent:DropDownButton.LargeIcon>
@@ -191,7 +182,7 @@
             </Fluent:RibbonTabItem>
             
             <!-- Masters Tab -->
-            <Fluent:RibbonTabItem Header="Masters" IsEnabled="{Binding IsProjectOpen}">
+            <Fluent:RibbonTabItem Header="Masters">
                 <Fluent:RibbonGroupBox Header="Configuration">
                     <Fluent:Button Header="Rig State Master" Command="{Binding OpenRigStateMasterCommand}">
                         <Fluent:Button.LargeIcon>

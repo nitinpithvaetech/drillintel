@@ -128,7 +128,7 @@ public class EditTimeLogTests : IDisposable
     }
 
     [Fact]
-    public async Task DialogInitialization_PopulatesLogInformation_FromVmxTimeLog()
+    public async Task DialogInitialization_PopulatesLogInformation_FromTimeLog()
     {
         await SeedTimelogAsync(
             logName: "Timelog1",
@@ -398,7 +398,7 @@ public class EditTimeLogTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsAllChangesToVmxTimeLogAndColumns()
+    public async Task SaveAsync_PersistsAllChangesToTimeLogAndColumns()
     {
         await SeedTimelogAsync();
         var vm = new EditTimeLogViewModel(_session, _repo, "TL-001");

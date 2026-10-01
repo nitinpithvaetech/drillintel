@@ -23,46 +23,87 @@ namespace DrillIntel.Data;
 public class WellDataRepository : IWellDataRepository
 {
     private readonly ProjectSession _session;
+    private readonly IAppDatabaseService? _appDatabaseService;
 
-    public WellDataRepository(ProjectSession session)
+    public WellDataRepository(ProjectSession session, IAppDatabaseService? appDatabaseService = null)
     {
         _session = session;
+        _appDatabaseService = appDatabaseService;
+    }
+
+    private IAppDatabaseService? ResolveAppDatabaseService()
+    {
+        return _appDatabaseService ?? (System.Windows.Application.Current != null ? App.AppDatabaseService : null);
     }
 
     public async Task InitializeDictionaryAsync()
     {
-        if (!_session.IsProjectOpen) return;
-        var connection = _session.GetConnection();
-        
-        var createDict = @"
-            CREATE TABLE IF NOT EXISTS VMX_CURVE_DICTIONARY (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Mnemonic TEXT UNIQUE,
-                StandardChannel TEXT
-            );";
-        await connection.ExecuteAsync(createDict);
-
-        // Seed default dictionary if empty
-        var count = await connection.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM VMX_CURVE_DICTIONARY");
-        if (count == 0)
+        var appDb = ResolveAppDatabaseService();
+        if (appDb != null && !appDb.IsInitialized)
         {
-            var seedSql = @"
-                INSERT INTO VMX_CURVE_DICTIONARY (Mnemonic, StandardChannel) VALUES 
-                ('DEPTH', 'Depth'), ('DMEA', 'Depth'), ('DEPT', 'Depth'),
-                ('HKLD', 'Hookload'), ('WOB', 'Hookload'), ('WEIGHT', 'Hookload'),
-                ('RPM', 'RPM'), ('SRPM', 'RPM'), ('TRPM', 'RPM'),
-                ('SPPA', 'Pump Pressure'), ('PRESS', 'Pump Pressure'), ('PUMP', 'Pump Pressure'),
-                ('TQA', 'Torque'), ('TORQ', 'Torque');";
-            await connection.ExecuteAsync(seedSql);
+            appDb.Initialize();
         }
+        await Task.CompletedTask;
+    }
+
+    public async Task<List<AppChannelMapping>> GetChannelMappingsAsync()
+    {
+        var appDb = ResolveAppDatabaseService();
+        if (appDb != null)
+        {
+            try
+            {
+                var mappings = appDb.GetChannelMappings();
+                if (mappings != null && mappings.Count > 0)
+                {
+                    return mappings;
+                }
+            }
+            catch { }
+        }
+
+        // Fallback: check project database for APP_CHANNEL_MAPPING or legacy VMX_CURVE_DICTIONARY
+        if (_session.IsProjectOpen)
+        {
+            try
+            {
+                var connection = _session.GetConnection();
+                var hasAppTable = await connection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') AND name='APP_CHANNEL_MAPPING';");
+                if (hasAppTable > 0)
+                {
+                    var result = await connection.QueryAsync<AppChannelMapping>(
+                        "SELECT ID as Id, MNEMONIC as Mnemonic, STANDARD_CHANNEL as StandardChannel, DESCRIPTION as Description, DEFAULT_UNIT as DefaultUnit, SOURCE_VENDOR as SourceVendor FROM APP_CHANNEL_MAPPING;");
+                    return result.ToList();
+                }
+
+                var hasLegacyTable = await connection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') AND name='VMX_CURVE_DICTIONARY';");
+                if (hasLegacyTable > 0)
+                {
+                    var result = await connection.QueryAsync<AppChannelMapping>(
+                        "SELECT ID as Id, MNEMONIC as Mnemonic, STANDARD_CHANNEL as StandardChannel FROM VMX_CURVE_DICTIONARY;");
+                    return result.ToList();
+                }
+            }
+            catch { }
+        }
+
+        return new List<AppChannelMapping>();
     }
 
     public async Task<List<VmxCurveDictionary>> GetCurveDictionariesAsync()
     {
-        if (!_session.IsProjectOpen) return new List<VmxCurveDictionary>();
-        var connection = _session.GetConnection();
-        var result = await connection.QueryAsync<VmxCurveDictionary>("SELECT * FROM VMX_CURVE_DICTIONARY");
-        return result.ToList();
+        var mappings = await GetChannelMappingsAsync();
+        return mappings.Select(m => new VmxCurveDictionary
+        {
+            Id = m.Id,
+            Mnemonic = m.Mnemonic,
+            StandardChannel = m.StandardChannel,
+            Description = m.Description,
+            DefaultUnit = m.DefaultUnit,
+            SourceVendor = m.SourceVendor
+        }).ToList();
     }
 
     public async Task LogTimeLogAsync(TimeLog log)
@@ -209,24 +250,6 @@ public class WellDataRepository : IWellDataRepository
         _session.NotifyDataChanged();
     }
 
-    public async Task LogVmxTimeLogAsync(TimeLog log) => await LogTimeLogAsync(log);
-
-    public async Task LogVmxTimeLogAsync(VmxTimeLog log)
-    {
-        var timeLog = new TimeLog
-        {
-            ObjectID = Guid.NewGuid().ToString(),
-            nameLog = log.LogName,
-            nameWell = log.WellName,
-            __WellName = log.WellName,
-            __dataTableName = log.DataTableName,
-            comments = log.ImportStatus,
-            description = $"QC: {log.QcScore:F1}% • {log.ImportDate:dd-MM-yyyy hh:mm tt}",
-            creationDate = log.ImportDate.ToString("dd-MMM-yyyy HH:mm:ss")
-        };
-        await LogTimeLogAsync(timeLog);
-    }
-
     public async Task LogDepthLogAsync(DepthLog log)
     {
         if (log == null) throw new ArgumentNullException(nameof(log));
@@ -371,24 +394,6 @@ public class WellDataRepository : IWellDataRepository
 
         // Notify session that well data has changed
         _session.NotifyDataChanged();
-    }
-
-    public async Task LogVmxDepthLogAsync(DepthLog log) => await LogDepthLogAsync(log);
-
-    public async Task LogVmxDepthLogAsync(VmxDepthLog log)
-    {
-        var depthLog = new DepthLog
-        {
-            ObjectID = Guid.NewGuid().ToString(),
-            nameLog = log.LogName,
-            nameWell = log.WellName,
-            __WellName = log.WellName,
-            __dataTableName = log.DataTableName,
-            comments = log.ImportStatus,
-            description = $"QC: {log.QcScore:F1}% • {log.ImportDate:dd-MM-yyyy hh:mm tt}",
-            creationDate = log.ImportDate.ToString("dd-MMM-yyyy HH:mm:ss")
-        };
-        await LogDepthLogAsync(depthLog);
     }
 
     public async Task<List<TimeLog>> GetTimeLogsAsync()

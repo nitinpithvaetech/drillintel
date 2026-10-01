@@ -175,13 +175,19 @@
                                          Style="{DynamicResource MaterialDesignFloatingHintTextBox}" 
                                          Margin="0,0,16,0" />
 
-                                <!-- Color Preview Swatch -->
-                                <Border Grid.Column="2" 
-                                        Background="{Binding UnknownColorHex, Converter={StaticResource HexToBrushConverter}}" 
-                                        BorderBrush="#888888" BorderThickness="1" 
-                                        CornerRadius="4" Height="32" Width="60" 
-                                        VerticalAlignment="Center" HorizontalAlignment="Left" 
-                                        ToolTip="Current Unknown Color" />
+                                <!-- Color Preview Swatch (Clickable to open Color Dialog) -->
+                                <Button Grid.Column="2" 
+                                        Click="PickUnknownColor_Click"
+                                        ToolTip="Click to open Color Selector dialog" 
+                                        Cursor="Hand"
+                                        Padding="0" Height="32" Width="60" 
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <Border Background="{Binding UnknownColorHex, Converter={StaticResource HexToBrushConverter}}" 
+                                            BorderBrush="#777777" BorderThickness="1.5" 
+                                            CornerRadius="4" Height="32" Width="60" />
+                                </Button>
 
                                 <!-- Hex Code -->
                                 <TextBox Grid.Column="3" 
@@ -190,25 +196,18 @@
                                          Style="{DynamicResource MaterialDesignFloatingHintTextBox}" 
                                          Margin="0,0,16,0" />
 
-                                <!-- Quick Palettes for Unknown -->
-                                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="Preset:" Foreground="Gray" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="11" />
-                                    <Button Background="#D50000" Width="22" Height="22" Padding="0" Margin="2,0" ToolTip="Red (#D50000)" 
-                                            Command="{Binding SetUnknownColorHexCommand}" CommandParameter="#D50000" 
-                                            Click="PresetUnknownColor_Click" Tag="#D50000" />
-                                    <Button Background="#FF6D00" Width="22" Height="22" Padding="0" Margin="2,0" ToolTip="Orange (#FF6D00)" 
-                                            Command="{Binding SetUnknownColorHexCommand}" CommandParameter="#FF6D00" 
-                                            Click="PresetUnknownColor_Click" Tag="#FF6D00" />
-                                    <Button Background="#FFD600" Width="22" Height="22" Padding="0" Margin="2,0" ToolTip="Amber (#FFD600)" 
-                                            Command="{Binding SetUnknownColorHexCommand}" CommandParameter="#FFD600" 
-                                            Click="PresetUnknownColor_Click" Tag="#FFD600" />
-                                    <Button Background="#757575" Width="22" Height="22" Padding="0" Margin="2,0" ToolTip="Gray (#757575)" 
-                                            Command="{Binding SetUnknownColorHexCommand}" CommandParameter="#757575" 
-                                            Click="PresetUnknownColor_Click" Tag="#757575" />
-                                    <Button Background="#000000" Width="22" Height="22" Padding="0" Margin="2,0" ToolTip="Black (#000000)" 
-                                            Command="{Binding SetUnknownColorHexCommand}" CommandParameter="#000000" 
-                                            Click="PresetUnknownColor_Click" Tag="#000000" />
-                                </StackPanel>
+                                <!-- Pick Color Dialog Button -->
+                                <Button Grid.Column="4" 
+                                        Click="PickUnknownColor_Click"
+                                        ToolTip="Open Color Selector dialog"
+                                        Style="{DynamicResource MaterialDesignOutlinedButton}"
+                                        Height="32" Padding="12,0"
+                                        HorizontalAlignment="Left" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="PaletteOutline" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="Select Color..." VerticalAlignment="Center" FontSize="12" />
+                                    </StackPanel>
+                                </Button>
                             </Grid>
                         </Grid>
                     </materialDesign:Card>
@@ -242,7 +241,7 @@
                                     <DataGridTextColumn Header="No." Binding="{Binding Number}" IsReadOnly="True" Width="70" />
 
                                     <!-- Name -->
-                                    <DataGridTemplateColumn Header="Rig State Name" Width="300">
+                                    <DataGridTemplateColumn Header="Rig State Name" Width="*" MinWidth="260">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontWeight="Medium" />
@@ -255,14 +254,21 @@
                                         </DataGridTemplateColumn.CellEditingTemplate>
                                     </DataGridTemplateColumn>
 
-                                    <!-- Color Swatch -->
+                                    <!-- Color Swatch (Click to open Color Dialog) -->
                                     <DataGridTemplateColumn Header="Color" Width="90">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
-                                                <Border Background="{Binding ColorHex, Converter={StaticResource HexToBrushConverter}}" 
-                                                        Width="48" Height="22" CornerRadius="3" 
-                                                        BorderBrush="#777777" BorderThickness="1" 
-                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Button Click="ItemColorSwatch_Click"
+                                                        ToolTip="Click to open Color Selector dialog"
+                                                        Cursor="Hand"
+                                                        Padding="0" Margin="0"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Border Background="{Binding ColorHex, Converter={StaticResource HexToBrushConverter}}" 
+                                                            Width="52" Height="22" CornerRadius="3" 
+                                                            BorderBrush="#777777" BorderThickness="1.5" />
+                                                </Button>
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
@@ -279,26 +285,6 @@
                                                 <TextBox Text="{Binding ColorHex, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellEditingTemplate>
-                                    </DataGridTemplateColumn>
-
-                                    <!-- Quick Color Selection Buttons -->
-                                    <DataGridTemplateColumn Header="Color Presets" Width="*">
-                                        <DataGridTemplateColumn.CellTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Background="#00FF00" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Green (#00FF00)" Command="{Binding SetColorHexCommand}" CommandParameter="#00FF00" Click="ItemColorPreset_Click" Tag="#00FF00" />
-                                                    <Button Background="#00C853" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Emerald (#00C853)" Command="{Binding SetColorHexCommand}" CommandParameter="#00C853" Click="ItemColorPreset_Click" Tag="#00C853" />
-                                                    <Button Background="#808080" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Gray (#808080)" Command="{Binding SetColorHexCommand}" CommandParameter="#808080" Click="ItemColorPreset_Click" Tag="#808080" />
-                                                    <Button Background="#0000FF" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Blue (#0000FF)" Command="{Binding SetColorHexCommand}" CommandParameter="#0000FF" Click="ItemColorPreset_Click" Tag="#0000FF" />
-                                                    <Button Background="#8000FF" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Purple (#8000FF)" Command="{Binding SetColorHexCommand}" CommandParameter="#8000FF" Click="ItemColorPreset_Click" Tag="#8000FF" />
-                                                    <Button Background="#FFFF00" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Yellow (#FFFF00)" Command="{Binding SetColorHexCommand}" CommandParameter="#FFFF00" Click="ItemColorPreset_Click" Tag="#FFFF00" />
-                                                    <Button Background="#FF8000" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Orange (#FF8000)" Command="{Binding SetColorHexCommand}" CommandParameter="#FF8000" Click="ItemColorPreset_Click" Tag="#FF8000" />
-                                                    <Button Background="#FF0000" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Red (#FF0000)" Command="{Binding SetColorHexCommand}" CommandParameter="#FF0000" Click="ItemColorPreset_Click" Tag="#FF0000" />
-                                                    <Button Background="#00FFFF" Width="18" Height="18" Padding="0" Margin="2,0" ToolTip="Cyan (#00FFFF)" Command="{Binding SetColorHexCommand}" CommandParameter="#00FFFF" Click="ItemColorPreset_Click" Tag="#00FFFF" />
-                                                    <Button Background="#FFFFFF" Width="18" Height="18" Padding="0" Margin="2,0" BorderBrush="#888" BorderThickness="1" ToolTip="White (#FFFFFF)" Command="{Binding SetColorHexCommand}" CommandParameter="#FFFFFF" Click="ItemColorPreset_Click" Tag="#FFFFFF" />
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
