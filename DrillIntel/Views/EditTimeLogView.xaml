@@ -369,7 +369,7 @@
                     </Border>
 
                     <!-- Channels Grid -->
-                    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="2">
+                    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="1">
                         <DataGrid ItemsSource="{Binding Channels}" 
                                   SelectedItem="{Binding SelectedChannel}"
                                   AutoGenerateColumns="False" 
@@ -383,35 +383,124 @@
                                   RowHeaderWidth="0"
                                   Background="Transparent"
                                   BorderThickness="0"
-                                  FontSize="11.5"
-                                  RowHeight="28">
+                                  FontSize="12"
+                                  RowHeight="36"
+                                  MinRowHeight="36"
+                                  ColumnHeaderHeight="34"
+                                  materialDesign:DataGridAssist.CellPadding="10 6"
+                                  materialDesign:DataGridAssist.ColumnHeaderPadding="10 6"
+                                  AlternatingRowBackground="#F8FAFC"
+                                  RowBackground="#FFFFFF">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                    <Setter Property="MinHeight" Value="36" />
+                                    <Setter Property="Height" Value="36" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                    <Setter Property="Foreground" Value="#334155" />
+                                    <Setter Property="Background" Value="#F1F5F9" />
+                                    <Setter Property="Height" Value="34" />
+                                    <Setter Property="Padding" Value="10,0" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                                    <Setter Property="BorderBrush" Value="#CBD5E1" />
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
                             <DataGrid.Columns>
                                 <!-- Upload Checkbox -->
-                                <DataGridCheckBoxColumn Header="Upload" Binding="{Binding Upload, UpdateSourceTrigger=PropertyChanged}" Width="55" />
+                                <DataGridCheckBoxColumn Header="Upload" Binding="{Binding Upload, UpdateSourceTrigger=PropertyChanged}" Width="65">
+                                    <DataGridCheckBoxColumn.ElementStyle>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="HorizontalAlignment" Value="Center" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                        </Style>
+                                    </DataGridCheckBoxColumn.ElementStyle>
+                                </DataGridCheckBoxColumn>
 
                                 <!-- Mnemonic -->
-                                <DataGridTextColumn Header="Mnemonic" Binding="{Binding Mnemonic, UpdateSourceTrigger=PropertyChanged}" Width="100" FontWeight="SemiBold" />
+                                <DataGridTextColumn Header="Mnemonic" Binding="{Binding Mnemonic, UpdateSourceTrigger=PropertyChanged}" Width="110" FontWeight="SemiBold">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Unit -->
-                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit, UpdateSourceTrigger=PropertyChanged}" Width="65" />
+                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit, UpdateSourceTrigger=PropertyChanged}" Width="75">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- VuMax Unit ID -->
-                                <DataGridTextColumn Header="VuMax Unit ID" Binding="{Binding VuMaxUnitId, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+                                <DataGridTextColumn Header="VuMax Unit ID" Binding="{Binding VuMaxUnitId, UpdateSourceTrigger=PropertyChanged}" Width="110">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Description -->
-                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Upload Mnemonic -->
-                                <DataGridTextColumn Header="Upload Mnemonic" Binding="{Binding UploadMnemonic, UpdateSourceTrigger=PropertyChanged}" Width="110" />
+                                <DataGridTextColumn Header="Upload Mnemonic" Binding="{Binding UploadMnemonic, UpdateSourceTrigger=PropertyChanged}" Width="120">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Value Type -->
-                                <DataGridTextColumn Header="Value Type" Binding="{Binding ValueType, UpdateSourceTrigger=PropertyChanged}" Width="85" />
+                                <DataGridTextColumn Header="Value Type" Binding="{Binding ValueType, UpdateSourceTrigger=PropertyChanged}" Width="95">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Expression -->
-                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" Width="110" />
+                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" Width="120">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
 
                                 <!-- Do Not Interpol -->
-                                <DataGridCheckBoxColumn Header="Do Not Interpol" Binding="{Binding DoNotInterpol, UpdateSourceTrigger=PropertyChanged}" Width="100" />
+                                <DataGridCheckBoxColumn Header="Do Not Interpol" Binding="{Binding DoNotInterpol, UpdateSourceTrigger=PropertyChanged}" Width="110">
+                                    <DataGridCheckBoxColumn.ElementStyle>
+                                        <Style TargetType="CheckBox">
+                                            <Setter Property="HorizontalAlignment" Value="Center" />
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                        </Style>
+                                    </DataGridCheckBoxColumn.ElementStyle>
+                                </DataGridCheckBoxColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </Border>
