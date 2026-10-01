@@ -310,7 +310,16 @@ public class WellTreeImportDisplayRulesTests : IDisposable
             await _depthLogService.ImportFromFileAsync(csvPath, options);
 
             // Allow event to propagate and refresh
-            await Task.Delay(100);
+            for (int i = 0; i < 20; i++)
+            {
+                if (dashboard.WellTree.Count > 0)
+                {
+                    wellNode = dashboard.WellTree[0];
+                    depthFolder = wellNode.Children.FirstOrDefault(c => c.Name == "Depthlogs") ?? depthFolder;
+                    if (depthFolder.Children.Count > 0) break;
+                }
+                await Task.Delay(50);
+            }
 
             // Verify tree refreshed
             wellNode = dashboard.WellTree[0];

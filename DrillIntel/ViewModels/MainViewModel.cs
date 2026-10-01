@@ -165,6 +165,40 @@ public partial class MainViewModel : ObservableObject
         await OpenWellEditor();
     }
 
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenTimelogEditor()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (CurrentViewModel is DashboardViewModel dashboardVm)
+        {
+            await dashboardVm.EditTimeLogAsync();
+        }
+        else
+        {
+            var repo = new WellDataRepository(_session);
+            var timeLogs = await repo.GetTimeLogsAsync();
+            var targetLog = timeLogs.FirstOrDefault();
+            if (targetLog != null)
+            {
+                var vm = new EditTimeLogViewModel(_session, repo, targetLog.ObjectID, targetLog);
+                await vm.InitializeAsync();
+                var window = new DrillIntel.Views.EditTimeLogWindow
+                {
+                    DataContext = vm,
+                    Owner = Application.Current?.MainWindow
+                };
+                if (window.ShowDialog() == true)
+                {
+                    _session.NotifyDataChanged();
+                }
+            }
+            else
+            {
+                MessageBox.Show("No Timelog available to edit. Please import a timelog first.", "Edit Timelog", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+    }
+
     private void OnProjectStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsProjectOpen));
@@ -177,6 +211,7 @@ public partial class MainViewModel : ObservableObject
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenWellEditorCommand.NotifyCanExecuteChanged();
         EditWellCommand.NotifyCanExecuteChanged();
+        OpenTimelogEditorCommand.NotifyCanExecuteChanged();
 
         if (Application.Current?.Dispatcher != null)
         {

@@ -78,5 +78,12 @@ public interface IWellDataRepository
         CancellationToken cancellationToken = default);
 
     Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 1000);
+
+    Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId);
+    Task<List<TimelogChannelItem>> GetTimeLogChannelsAsync(string logId, string? dataTableName);
+    Task SaveTimeLogEditAsync(TimeLogEditMetadata metadata, List<TimelogChannelItem> channels);
+    Task<List<WellOption>> GetWellsForLinkingAsync();
+    Task<List<WellboreOption>> GetWellboresForLinkingAsync(string? wellId = null);
+    Task<List<TimeLogOption>> GetTimeLogsForLinkingAsync(string? wellId = null, string? wellboreId = null, string? excludeLogId = null);
 }
 

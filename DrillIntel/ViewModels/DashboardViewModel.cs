@@ -70,7 +70,14 @@ public partial class DashboardViewModel : ObservableObject
     {
         if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(RefreshAsync);
+            var op = System.Windows.Application.Current.Dispatcher.InvokeAsync(RefreshAsync);
+            _ = Task.Delay(250).ContinueWith(_ =>
+            {
+                if (op.Status == System.Windows.Threading.DispatcherOperationStatus.Pending)
+                {
+                    _ = RefreshAsync();
+                }
+            });
         }
         else
         {
@@ -403,6 +410,53 @@ public partial class DashboardViewModel : ObservableObject
     public async Task EditWellAsync(WellTreeNode? targetNode = null)
     {
         await EditObjectAsync(targetNode);
+    }
+
+    public EditTimeLogViewModel? LastEditTimeLogViewModel { get; private set; }
+    public Func<EditTimeLogViewModel, bool?>? OpenEditTimeLogDialogHandler { get; set; }
+
+    [RelayCommand]
+    public async Task EditTimeLogAsync(WellTreeNode? targetNode = null)
+    {
+        var node = targetNode ?? ContextSelectedNode ?? SelectedNode;
+        if (node == null || _session?.IsProjectOpen != true || _repository == null) return;
+
+        TimeLog? targetLog = node.Tag as TimeLog
+            ?? (node.Children.Count > 0 ? node.Children[0].Tag as TimeLog : null);
+
+        string logId = targetLog?.ObjectID ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(logId))
+        {
+            var timeLogs = await _repository.GetTimeLogsAsync();
+            targetLog = timeLogs.FirstOrDefault(t => t.ObjectID == node.Name || t.nameLog == node.Name)
+                     ?? timeLogs.FirstOrDefault();
+            logId = targetLog?.ObjectID ?? node.Name;
+        }
+
+        var vm = new EditTimeLogViewModel(_session, _repository, logId, targetLog);
+        await vm.InitializeAsync();
+        LastEditTimeLogViewModel = vm;
+
+        bool? result = false;
+        if (OpenEditTimeLogDialogHandler != null)
+        {
+            result = OpenEditTimeLogDialogHandler(vm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.EditTimeLogWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            _session?.NotifyDataChanged();
+            await RefreshAsync();
+        }
     }
 
     [RelayCommand]

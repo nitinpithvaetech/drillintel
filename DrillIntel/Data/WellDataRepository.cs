@@ -2320,4 +2320,645 @@ public class WellDataRepository : IWellDataRepository
             }
         });
     }
+
+    public async Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(logId)) return null;
+        var connection = _session.GetConnection();
+
+        // 1. Query vmx_time_log for the selected Timelog ID
+        var row = await connection.QueryFirstOrDefaultAsync<dynamic>(
+            "SELECT * FROM VMX_TIME_LOG WHERE LOG_ID = @LogId LIMIT 1;",
+            new { LogId = logId });
+
+        if (row == null)
+        {
+            // Fallback by LOG_NAME or DATA_TABLE_NAME if logId was passed as a name
+            row = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                "SELECT * FROM VMX_TIME_LOG WHERE LOG_NAME = @LogId OR DATA_TABLE_NAME = @LogId LIMIT 1;",
+                new { LogId = logId });
+        }
+
+        if (row == null)
+        {
+            // Fallback to VMX_TIME_LOG_SUMMARY
+            var hasSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+            if (hasSummary > 0)
+            {
+                var sumRow = await connection.QueryFirstOrDefaultAsync<dynamic>(
+                    "SELECT * FROM VMX_TIME_LOG_SUMMARY WHERE LogId = @LogId OR LogName = @LogId LIMIT 1;",
+                    new { LogId = logId });
+                if (sumRow != null)
+                {
+                    var sDict = (IDictionary<string, object>)sumRow;
+                    return new TimeLogEditMetadata
+                    {
+                        LogId = logId,
+                        LogName = sDict.TryGetValue("LogName", out var nm) && nm != null ? Convert.ToString(nm)! : "",
+                        DataTableName = sDict.TryGetValue("DataTableName", out var dt) && dt != null ? Convert.ToString(dt)! : "",
+                        Description = sDict.TryGetValue("ImportStatus", out var st) && st != null ? Convert.ToString(st)! : "",
+                        NoAutoCalc = true
+                    };
+                }
+            }
+            return null;
+        }
+
+        var dict = (IDictionary<string, object>)row;
+
+        string GetStr(string col1, string? col2 = null)
+        {
+            foreach (var kvp in dict)
+            {
+                if (kvp.Key.Equals(col1, StringComparison.OrdinalIgnoreCase) && kvp.Value != null && kvp.Value != DBNull.Value)
+                    return Convert.ToString(kvp.Value)!;
+                if (col2 != null && kvp.Key.Equals(col2, StringComparison.OrdinalIgnoreCase) && kvp.Value != null && kvp.Value != DBNull.Value)
+                    return Convert.ToString(kvp.Value)!;
+            }
+            return string.Empty;
+        }
+
+        bool GetBool(string col1, string? col2 = null)
+        {
+            foreach (var kvp in dict)
+            {
+                if ((kvp.Key.Equals(col1, StringComparison.OrdinalIgnoreCase) || (col2 != null && kvp.Key.Equals(col2, StringComparison.OrdinalIgnoreCase))) && kvp.Value != null && kvp.Value != DBNull.Value)
+                {
+                    if (kvp.Value is bool b) return b;
+                    if (long.TryParse(Convert.ToString(kvp.Value), out var l)) return l != 0;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        double GetDouble(string col1, string? col2 = null)
+        {
+            foreach (var kvp in dict)
+            {
+                if ((kvp.Key.Equals(col1, StringComparison.OrdinalIgnoreCase) || (col2 != null && kvp.Key.Equals(col2, StringComparison.OrdinalIgnoreCase))) && kvp.Value != null && kvp.Value != DBNull.Value)
+                {
+                    if (double.TryParse(Convert.ToString(kvp.Value), NumberStyles.Any, CultureInfo.InvariantCulture, out var d))
+                        return d;
+                }
+            }
+            return 0;
+        }
+
+        int dupCode = 2; // Default to Merge Columns
+        foreach (var kvp in dict)
+        {
+            if (kvp.Key.Equals("DUPLICATE_ACTION", StringComparison.OrdinalIgnoreCase) && kvp.Value != null && kvp.Value != DBNull.Value)
+            {
+                int.TryParse(Convert.ToString(kvp.Value), out dupCode);
+                break;
+            }
+        }
+
+        string dupActionStr = dupCode switch
+        {
+            1 => "Ignore",
+            0 => "Replace",
+            2 => "Merge Columns",
+            _ => "Merge Columns"
+        };
+
+        return new TimeLogEditMetadata
+        {
+            LogId = GetStr("LOG_ID", "log_id"),
+            WellId = GetStr("WELL_ID", "well_id"),
+            WellboreId = GetStr("WELLBORE_ID", "wellbore_id"),
+            LogName = GetStr("LOG_NAME", "log_name"),
+            ServiceCompany = GetStr("SERVICE_COMPANY", "service_company"),
+            EdrProvider = GetStr("EDR_PROVIDER", "edr_provider"),
+            RunNo = GetStr("RUN_NO", "run_no"),
+            Description = GetStr("DESCRIPTION", "description"),
+            PrimaryLog = GetBool("PRIMARY_LOG", "primary_log"),
+            RemarksLog = GetBool("REMARKS_LOG", "remarks_log"),
+            NoAutoCalc = GetBool("DONT_CALC_HDTH", "no_auto_calc"),
+            StartingHoleDepth = GetDouble("STARTING_HDTH", "starting_hole_depth"),
+            DataTableName = GetStr("DATA_TABLE_NAME", "data_table_name"),
+            LinkToParent = GetBool("LINK_TO_PARENT", "link_to_parent"),
+            LinkWellId = GetStr("LINK_WELL_ID", "link_well_id"),
+            LinkWellboreId = GetStr("LINK_WELLBORE_ID", "link_wellbore_id"),
+            LinkLogId = GetStr("LINK_LOG_ID", "link_log_id"),
+            DontMoveAhead = GetBool("DONT_MOVE_AHEAD", "dont_move_ahead"),
+            DuplicateAction = dupActionStr
+        };
+    }
+
+    public async Task<List<TimelogChannelItem>> GetTimeLogChannelsAsync(string logId, string? dataTableName)
+    {
+        var channels = new List<TimelogChannelItem>();
+        if (!_session.IsProjectOpen) return channels;
+        var connection = _session.GetConnection();
+
+        bool dataTableIsTimeSeries = false;
+
+        // 1. Query all rows from DATA_TABLE_NAME if specified
+        if (!string.IsNullOrWhiteSpace(dataTableName))
+        {
+            var hasTable = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = @TableName;",
+                new { TableName = dataTableName });
+
+            if (hasTable > 0)
+            {
+                try
+                {
+                    var tableCols = (await connection.QueryAsync<string>(
+                        $"SELECT name FROM pragma_table_info('{dataTableName}');")).ToList();
+
+                    // Check if DATA_TABLE_NAME rows represent channel definitions
+                    var mnemCol = tableCols.FirstOrDefault(c => c.Equals("MNEMONIC", StringComparison.OrdinalIgnoreCase) || c.Equals("Mnemonic", StringComparison.OrdinalIgnoreCase));
+
+                    if (mnemCol != null)
+                    {
+                        var rows = (await connection.QueryAsync<dynamic>($"SELECT * FROM [{dataTableName}];")).ToList();
+                        foreach (var r in rows)
+                        {
+                            var rDict = (IDictionary<string, object>)r;
+                            var item = new TimelogChannelItem();
+                            foreach (var kvp in rDict)
+                            {
+                                if (kvp.Value == null || kvp.Value == DBNull.Value) continue;
+                                var k = kvp.Key;
+                                var v = kvp.Value;
+
+                                if (k.Equals("Upload", StringComparison.OrdinalIgnoreCase) || k.Equals("WRITE_BACK", StringComparison.OrdinalIgnoreCase))
+                                    item.Upload = Convert.ToInt64(v) != 0 || (v is bool b && b);
+                                else if (k.Equals("Mnemonic", StringComparison.OrdinalIgnoreCase) || k.Equals("MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                    item.Mnemonic = Convert.ToString(v) ?? "";
+                                else if (k.Equals("Unit", StringComparison.OrdinalIgnoreCase) || k.Equals("UNIT", StringComparison.OrdinalIgnoreCase))
+                                    item.Unit = Convert.ToString(v) ?? "";
+                                else if (k.Equals("VuMax Unit ID", StringComparison.OrdinalIgnoreCase) || k.Equals("VUMAX_UNIT_ID", StringComparison.OrdinalIgnoreCase) || k.Equals("UnitID", StringComparison.OrdinalIgnoreCase))
+                                    item.VuMaxUnitId = Convert.ToString(v) ?? "";
+                                else if (k.Equals("Description", StringComparison.OrdinalIgnoreCase) || k.Equals("CHANNEL_NAME", StringComparison.OrdinalIgnoreCase) || k.Equals("curveDescription", StringComparison.OrdinalIgnoreCase))
+                                    item.Description = Convert.ToString(v) ?? "";
+                                else if (k.Equals("Upload Mnemonic", StringComparison.OrdinalIgnoreCase) || k.Equals("WITSML_MNEMONIC", StringComparison.OrdinalIgnoreCase) || k.Equals("PI_MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                    item.UploadMnemonic = Convert.ToString(v) ?? "";
+                                else if (k.Equals("Value Type", StringComparison.OrdinalIgnoreCase) || k.Equals("VALUE_TYPE", StringComparison.OrdinalIgnoreCase))
+                                    item.ValueType = Convert.ToString(v) ?? "0";
+                                else if (k.Equals("Expression", StringComparison.OrdinalIgnoreCase) || k.Equals("VALUE_QUERY", StringComparison.OrdinalIgnoreCase))
+                                    item.Expression = Convert.ToString(v) ?? "";
+                                else if (k.Equals("Do Not Interpol", StringComparison.OrdinalIgnoreCase) || k.Equals("NO_INTERPOLATE", StringComparison.OrdinalIgnoreCase))
+                                    item.DoNotInterpol = Convert.ToInt64(v) != 0 || (v is bool b && b);
+                            }
+                            item.OriginalMnemonic = item.Mnemonic;
+                            channels.Add(item);
+                        }
+                        return channels;
+                    }
+                    else
+                    {
+                        dataTableIsTimeSeries = true;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        // 2. Query VMX_TIME_LOG_COLUMNS
+        var hasVmxCols = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_COLUMNS';");
+
+        var loadedMnemonics = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (hasVmxCols > 0)
+        {
+            var colRows = (await connection.QueryAsync<dynamic>(
+                "SELECT * FROM VMX_TIME_LOG_COLUMNS WHERE LOG_ID = @LogId ORDER BY COLUMN_ORDER ASC, MNEMONIC ASC;",
+                new { LogId = logId })).ToList();
+
+            foreach (var r in colRows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string mnem = dict.TryGetValue("MNEMONIC", out var mVal) && mVal != null ? Convert.ToString(mVal)! : "";
+                if (string.IsNullOrWhiteSpace(mnem)) continue;
+
+                bool upload = true;
+                if (dict.TryGetValue("WRITE_BACK", out var wbVal) && wbVal != null && wbVal != DBNull.Value)
+                {
+                    upload = Convert.ToInt64(wbVal) != 0;
+                }
+
+                string unit = dict.TryGetValue("UNIT", out var uVal) && uVal != null ? Convert.ToString(uVal)! : "";
+                string vumaxUnitId = dict.TryGetValue("VUMAX_UNIT_ID", out var vVal) && vVal != null ? Convert.ToString(vVal)! : (dict.TryGetValue("UNIT_ID", out var uid) && uid != null ? Convert.ToString(uid)! : "");
+                string desc = dict.TryGetValue("CHANNEL_NAME", out var cVal) && cVal != null ? Convert.ToString(cVal)! : "";
+                string upMnem = dict.TryGetValue("WITSML_MNEMONIC", out var wVal) && wVal != null ? Convert.ToString(wVal)! : (dict.TryGetValue("PI_MNEMONIC", out var piVal) && piVal != null ? Convert.ToString(piVal)! : mnem);
+                string valType = dict.TryGetValue("VALUE_TYPE", out var vtVal) && vtVal != null ? Convert.ToString(vtVal)! : "0";
+                string expr = dict.TryGetValue("VALUE_QUERY", out var vqVal) && vqVal != null ? Convert.ToString(vqVal)! : "";
+                bool doNotInterpol = dict.TryGetValue("NO_INTERPOLATE", out var niVal) && niVal != null && niVal != DBNull.Value && Convert.ToInt64(niVal) != 0;
+                string dataType = dict.TryGetValue("DATA_TYPE", out var dtVal) && dtVal != null ? Convert.ToString(dtVal)! : "Double";
+                int order = dict.TryGetValue("COLUMN_ORDER", out var ordVal) && ordVal != null && ordVal != DBNull.Value ? Convert.ToInt32(ordVal) : channels.Count + 1;
+
+                channels.Add(new TimelogChannelItem
+                {
+                    Upload = upload,
+                    Mnemonic = mnem,
+                    Unit = unit,
+                    VuMaxUnitId = vumaxUnitId,
+                    Description = desc,
+                    UploadMnemonic = upMnem,
+                    ValueType = valType,
+                    Expression = expr,
+                    DoNotInterpol = doNotInterpol,
+                    DataType = dataType,
+                    ColumnOrder = order,
+                    OriginalMnemonic = mnem
+                });
+                loadedMnemonics.Add(mnem);
+            }
+        }
+
+        // 3. If DATA_TABLE_NAME exists and contains columns not yet in channels, include them
+        if (dataTableIsTimeSeries && !string.IsNullOrWhiteSpace(dataTableName))
+        {
+            try
+            {
+                var cols = await GetTableColumnsAsync(dataTableName);
+                int order = channels.Count + 1;
+                foreach (var col in cols)
+                {
+                    if (col.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!loadedMnemonics.Contains(col))
+                    {
+                        bool isDt = col.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                                    col.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
+                                    col.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
+                                    col.Equals("DATE", StringComparison.OrdinalIgnoreCase);
+
+                        channels.Add(new TimelogChannelItem
+                        {
+                            Upload = true,
+                            Mnemonic = col,
+                            Unit = isDt ? "" : (col.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : ""),
+                            VuMaxUnitId = isDt ? "" : (col.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ? "m" : ""),
+                            Description = col,
+                            UploadMnemonic = col,
+                            ValueType = "0",
+                            Expression = "",
+                            DoNotInterpol = false,
+                            DataType = isDt ? "DateTime" : "Double",
+                            ColumnOrder = order++,
+                            OriginalMnemonic = col
+                        });
+                        loadedMnemonics.Add(col);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        return channels;
+    }
+
+    public async Task SaveTimeLogEditAsync(TimeLogEditMetadata metadata, List<TimelogChannelItem> channels)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(metadata.LogId)) return;
+        var connection = _session.GetConnection();
+
+        int dupCode = metadata.DuplicateAction switch
+        {
+            "Ignore" => 1,
+            "Replace" => 0,
+            "Merge Columns" => 2,
+            _ => 2
+        };
+
+        var vmxCols = (await connection.QueryAsync<string>("SELECT name FROM pragma_table_info('VMX_TIME_LOG');")).ToList();
+
+        bool hasNoAutoCalc = vmxCols.Contains("no_auto_calc", StringComparer.OrdinalIgnoreCase);
+        bool hasDontCalcHdth = vmxCols.Contains("DONT_CALC_HDTH", StringComparer.OrdinalIgnoreCase);
+        bool hasStartingHoleDepth = vmxCols.Contains("starting_hole_depth", StringComparer.OrdinalIgnoreCase);
+        bool hasStartingHdth = vmxCols.Contains("STARTING_HDTH", StringComparer.OrdinalIgnoreCase);
+
+        var updateSql = @"
+            UPDATE VMX_TIME_LOG SET
+                LOG_NAME = @LogName,
+                SERVICE_COMPANY = @ServiceCompany,
+                EDR_PROVIDER = @EdrProvider,
+                RUN_NO = @RunNo,
+                DESCRIPTION = @Description,
+                PRIMARY_LOG = @PrimaryLog,
+                REMARKS_LOG = @RemarksLog,
+                LINK_TO_PARENT = @LinkToParent,
+                LINK_WELL_ID = @LinkWellId,
+                LINK_WELLBORE_ID = @LinkWellboreId,
+                LINK_LOG_ID = @LinkLogId,
+                DONT_MOVE_AHEAD = @DontMoveAhead,
+                DUPLICATE_ACTION = @DuplicateAction,
+                MODIFIED_DATE = @ModifiedDate"
+            + (hasDontCalcHdth ? ", DONT_CALC_HDTH = @NoAutoCalc" : "")
+            + (hasNoAutoCalc ? ", no_auto_calc = @NoAutoCalc" : "")
+            + (hasStartingHdth ? ", STARTING_HDTH = @StartingHoleDepth" : "")
+            + (hasStartingHoleDepth ? ", starting_hole_depth = @StartingHoleDepth" : "")
+            + " WHERE LOG_ID = @LogId;";
+
+        await connection.ExecuteAsync(updateSql, new
+        {
+            LogName = metadata.LogName,
+            ServiceCompany = metadata.ServiceCompany,
+            EdrProvider = metadata.EdrProvider,
+            RunNo = metadata.RunNo,
+            Description = metadata.Description,
+            PrimaryLog = metadata.PrimaryLog ? 1 : 0,
+            RemarksLog = metadata.RemarksLog ? 1 : 0,
+            LinkToParent = metadata.LinkToParent ? 1 : 0,
+            LinkWellId = metadata.LinkWellId,
+            LinkWellboreId = metadata.LinkWellboreId,
+            LinkLogId = metadata.LinkLogId,
+            DontMoveAhead = metadata.DontMoveAhead ? 1 : 0,
+            DuplicateAction = dupCode,
+            ModifiedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss"),
+            NoAutoCalc = metadata.NoAutoCalc ? 1 : 0,
+            StartingHoleDepth = metadata.StartingHoleDepth,
+            LogId = metadata.LogId
+        });
+
+        // Also update summary table
+        var hasSummary = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+        if (hasSummary > 0)
+        {
+            await connection.ExecuteAsync(
+                "UPDATE VMX_TIME_LOG_SUMMARY SET LogName = @LogName WHERE LogId = @LogId;",
+                new { LogName = metadata.LogName, LogId = metadata.LogId });
+        }
+
+        // Persist channels into VMX_TIME_LOG_COLUMNS
+        var hasColsTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_COLUMNS';");
+        if (hasColsTable > 0)
+        {
+            await connection.ExecuteAsync(
+                "DELETE FROM VMX_TIME_LOG_COLUMNS WHERE LOG_ID = @LogId;",
+                new { LogId = metadata.LogId });
+
+            var insertColSql = @"
+                INSERT INTO VMX_TIME_LOG_COLUMNS (
+                    WELL_ID, WELLBORE_ID, LOG_ID, MNEMONIC, CHANNEL_NAME, DATA_TYPE,
+                    UNIT, UNIT_ID, VUMAX_UNIT_ID, VALUE_TYPE, VALUE_QUERY, WITSML_MNEMONIC,
+                    CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE, COLUMN_ORDER,
+                    WRITE_BACK, NO_INTERPOLATE
+                ) VALUES (
+                    @WellId, @WellboreId, @LogId, @Mnemonic, @ChannelName, @DataType,
+                    @Unit, @UnitId, @VuMaxUnitId, @ValueType, @ValueQuery, @WitsmlMnemonic,
+                    'System', @CreatedDate, 'System', @ModifiedDate, @ColumnOrder,
+                    @WriteBack, @NoInterpolate
+                );";
+
+            int order = 1;
+            foreach (var ch in channels)
+            {
+                int vt = 0;
+                if (int.TryParse(ch.ValueType, out var parsedVt)) vt = parsedVt;
+                else if (ch.ValueType.Contains("Query", StringComparison.OrdinalIgnoreCase) || ch.ValueType.Contains("Calc", StringComparison.OrdinalIgnoreCase)) vt = 1;
+
+                await connection.ExecuteAsync(insertColSql, new
+                {
+                    WellId = metadata.WellId,
+                    WellboreId = metadata.WellboreId,
+                    LogId = metadata.LogId,
+                    Mnemonic = ch.Mnemonic,
+                    ChannelName = ch.Description,
+                    DataType = string.IsNullOrWhiteSpace(ch.DataType) ? "Double" : ch.DataType,
+                    Unit = ch.Unit,
+                    UnitId = ch.VuMaxUnitId,
+                    VuMaxUnitId = ch.VuMaxUnitId,
+                    ValueType = vt,
+                    ValueQuery = ch.Expression,
+                    WitsmlMnemonic = string.IsNullOrWhiteSpace(ch.UploadMnemonic) ? ch.Mnemonic : ch.UploadMnemonic,
+                    CreatedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss"),
+                    ModifiedDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss"),
+                    ColumnOrder = order++,
+                    WriteBack = ch.Upload ? 1 : 0,
+                    NoInterpolate = ch.DoNotInterpol ? 1 : 0
+                });
+            }
+        }
+
+        // If DATA_TABLE_NAME stores channel rows directly (has MNEMONIC column), update it too
+        if (!string.IsNullOrWhiteSpace(metadata.DataTableName))
+        {
+            var hasDt = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = @TableName;",
+                new { TableName = metadata.DataTableName });
+            if (hasDt > 0)
+            {
+                try
+                {
+                    var dtCols = (await connection.QueryAsync<string>(
+                        $"SELECT name FROM pragma_table_info('{metadata.DataTableName}');")).ToList();
+                    if (dtCols.Contains("MNEMONIC", StringComparer.OrdinalIgnoreCase))
+                    {
+                        await connection.ExecuteAsync($"DELETE FROM [{metadata.DataTableName}];");
+                        foreach (var ch in channels)
+                        {
+                            var rowCols = new List<string>();
+                            var rowVals = new List<string>();
+                            var p = new DynamicParameters();
+
+                            void AddIfCol(string col, object? val)
+                            {
+                                if (dtCols.Contains(col, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    rowCols.Add($"[{col}]");
+                                    rowVals.Add($"@{col}");
+                                    p.Add(col, val);
+                                }
+                            }
+
+                            AddIfCol("Upload", ch.Upload ? 1 : 0);
+                            AddIfCol("WRITE_BACK", ch.Upload ? 1 : 0);
+                            AddIfCol("Mnemonic", ch.Mnemonic);
+                            AddIfCol("MNEMONIC", ch.Mnemonic);
+                            AddIfCol("Unit", ch.Unit);
+                            AddIfCol("UNIT", ch.Unit);
+                            AddIfCol("VuMax Unit ID", ch.VuMaxUnitId);
+                            AddIfCol("VUMAX_UNIT_ID", ch.VuMaxUnitId);
+                            AddIfCol("Description", ch.Description);
+                            AddIfCol("CHANNEL_NAME", ch.Description);
+                            AddIfCol("Upload Mnemonic", ch.UploadMnemonic);
+                            AddIfCol("WITSML_MNEMONIC", ch.UploadMnemonic);
+                            AddIfCol("Value Type", ch.ValueType);
+                            AddIfCol("VALUE_TYPE", ch.ValueType);
+                            AddIfCol("Expression", ch.Expression);
+                            AddIfCol("VALUE_QUERY", ch.Expression);
+                            AddIfCol("Do Not Interpol", ch.DoNotInterpol ? 1 : 0);
+                            AddIfCol("NO_INTERPOLATE", ch.DoNotInterpol ? 1 : 0);
+
+                            if (rowCols.Count > 0)
+                            {
+                                string insSql = $"INSERT INTO [{metadata.DataTableName}] ({string.Join(", ", rowCols)}) VALUES ({string.Join(", ", rowVals)});";
+                                await connection.ExecuteAsync(insSql, p);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        try { await connection.ExecuteAsync("PRAGMA wal_checkpoint(FULL);"); } catch { }
+        _session.NotifyDataChanged();
+    }
+
+    public async Task<List<WellOption>> GetWellsForLinkingAsync()
+    {
+        var list = new List<WellOption>();
+        if (!_session.IsProjectOpen) return list;
+        var connection = _session.GetConnection();
+
+        var hasWellTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_WELL';");
+        if (hasWellTable > 0)
+        {
+            var rows = await connection.QueryAsync<dynamic>("SELECT WELL_ID, WELL_NAME FROM VMX_WELL ORDER BY WELL_NAME;");
+            foreach (var r in rows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string wId = dict.TryGetValue("WELL_ID", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                string wName = dict.TryGetValue("WELL_NAME", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+                if (!string.IsNullOrWhiteSpace(wId) || !string.IsNullOrWhiteSpace(wName))
+                {
+                    list.Add(new WellOption { WellId = wId, WellName = !string.IsNullOrWhiteSpace(wName) ? wName : wId });
+                }
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            var projectWell = await GetProjectWellAsync();
+            if (projectWell != null)
+            {
+                list.Add(new WellOption
+                {
+                    WellId = projectWell.ObjectID,
+                    WellName = projectWell.WellName
+                });
+            }
+        }
+
+        return list;
+    }
+
+    public async Task<List<WellboreOption>> GetWellboresForLinkingAsync(string? wellId = null)
+    {
+        var list = new List<WellboreOption>();
+        if (!_session.IsProjectOpen) return list;
+        var connection = _session.GetConnection();
+
+        var hasWbTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_WELLBORE';");
+        if (hasWbTable > 0)
+        {
+            string sql = string.IsNullOrWhiteSpace(wellId)
+                ? "SELECT WELLBORE_ID, WELL_ID, WELLBORE_NAME FROM VMX_WELLBORE ORDER BY WELLBORE_NAME;"
+                : "SELECT WELLBORE_ID, WELL_ID, WELLBORE_NAME FROM VMX_WELLBORE WHERE WELL_ID = @WellId ORDER BY WELLBORE_NAME;";
+
+            var rows = await connection.QueryAsync<dynamic>(sql, new { WellId = wellId });
+            foreach (var r in rows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string wbId = dict.TryGetValue("WELLBORE_ID", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                string wId = dict.TryGetValue("WELL_ID", out var wVal) && wVal != null ? Convert.ToString(wVal)! : "";
+                string wbName = dict.TryGetValue("WELLBORE_NAME", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+                if (!string.IsNullOrWhiteSpace(wbId) || !string.IsNullOrWhiteSpace(wbName))
+                {
+                    list.Add(new WellboreOption
+                    {
+                        WellboreId = wbId,
+                        WellId = wId,
+                        WellboreName = !string.IsNullOrWhiteSpace(wbName) ? wbName : wbId
+                    });
+                }
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            // Default fallback wellbore
+            list.Add(new WellboreOption
+            {
+                WellboreId = "WB-01",
+                WellId = wellId ?? "",
+                WellboreName = "Default Wellbore"
+            });
+        }
+
+        return list;
+    }
+
+    public async Task<List<TimeLogOption>> GetTimeLogsForLinkingAsync(string? wellId = null, string? wellboreId = null, string? excludeLogId = null)
+    {
+        var list = new List<TimeLogOption>();
+        if (!_session.IsProjectOpen) return list;
+        var connection = _session.GetConnection();
+
+        var hasTable = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG';");
+
+        if (hasTable > 0)
+        {
+            var rows = await connection.QueryAsync<dynamic>("SELECT LOG_ID, WELL_ID, WELLBORE_ID, LOG_NAME FROM VMX_TIME_LOG;");
+            foreach (var r in rows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string id = dict.TryGetValue("LOG_ID", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                string name = dict.TryGetValue("LOG_NAME", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+                string wId = dict.TryGetValue("WELL_ID", out var wVal) && wVal != null ? Convert.ToString(wVal)! : "";
+                string wbId = dict.TryGetValue("WELLBORE_ID", out var wbVal) && wbVal != null ? Convert.ToString(wbVal)! : "";
+
+                if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellId) && !wId.Equals(wellId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellboreId) && !wbId.Equals(wellboreId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                list.Add(new TimeLogOption
+                {
+                    LogId = id,
+                    LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                    WellId = wId,
+                    WellboreId = wbId
+                });
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            // Check VMX_TIME_LOG_SUMMARY
+            var hasSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_TIME_LOG_SUMMARY';");
+            if (hasSummary > 0)
+            {
+                var rows = await connection.QueryAsync<dynamic>("SELECT LogId, LogName FROM VMX_TIME_LOG_SUMMARY;");
+                foreach (var r in rows)
+                {
+                    var dict = (IDictionary<string, object>)r;
+                    string id = dict.TryGetValue("LogId", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                    string name = dict.TryGetValue("LogName", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+
+                    if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    list.Add(new TimeLogOption
+                    {
+                        LogId = id,
+                        LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                        WellId = wellId ?? "",
+                        WellboreId = wellboreId ?? ""
+                    });
+                }
+            }
+        }
+
+        return list;
+    }
 }
+

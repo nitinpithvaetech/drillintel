@@ -26,6 +26,14 @@
                     <materialDesign:PackIcon Kind="PencilOutline" Width="18" Height="18" Foreground="#2196F3" />
                 </MenuItem.Icon>
             </MenuItem>
+            <MenuItem Header="Edit Timelog" 
+                      Command="{Binding PlacementTarget.Tag.EditTimeLogCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.Type, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=TimeLog}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="FileDocumentEditOutline" Width="18" Height="18" Foreground="#FF9800" />
+                </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="View Data" 
                       Command="{Binding PlacementTarget.Tag.ViewDataCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
