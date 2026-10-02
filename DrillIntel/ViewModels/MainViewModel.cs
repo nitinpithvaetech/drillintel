@@ -467,6 +467,46 @@ public partial class MainViewModel : ObservableObject
         window.ShowDialog();
     }
 
+    [RelayCommand]
+    private void OpenUnitConversion()
+    {
+        IDataServiceDIntel dataService;
+        string tableName;
+        string contextName;
+        string dbPath;
+
+        if (_session.IsProjectOpen)
+        {
+            dataService = _session.GetDataService();
+            tableName = DrillIntel.Models.UnitConverter.ProjectTableName;
+            contextName = $"Project: {_session.ProjectName}";
+            dbPath = _session.ProjectFilePath ?? "Active Project Database";
+        }
+        else
+        {
+            var appDb = _appDatabaseService ?? App.AppDatabaseService;
+            dataService = appDb.GetDataService();
+            tableName = DrillIntel.Models.UnitConverter.TableName;
+            contextName = "Application Master Template (DrillIntelApp.sqlite)";
+            dbPath = appDb.DatabasePath;
+        }
+
+        var vm = new UnitConversionMasterViewModel(
+            dataService,
+            tableName: tableName,
+            contextName: contextName,
+            isProjectOpen: _session.IsProjectOpen,
+            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
+            databasePath: dbPath);
+
+        var window = new DrillIntel.Views.UnitConversionMasterWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task IdentifyRigStates()
     {

@@ -189,6 +189,11 @@
                             <materialDesign:PackIcon Kind="RulerSquareCompass" Foreground="#3F51B5" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Unit Conversion" Command="{Binding OpenUnitConversionCommand}">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="SwapHorizontalCircleOutline" Foreground="#00897B" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Rig State Master" Command="{Binding OpenRigStateMasterCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="CogSyncOutline" Foreground="#673AB7" Width="32" Height="32" />

@@ -649,6 +649,21 @@ CREATE TABLE IF NOT EXISTS VMX_UNIT_MASTER (
     MODIFIED_BY   TEXT,
     MODIFIED_DATE TEXT
 );
+
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS VMX_UNIT_CONVERSIONS (
+    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
+    FROM_UNIT     TEXT NOT NULL COLLATE NOCASE,
+    TO_UNIT       TEXT NOT NULL COLLATE NOCASE,
+    MULTIPLIER    REAL NOT NULL,
+    OFFSET        REAL NOT NULL DEFAULT 0.0,
+    CATEGORY      TEXT NOT NULL,
+    CREATED_BY    TEXT,
+    CREATED_DATE  TEXT,
+    MODIFIED_BY   TEXT,
+    MODIFIED_DATE TEXT,
+    UNIQUE(FROM_UNIT, TO_UNIT)
+);
 ";
     }
 
@@ -967,6 +982,21 @@ CREATE TABLE IF NOT EXISTS VMX_UNIT_MASTER (
                         else
                         {
                             Unit.CreateDefaultUnits(projectDataService, Unit.ProjectTableName);
+                        }
+
+                        // Copy master unit conversions to project VMX_UNIT_CONVERSIONS
+                        DrillIntel.Models.UnitConverter.EnsureTableExists(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
+                        var masterConversions = DrillIntel.Models.UnitConverter.GetList(appDataService, tableName: DrillIntel.Models.UnitConverter.TableName);
+                        if (masterConversions.Count > 0)
+                        {
+                            foreach (var c in masterConversions)
+                            {
+                                DrillIntel.Models.UnitConverter.Add(projectDataService, c, DrillIntel.Models.UnitConverter.ProjectTableName);
+                            }
+                        }
+                        else
+                        {
+                            DrillIntel.Models.UnitConverter.CreateDefaultConversion(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
                         }
                     }
                 }
