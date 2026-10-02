@@ -368,5 +368,21 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                 return false;
             }
         }
+
+        // --- [NEW LOGIC (getWellDateFormat: retrieves DATE_FORMAT column from VMX_WELL)] ---
+        public static string getWellDateFormat(IDataServiceDIntel objDataService, string wellID)
+        {
+            if (objDataService == null || string.IsNullOrWhiteSpace(wellID)) return wDateFormatLocal;
+            try
+            {
+                var val = objDataService.GetValue("SELECT DATE_FORMAT FROM VMX_WELL WHERE WELL_ID='" + wellID.Replace("'", "''") + "' LIMIT 1;");
+                var str = Convert.ToString(val) ?? "";
+                return string.IsNullOrWhiteSpace(str) ? wDateFormatLocal : str;
+            }
+            catch
+            {
+                return wDateFormatLocal;
+            }
+        }
     }
 }

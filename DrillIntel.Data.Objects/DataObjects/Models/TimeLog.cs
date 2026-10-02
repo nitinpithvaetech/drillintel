@@ -1,8 +1,9 @@
+using DrillIntel.Data;
+using DrillIntel.Data.Objects.DataObjects.Services;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using DrillIntel.Data;
-using DrillIntel.Data.Objects.DataObjects.Services;
+using System.Globalization;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models
 {
@@ -391,6 +392,224 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         public double getLastIndexOptimized(IDataServiceDIntel objDataService)
         {
             return TimeLogService.getLastIndexOptimized(objDataService, this.WellID, this.WellboreID, this.ObjectID);
+        }
+
+        public static double getLastIndexOptimized(IDataServiceDIntel objDataService, string wellID, string wellboreID, string logID)
+        {
+            return TimeLogService.getLastIndexOptimized(objDataService, wellID, wellboreID, logID);
+        }
+
+        //public bool addTimeLog(IDataServiceDIntel objDataService, TimeLog objTimeLog)
+        //{
+        //    string lastError = "";
+        //    return TimeLogService.addTimeLog(objDataService, objTimeLog, ref lastError);
+        //}
+
+        public static bool addTimeLog(IDataServiceDIntel objDataService, TimeLog objTimeLog)
+        {
+            string lastError = "";
+            return TimeLogService.addTimeLog(objDataService, objTimeLog, ref lastError);
+        }
+
+
+        #endregion
+
+        #region Update Data & Helpers (SQLite)
+
+        // --- [NEW LOGIC (loadTimeLog: loads a TimeLog by WellID, WellboreID, and LogID)] ---
+        public static TimeLog? loadTimeLog(IDataServiceDIntel objDataService, string WellID, string WellboreID, string LogID, string dummy = "")
+        {
+            string lastError = "";
+            return TimeLogService.LoadObject(objDataService, WellID, WellboreID, LogID, ref lastError);
+        }
+
+        public static TimeLog? loadTimeLog(IDataServiceDIntel objDataService, string LogID)
+        {
+            string lastError = "";
+            return TimeLogService.LoadObject(objDataService, LogID, ref lastError);
+        }
+
+        // --- [NEW LOGIC (getDataTableName: queries DATA_TABLE_NAME from VMX_TIME_LOG)] ---
+        public static string getDataTableName(IDataServiceDIntel objDataService, string WellID, string WellboreID, string LogID)
+        {
+            if (objDataService == null || string.IsNullOrWhiteSpace(LogID)) return "";
+            try
+            {
+                var val = objDataService.GetValue("SELECT DATA_TABLE_NAME FROM VMX_TIME_LOG WHERE LOG_ID='" + LogID.Replace("'", "''") + "' LIMIT 1;");
+                return Convert.ToString(val) ?? "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        // --- [NEW LOGIC (getIndexWITSMLMnemonic: gets WITSML mnemonic for index/datetime curve)] ---
+        public string getIndexWITSMLMnemonic()
+        {
+            if (!string.IsNullOrWhiteSpace(indexCurve) && logCurves != null && logCurves.ContainsKey(indexCurve))
+            {
+                var ch = logCurves[indexCurve];
+                if (!string.IsNullOrWhiteSpace(ch.witsmlMnemonic))
+                    return ch.witsmlMnemonic;
+            }
+
+            if (logCurves != null)
+            {
+                foreach (var kvp in logCurves)
+                {
+                    if (kvp.Key.Equals("DATETIME", StringComparison.OrdinalIgnoreCase) ||
+                        kvp.Key.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrWhiteSpace(kvp.Value.witsmlMnemonic))
+                            return kvp.Value.witsmlMnemonic;
+                        return kvp.Key;
+                    }
+                }
+            }
+            return "DATETIME";
+        }
+
+        // --- [NEW LOGIC (getVuMaxMnemonic: maps incoming WITSML column name to internal VuMax mnemonic)] ---
+        public string getVuMaxMnemonic(string witsmlMnemonic)
+        {
+            if (string.IsNullOrWhiteSpace(witsmlMnemonic) || logCurves == null) return "";
+            foreach (var kvp in logCurves)
+            {
+                if (kvp.Value != null &&
+                    (string.Equals(kvp.Value.witsmlMnemonic, witsmlMnemonic, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(kvp.Key, witsmlMnemonic, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return kvp.Key;
+                }
+            }
+            return "";
+        }
+
+        // --- [NEW LOGIC (updateUnits: performs in-place column unit conversion using registered conversion factors)] ---
+        public static bool updateUnits(IDataServiceDIntel objDataService, TimeLog objTimeLog, string mnemonic, string fromUnit, string toUnit, DateTime minDate, DateTime maxDate)
+        {
+            if (string.IsNullOrWhiteSpace(fromUnit) || string.IsNullOrWhiteSpace(toUnit) ||
+                string.Equals(fromUnit.Trim(), toUnit.Trim(), StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (objDataService == null || objTimeLog == null) return false;
+
+            string dataTable = objTimeLog.__dataTableName;
+            if (string.IsNullOrWhiteSpace(dataTable))
+                dataTable = getDataTableName(objDataService, objTimeLog.WellID, objTimeLog.WellboreID, objTimeLog.ObjectID);
+
+            if (string.IsNullOrWhiteSpace(dataTable)) return false;
+
+            try
+            {
+                double multiplier = 1.0;
+                double offset = 0.0;
+                bool found = false;
+
+                // Check VMX_UNIT_CONVERSIONS first
+                string sqlConv = "SELECT MULTIPLIER, OFFSET FROM VMX_UNIT_CONVERSIONS WHERE LOWER(FROM_UNIT)='" 
+                    + fromUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' AND LOWER(TO_UNIT)='" 
+                    + toUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' LIMIT 1;";
+                DataTable dtConv = objDataService.GetTable(sqlConv);
+                if (dtConv != null && dtConv.Rows.Count > 0)
+                {
+                    multiplier = Convert.ToDouble(dtConv.Rows[0]["MULTIPLIER"], CultureInfo.InvariantCulture);
+                    offset = Convert.ToDouble(dtConv.Rows[0]["OFFSET"], CultureInfo.InvariantCulture);
+                    found = true;
+                    dtConv.Dispose();
+                }
+                else
+                {
+                    // Fallback to APP_UNIT_CONVERSIONS if present
+                    string sqlAppConv = "SELECT MULTIPLIER, OFFSET FROM APP_UNIT_CONVERSIONS WHERE LOWER(FROM_UNIT)='" 
+                        + fromUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' AND LOWER(TO_UNIT)='" 
+                        + toUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' LIMIT 1;";
+                    DataTable dtAppConv = objDataService.GetTable(sqlAppConv);
+                    if (dtAppConv != null && dtAppConv.Rows.Count > 0)
+                    {
+                        multiplier = Convert.ToDouble(dtAppConv.Rows[0]["MULTIPLIER"], CultureInfo.InvariantCulture);
+                        offset = Convert.ToDouble(dtAppConv.Rows[0]["OFFSET"], CultureInfo.InvariantCulture);
+                        found = true;
+                        dtAppConv.Dispose();
+                    }
+                }
+
+                if (found)
+                {
+                    string sqlUpdate;
+                    if (minDate > DateTime.MinValue && maxDate > DateTime.MinValue)
+                    {
+                        sqlUpdate = "UPDATE [" + dataTable + "] SET [" + mnemonic + "] = ([" + mnemonic + "] * " 
+                            + multiplier.ToString(CultureInfo.InvariantCulture) + ") + " 
+                            + offset.ToString(CultureInfo.InvariantCulture) + " WHERE [" + mnemonic + "] IS NOT NULL AND DATETIME >= '" 
+                            + minDate.ToString("dd-MMM-yyyy HH:mm:ss") + "' AND DATETIME <= '" 
+                            + maxDate.ToString("dd-MMM-yyyy HH:mm:ss") + "';";
+                    }
+                    else
+                    {
+                        sqlUpdate = "UPDATE [" + dataTable + "] SET [" + mnemonic + "] = ([" + mnemonic + "] * " 
+                            + multiplier.ToString(CultureInfo.InvariantCulture) + ") + " 
+                            + offset.ToString(CultureInfo.InvariantCulture) + " WHERE [" + mnemonic + "] IS NOT NULL;";
+                    }
+                    return objDataService.ExecuteNonQuery(sqlUpdate);
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // --- [NEW LOGIC (updateData: updates timelog data table with incoming rows and executes unit conversions)] ---
+        public static bool updateData(IDataServiceDIntel objDataService, string WellID, string WellboreID, string LogID, DataTable objData, string TimeZone, ref string LastError)
+        {
+            return TimeLogService.updateData(objDataService, WellID, WellboreID, LogID, objData, TimeZone, ref LastError);
+        }
+
+        // --- [NEW LOGIC (Remove / RemoveTimeLog: wrappers delegating to TimeLogService.RemoveTimeLog)] ---
+        public bool Remove(IDataServiceDIntel objDataService, bool dropDataTable = true)
+        {
+            string lastError = "";
+            return TimeLogService.RemoveTimeLog(objDataService, this.WellID, this.WellboreID, this.ObjectID, dropDataTable, ref lastError);
+        }
+
+        public static bool RemoveTimeLog(IDataServiceDIntel objDataService, string wellID, string wellboreID, string logID, bool dropDataTable, ref string lastError)
+        {
+            return TimeLogService.RemoveTimeLog(objDataService, wellID, wellboreID, logID, dropDataTable, ref lastError);
+        }
+
+        public static bool RemoveTimeLog(IDataServiceDIntel objDataService, string logID, bool dropDataTable = true)
+        {
+            return TimeLogService.RemoveTimeLog(objDataService, logID, dropDataTable);
+        }
+
+        // --- [OLD LOGIC (Redundant static overload: callers use timeLog.Remove(objDataService) or RemoveTimeLog(objDataService, logID))] ---
+        // public static bool RemoveTimeLog(IDataServiceDIntel objDataService, TimeLog log, bool dropDataTable = true)
+        // {
+        //     return TimeLogService.RemoveTimeLog(objDataService, log.ObjectID, dropDataTable);
+        // }
+
+        // --- [NEW LOGIC (Save / SaveTimeLog: wrappers delegating to TimeLogService.SaveTimeLog)] ---
+        public bool Save(IDataServiceDIntel objDataService, ref string lastError)
+        {
+            return TimeLogService.SaveTimeLog(objDataService, this, this.logCurves.Values, ref lastError);
+        }
+
+        public bool Save(IDataServiceDIntel objDataService, IEnumerable<LogChannel> channels, ref string lastError)
+        {
+            return TimeLogService.SaveTimeLog(objDataService, this, channels, ref lastError);
+        }
+
+        public static bool SaveTimeLog(IDataServiceDIntel objDataService, TimeLog log, IEnumerable<LogChannel> channels, ref string lastError)
+        {
+            return TimeLogService.SaveTimeLog(objDataService, log, channels, ref lastError);
+        }
+
+        public static bool SaveTimeLog(IDataServiceDIntel objDataService, TimeLog log, ref string lastError)
+        {
+            return TimeLogService.SaveTimeLog(objDataService, log, ref lastError);
         }
 
         #endregion

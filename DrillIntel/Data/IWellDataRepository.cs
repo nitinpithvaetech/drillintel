@@ -76,6 +76,12 @@ public interface IWellDataRepository
 
     Task<DataTable> GetLogDataTableAsync(string tableName, int limitRows = 1000);
 
+    // --- [NEW LOGIC (TimeLog & LogChannel methods from DrillIntel.Data.Objects)] ---
+    Task<TimeLog?> GetTimeLogAsync(string logId);
+    Task<List<LogChannel>> GetLogChannelsAsync(string logId, string? dataTableName);
+    Task SaveTimeLogAsync(TimeLog log, List<LogChannel> channels);
+
+    // --- [OLD LOGIC (Legacy metadata methods maintained for backwards compatibility)] ---
     Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId);
     Task<List<TimelogChannelItem>> GetTimeLogChannelsAsync(string logId, string? dataTableName);
     Task SaveTimeLogEditAsync(TimeLogEditMetadata metadata, List<TimelogChannelItem> channels);

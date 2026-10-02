@@ -2326,6 +2326,72 @@ public class WellDataRepository : IWellDataRepository
         });
     }
 
+    // --- [NEW LOGIC (TimeLog and LogChannel operations using TimeLogService and SQLite)] ---
+    public async Task<TimeLog?> GetTimeLogAsync(string logId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(logId)) return null;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return null;
+
+        return await Task.Run(() =>
+        {
+            string lastError = "";
+            var log = TimeLogService.LoadObject(dataService, logId, ref lastError);
+            if (log != null) return log;
+
+            // Fallback by LOG_NAME or DATA_TABLE_NAME if logId was passed as a name
+            var dt = dataService.GetTable("SELECT WELL_ID, WELLBORE_ID, LOG_ID FROM VMX_TIME_LOG WHERE LOG_NAME = '" 
+                + logId.Replace("'", "''") + "' OR DATA_TABLE_NAME = '" 
+                + logId.Replace("'", "''") + "' LIMIT 1;");
+            if (dt != null && dt.Rows.Count > 0)
+            {
+                string foundLogId = DataService.checkNull(dt.Rows[0]["LOG_ID"], "");
+                string wId = DataService.checkNull(dt.Rows[0]["WELL_ID"], "");
+                string wbId = DataService.checkNull(dt.Rows[0]["WELLBORE_ID"], "");
+                dt.Dispose();
+                return TimeLogService.LoadObject(dataService, wId, wbId, foundLogId, ref lastError);
+            }
+
+            return null;
+        });
+    }
+
+    public async Task<List<LogChannel>> GetLogChannelsAsync(string logId, string? dataTableName)
+    {
+        var log = await GetTimeLogAsync(logId);
+        if (log != null && log.logCurves.Count > 0)
+        {
+            return log.logCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        var dataService = _session.GetDataService();
+        if (dataService != null)
+        {
+            if (log == null)
+            {
+                log = new TimeLog { ObjectID = logId, __dataTableName = dataTableName ?? "" };
+            }
+            TimeLogService.LoadLogCurves(dataService, log);
+            return log.logCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        return new List<LogChannel>();
+    }
+
+    public async Task SaveTimeLogAsync(TimeLog timeLog, List<LogChannel> channels)
+    {
+        if (!_session.IsProjectOpen || timeLog == null || string.IsNullOrWhiteSpace(timeLog.ObjectID)) return;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return;
+
+        await Task.Run(() =>
+        {
+            string lastError = "";
+            TimeLogService.SaveTimeLog(dataService, timeLog, channels, ref lastError);
+        });
+    }
+
+    // --- [OLD LOGIC (Legacy TimeLogEditMetadata methods maintained for backwards compatibility)] ---
     public async Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId)
     {
         if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(logId)) return null;

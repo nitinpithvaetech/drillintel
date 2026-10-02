@@ -372,6 +372,7 @@
                     <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="1">
                         <DataGrid ItemsSource="{Binding Channels}" 
                                   SelectedItem="{Binding SelectedChannel}"
+                                  MouseDoubleClick="OnChannelsDataGridMouseDoubleClick"
                                   AutoGenerateColumns="False" 
                                   CanUserAddRows="False"
                                   CanUserDeleteRows="False"
@@ -411,18 +412,20 @@
                                 </Style>
                             </DataGrid.ColumnHeaderStyle>
                             <DataGrid.Columns>
-                                <!-- Upload Checkbox -->
-                                <DataGridCheckBoxColumn Header="Upload" Binding="{Binding Upload, UpdateSourceTrigger=PropertyChanged}" Width="65">
+                                <!-- Upload Checkbox (Read Only) -->
+                                <DataGridCheckBoxColumn Header="Upload" Binding="{Binding Upload, UpdateSourceTrigger=PropertyChanged}" Width="65" IsReadOnly="True">
                                     <DataGridCheckBoxColumn.ElementStyle>
                                         <Style TargetType="CheckBox">
                                             <Setter Property="HorizontalAlignment" Value="Center" />
                                             <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="IsHitTestVisible" Value="False" />
+                                            <Setter Property="Focusable" Value="False" />
                                         </Style>
                                     </DataGridCheckBoxColumn.ElementStyle>
                                 </DataGridCheckBoxColumn>
 
-                                <!-- Mnemonic -->
-                                <DataGridTextColumn Header="Mnemonic" Binding="{Binding Mnemonic, UpdateSourceTrigger=PropertyChanged}" Width="110" FontWeight="SemiBold">
+                                <!-- Mnemonic (Read Only) -->
+                                <DataGridTextColumn Header="Mnemonic" Binding="{Binding Mnemonic, UpdateSourceTrigger=PropertyChanged}" Width="110" FontWeight="SemiBold" IsReadOnly="True">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -431,8 +434,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Unit -->
-                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit, UpdateSourceTrigger=PropertyChanged}" Width="75">
+                                <!-- Unit (Editable) -->
+                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit, UpdateSourceTrigger=PropertyChanged}" Width="75" IsReadOnly="False">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -441,8 +444,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- VuMax Unit ID -->
-                                <DataGridTextColumn Header="VuMax Unit ID" Binding="{Binding VuMaxUnitId, UpdateSourceTrigger=PropertyChanged}" Width="110">
+                                <!-- VuMax Unit ID (Editable) -->
+                                <DataGridTextColumn Header="VuMax Unit ID" Binding="{Binding VuMaxUnitId, UpdateSourceTrigger=PropertyChanged}" Width="110" IsReadOnly="False">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -451,8 +454,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Description -->
-                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*">
+                                <!-- Description (Editable) -->
+                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" IsReadOnly="False">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -462,8 +465,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Upload Mnemonic -->
-                                <DataGridTextColumn Header="Upload Mnemonic" Binding="{Binding UploadMnemonic, UpdateSourceTrigger=PropertyChanged}" Width="120">
+                                <!-- Upload Mnemonic (Read Only) -->
+                                <DataGridTextColumn Header="Upload Mnemonic" Binding="{Binding UploadMnemonic, UpdateSourceTrigger=PropertyChanged}" Width="120" IsReadOnly="True">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -472,8 +475,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Value Type -->
-                                <DataGridTextColumn Header="Value Type" Binding="{Binding ValueType, UpdateSourceTrigger=PropertyChanged}" Width="95">
+                                <!-- Value Type (Read Only) -->
+                                <DataGridTextColumn Header="Value Type" Binding="{Binding ValueType, UpdateSourceTrigger=PropertyChanged}" Width="95" IsReadOnly="True">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -482,8 +485,8 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Expression -->
-                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" Width="120">
+                                <!-- Expression (Read Only) -->
+                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" Width="120" IsReadOnly="True">
                                     <DataGridTextColumn.ElementStyle>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="VerticalAlignment" Value="Center" />
@@ -492,12 +495,14 @@
                                     </DataGridTextColumn.ElementStyle>
                                 </DataGridTextColumn>
 
-                                <!-- Do Not Interpol -->
-                                <DataGridCheckBoxColumn Header="Do Not Interpol" Binding="{Binding DoNotInterpol, UpdateSourceTrigger=PropertyChanged}" Width="110">
+                                <!-- Do Not Interpol (Read Only) -->
+                                <DataGridCheckBoxColumn Header="Do Not Interpol" Binding="{Binding DoNotInterpol, UpdateSourceTrigger=PropertyChanged}" Width="110" IsReadOnly="True">
                                     <DataGridCheckBoxColumn.ElementStyle>
                                         <Style TargetType="CheckBox">
                                             <Setter Property="HorizontalAlignment" Value="Center" />
                                             <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="IsHitTestVisible" Value="False" />
+                                            <Setter Property="Focusable" Value="False" />
                                         </Style>
                                     </DataGridCheckBoxColumn.ElementStyle>
                                 </DataGridCheckBoxColumn>

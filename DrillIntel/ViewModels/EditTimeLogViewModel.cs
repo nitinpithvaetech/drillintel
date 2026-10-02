@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 using DrillIntel.Models;
 using DrillIntel.Projects;
 
@@ -20,6 +21,9 @@ public partial class EditTimeLogViewModel : ObservableObject
     private readonly TimeLog? _fallbackTimeLog;
 
     public event Action<bool?>? RequestClose;
+
+    // Test hook / UI handler for Channel Properties dialog
+    public Func<ChannelPropertiesViewModel, bool?>? OpenChannelPropertiesDialogHandler { get; set; }
 
     [ObservableProperty]
     private string _title = "Edit Timelog";
@@ -85,10 +89,19 @@ public partial class EditTimeLogViewModel : ObservableObject
     private string _startingHoleDepth = "0";
 
     // --- (2) Channels ---
-    public ObservableCollection<TimelogChannelItem> Channels { get; } = new();
+    // --- [OLD LOGIC (TimelogChannelItem: replaced by LogChannel)] ---
+    // public ObservableCollection<TimelogChannelItem> Channels { get; } = new();
+    // [ObservableProperty]
+    // private TimelogChannelItem? _selectedChannel;
+
+    // --- [NEW LOGIC (LogChannel and TimeLog from DrillIntel.Data.Objects)] ---
+    public ObservableCollection<LogChannel> Channels { get; } = new();
 
     [ObservableProperty]
-    private TimelogChannelItem? _selectedChannel;
+    private LogChannel? _selectedChannel;
+
+    [ObservableProperty]
+    private TimeLog? _currentTimeLog;
 
     // --- (3) Link Time Log ---
     [ObservableProperty]
@@ -205,36 +218,86 @@ public partial class EditTimeLogViewModel : ObservableObject
         {
             IsLoading = true;
 
-            // 1. Query vmx_time_log for the selected Timelog ID
-            var meta = await _repository.GetTimeLogEditMetadataAsync(LogId);
-            if (meta != null)
-            {
-                LogName = meta.LogName;
-                ServiceCompany = meta.ServiceCompany;
-                EdrProvider = meta.EdrProvider;
-                RunNo = meta.RunNo;
-                Description = meta.Description;
-                PrimaryLog = meta.PrimaryLog;
-                RemarksLog = meta.RemarksLog;
-                NoAutoCalc = meta.NoAutoCalc;
-                StartingHoleDepth = meta.StartingHoleDepth.ToString(CultureInfo.InvariantCulture);
-                DataTableName = meta.DataTableName;
-                WellId = meta.WellId;
-                WellboreId = meta.WellboreId;
-                LinkToParent = meta.LinkToParent;
-                DontMoveAhead = meta.DontMoveAhead;
-                SelectedDuplicateAction = meta.DuplicateAction;
+            // --- [OLD LOGIC (Loaded TimeLogEditMetadata from repository)] ---
+            // var meta = await _repository.GetTimeLogEditMetadataAsync(LogId);
+            // if (meta != null) { ... }
+            // var channels = await _repository.GetTimeLogChannelsAsync(LogId, DataTableName);
 
-                Title = string.IsNullOrWhiteSpace(meta.LogName) ? "Edit Timelog" : $"Edit Timelog — {meta.LogName}";
-            }
-            else if (_fallbackTimeLog != null)
+            // --- [NEW LOGIC (Load TimeLog and LogChannel directly using TimeLog and TimeLogService)] ---
+            TimeLog? log = await _repository.GetTimeLogAsync(LogId);
+            if (log == null && _session?.GetDataService() is IDataServiceDIntel ds)
             {
-                DataTableName = _fallbackTimeLog.__dataTableName;
-                Title = $"Edit Timelog — {_fallbackTimeLog.nameLog}";
+                string err = "";
+                log = TimeLogService.LoadObject(ds, LogId, ref err);
+            }
+            if (log == null && _fallbackTimeLog != null)
+            {
+                log = _fallbackTimeLog;
             }
 
-            // 2. Query all rows from DATA_TABLE_NAME and populate Channels tab grid
-            var channels = await _repository.GetTimeLogChannelsAsync(LogId, DataTableName);
+            if (log != null)
+            {
+                CurrentTimeLog = log;
+                LogName = log.nameLog;
+                ServiceCompany = log.serviceCompany;
+                EdrProvider = log.EDRProvider;
+                RunNo = log.runNumber;
+                Description = log.description;
+                PrimaryLog = log.PrimaryLog;
+                RemarksLog = log.RemarksLog;
+                NoAutoCalc = log.DontCalcHoleDepth;
+                StartingHoleDepth = log.StartingHoleDepth.ToString(CultureInfo.InvariantCulture);
+                DataTableName = log.__dataTableName;
+                WellId = log.WellID;
+                WellboreId = log.WellboreID;
+                LinkToParent = log.LinkToParent;
+                DontMoveAhead = log.DontMoveAhead;
+                SelectedDuplicateAction = log.DuplicateAction switch
+                {
+                    enumDuplicateAction.SkipDuplicates => "Ignore",
+                    enumDuplicateAction.OverwriteDuplicates => "Replace",
+                    _ => "Merge Columns"
+                };
+
+                Title = string.IsNullOrWhiteSpace(log.nameLog) ? "Edit Timelog" : $"Edit Timelog — {log.nameLog}";
+            }
+            else
+            {
+                // Fallback to legacy metadata if necessary
+                var meta = await _repository.GetTimeLogEditMetadataAsync(LogId);
+                if (meta != null)
+                {
+                    LogName = meta.LogName;
+                    ServiceCompany = meta.ServiceCompany;
+                    EdrProvider = meta.EdrProvider;
+                    RunNo = meta.RunNo;
+                    Description = meta.Description;
+                    PrimaryLog = meta.PrimaryLog;
+                    RemarksLog = meta.RemarksLog;
+                    NoAutoCalc = meta.NoAutoCalc;
+                    StartingHoleDepth = meta.StartingHoleDepth.ToString(CultureInfo.InvariantCulture);
+                    DataTableName = meta.DataTableName;
+                    WellId = meta.WellId;
+                    WellboreId = meta.WellboreId;
+                    LinkToParent = meta.LinkToParent;
+                    DontMoveAhead = meta.DontMoveAhead;
+                    SelectedDuplicateAction = meta.DuplicateAction;
+
+                    Title = string.IsNullOrWhiteSpace(meta.LogName) ? "Edit Timelog" : $"Edit Timelog — {meta.LogName}";
+                }
+            }
+
+            // 2. Query all channels and populate Channels tab grid
+            List<LogChannel> channels;
+            if (CurrentTimeLog != null && CurrentTimeLog.logCurves.Count > 0)
+            {
+                channels = CurrentTimeLog.logCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+            }
+            else
+            {
+                channels = await _repository.GetLogChannelsAsync(LogId, DataTableName);
+            }
+
             Channels.Clear();
             foreach (var ch in channels)
             {
@@ -254,17 +317,21 @@ public partial class EditTimeLogViewModel : ObservableObject
                 AvailableWells.Add(w);
             }
 
-            if (!string.IsNullOrWhiteSpace(meta?.LinkWellId))
+            string linkWell = CurrentTimeLog?.LinkWellID ?? "";
+            string linkWb = CurrentTimeLog?.LinkWellboreID ?? "";
+            string linkLog = CurrentTimeLog?.LinkLogID ?? "";
+
+            if (!string.IsNullOrWhiteSpace(linkWell))
             {
-                SelectedWellOption = AvailableWells.FirstOrDefault(w => w.WellId.Equals(meta.LinkWellId, StringComparison.OrdinalIgnoreCase));
+                SelectedWellOption = AvailableWells.FirstOrDefault(w => w.WellId.Equals(linkWell, StringComparison.OrdinalIgnoreCase));
             }
             else if (AvailableWells.Count > 0)
             {
                 SelectedWellOption = AvailableWells[0];
             }
 
-            await RefreshWellboresAsync(meta?.LinkWellboreId);
-            await RefreshTimeLogsAsync(meta?.LinkLogId);
+            await RefreshWellboresAsync(linkWb);
+            await RefreshTimeLogsAsync(linkLog);
 
             // Add any custom service companies or EDR providers if present
             if (!string.IsNullOrWhiteSpace(ServiceCompany) && !AvailableServiceCompanies.Contains(ServiceCompany))
@@ -352,30 +419,61 @@ public partial class EditTimeLogViewModel : ObservableObject
             mnemonic = $"CHAN_{index}";
         }
 
-        var newChannel = new TimelogChannelItem
+        var dataService = _session?.GetDataService() ?? Unit.DefaultDataService;
+        var existingMnemonics = Channels.Select(c => c.Mnemonic).ToList();
+
+        // --- [OLD LOGIC (Immediately appended placeholder channel without dialog)] ---
+        // var newChannel = new LogChannel
+        // {
+        //     Upload = true,
+        //     Mnemonic = mnemonic,
+        //     Unit = "",
+        //     VuMaxUnitId = "",
+        //     Description = $"Channel {index}",
+        //     UploadMnemonic = mnemonic,
+        //     ValueType = "0",
+        //     Expression = "",
+        //     DoNotInterpol = false,
+        //     DataType = "Double",
+        //     ColumnOrder = Channels.Count + 1,
+        //     OriginalMnemonic = mnemonic
+        // };
+        // Channels.Add(newChannel);
+        // SelectedChannel = newChannel;
+
+        // --- [NEW LOGIC (Open Channel Properties dialog with Expression valueType and Project Unit Master units)] ---
+        var vm = new ChannelPropertiesViewModel(dataService, existingMnemonics, null, Channels.Count + 1, Channels)
         {
-            Upload = true,
             Mnemonic = mnemonic,
-            Unit = "",
-            VuMaxUnitId = "",
             Description = $"Channel {index}",
-            UploadMnemonic = mnemonic,
-            ValueType = "0",
-            Expression = "",
-            DoNotInterpol = false,
-            DataType = "Double",
-            ColumnOrder = Channels.Count + 1
+            ValueType = "Expression",
+            ColumnOrder = Channels.Count + 1,
+            SensorOffset = "0"
         };
 
-        Channels.Add(newChannel);
-        SelectedChannel = newChannel;
-        StatusMessage = $"Channel '{mnemonic}' added. You can edit its details directly in the grid.";
-        IsStatusError = false;
-        IsStatusVisible = true;
+        bool? result;
+        if (OpenChannelPropertiesDialogHandler != null)
+        {
+            result = OpenChannelPropertiesDialogHandler(vm);
+        }
+        else
+        {
+            result = ShowChannelPropertiesDialog(vm);
+        }
+
+        if (result == true)
+        {
+            var newChannel = vm.ToLogChannel();
+            Channels.Add(newChannel);
+            SelectedChannel = newChannel;
+            StatusMessage = $"Expression Channel '{newChannel.Mnemonic}' added.";
+            IsStatusError = false;
+            IsStatusVisible = true;
+        }
     }
 
     [RelayCommand]
-    public void EditChannel(TimelogChannelItem? channel)
+    public void EditChannel(LogChannel? channel)
     {
         var target = channel ?? SelectedChannel;
         if (target == null)
@@ -386,14 +484,65 @@ public partial class EditTimeLogViewModel : ObservableObject
             return;
         }
 
-        SelectedChannel = target;
-        StatusMessage = $"Editing channel '{target.Mnemonic}'. Edit fields directly in the table.";
-        IsStatusError = false;
-        IsStatusVisible = true;
+        var dataService = _session?.GetDataService() ?? Unit.DefaultDataService;
+        var existingMnemonics = Channels.Where(c => c != target).Select(c => c.Mnemonic).ToList();
+
+        // --- [NEW LOGIC (Open Channel Properties dialog to edit channel details)] ---
+        var vm = new ChannelPropertiesViewModel(dataService, existingMnemonics, target, target.ColumnOrder, Channels);
+
+        bool? result;
+        if (OpenChannelPropertiesDialogHandler != null)
+        {
+            result = OpenChannelPropertiesDialogHandler(vm);
+        }
+        else
+        {
+            result = ShowChannelPropertiesDialog(vm);
+        }
+
+        if (result == true)
+        {
+            vm.ApplyTo(target);
+            SelectedChannel = target;
+            StatusMessage = $"Channel '{target.Mnemonic}' updated.";
+            IsStatusError = false;
+            IsStatusVisible = true;
+        }
+    }
+
+    private bool? ShowChannelPropertiesDialog(ChannelPropertiesViewModel vm)
+    {
+        if (OpenChannelPropertiesDialogHandler != null)
+        {
+            return OpenChannelPropertiesDialogHandler(vm);
+        }
+
+        // If running in headless / unit test environment without active WPF application
+        if (System.Windows.Application.Current == null)
+        {
+            vm.Ok();
+            return !vm.HasError;
+        }
+
+        try
+        {
+            var dialog = new DrillIntel.Views.ChannelPropertiesWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive)
+                        ?? System.Windows.Application.Current?.MainWindow
+            };
+            return dialog.ShowDialog();
+        }
+        catch
+        {
+            vm.Ok();
+            return !vm.HasError;
+        }
     }
 
     [RelayCommand]
-    public void RemoveChannel(TimelogChannelItem? channel)
+    public void RemoveChannel(LogChannel? channel)
     {
         var target = channel ?? SelectedChannel;
         if (target == null)
@@ -520,56 +669,97 @@ public partial class EditTimeLogViewModel : ObservableObject
         {
             IsLoading = true;
 
-            var metadata = new TimeLogEditMetadata
+            // --- [OLD LOGIC (TimeLogEditMetadata)] ---
+            // var metadata = new TimeLogEditMetadata
+            // {
+            //     LogId = LogId,
+            //     WellId = WellId,
+            //     WellboreId = WellboreId,
+            //     LogName = LogName.Trim(),
+            //     ServiceCompany = ServiceCompany?.Trim() ?? string.Empty,
+            //     EdrProvider = EdrProvider?.Trim() ?? string.Empty,
+            //     RunNo = RunNo?.Trim() ?? string.Empty,
+            //     Description = Description?.Trim() ?? string.Empty,
+            //     PrimaryLog = PrimaryLog,
+            //     RemarksLog = RemarksLog,
+            //     NoAutoCalc = NoAutoCalc,
+            //     StartingHoleDepth = startHoleDepth,
+            //     DataTableName = DataTableName,
+            //     LinkToParent = LinkToParent,
+            //     LinkWellId = SelectedWellOption?.WellId ?? string.Empty,
+            //     LinkWellboreId = SelectedWellboreOption?.WellboreId ?? string.Empty,
+            //     LinkLogId = SelectedTimeLogOption?.LogId ?? string.Empty,
+            //     DontMoveAhead = DontMoveAhead,
+            //     DuplicateAction = SelectedDuplicateAction
+            // };
+            // if (_repository != null)
+            // {
+            //     await _repository.SaveTimeLogEditAsync(metadata, Channels.ToList());
+            // }
+
+            // --- [NEW LOGIC (TimeLog domain object persisted directly via repository / TimeLogService)] ---
+            var log = CurrentTimeLog ?? _fallbackTimeLog ?? new TimeLog();
+            log.ObjectID = LogId;
+            log.WellID = WellId;
+            log.WellboreID = WellboreId;
+            log.nameLog = LogName.Trim();
+            log.serviceCompany = ServiceCompany?.Trim() ?? string.Empty;
+            log.EDRProvider = EdrProvider?.Trim() ?? string.Empty;
+            log.runNumber = RunNo?.Trim() ?? string.Empty;
+            log.description = Description?.Trim() ?? string.Empty;
+            log.PrimaryLog = PrimaryLog;
+            log.RemarksLog = RemarksLog;
+            log.DontCalcHoleDepth = NoAutoCalc;
+            log.StartingHoleDepth = startHoleDepth;
+            log.__dataTableName = DataTableName;
+            log.LinkToParent = LinkToParent;
+            log.LinkWellID = SelectedWellOption?.WellId ?? string.Empty;
+            log.LinkWellboreID = SelectedWellboreOption?.WellboreId ?? string.Empty;
+            log.LinkLogID = SelectedTimeLogOption?.LogId ?? string.Empty;
+            log.DontMoveAhead = DontMoveAhead;
+            log.DuplicateAction = SelectedDuplicateAction switch
             {
-                LogId = LogId,
-                WellId = WellId,
-                WellboreId = WellboreId,
-                LogName = LogName.Trim(),
-                ServiceCompany = ServiceCompany?.Trim() ?? string.Empty,
-                EdrProvider = EdrProvider?.Trim() ?? string.Empty,
-                RunNo = RunNo?.Trim() ?? string.Empty,
-                Description = Description?.Trim() ?? string.Empty,
-                PrimaryLog = PrimaryLog,
-                RemarksLog = RemarksLog,
-                NoAutoCalc = NoAutoCalc,
-                StartingHoleDepth = startHoleDepth,
-                DataTableName = DataTableName,
-                LinkToParent = LinkToParent,
-                LinkWellId = SelectedWellOption?.WellId ?? string.Empty,
-                LinkWellboreId = SelectedWellboreOption?.WellboreId ?? string.Empty,
-                LinkLogId = SelectedTimeLogOption?.LogId ?? string.Empty,
-                DontMoveAhead = DontMoveAhead,
-                DuplicateAction = SelectedDuplicateAction
+                "Ignore" => enumDuplicateAction.SkipDuplicates,
+                "Replace" => enumDuplicateAction.OverwriteDuplicates,
+                _ => enumDuplicateAction.MergeColumns
             };
+
+            // Update logCurves dictionary
+            log.logCurves.Clear();
+            int order = 1;
+            foreach (var ch in Channels)
+            {
+                ch.ColumnOrder = order++;
+                log.logCurves[ch.Mnemonic] = ch;
+            }
 
             if (_repository != null)
             {
-                await _repository.SaveTimeLogEditAsync(metadata, Channels.ToList());
+                await _repository.SaveTimeLogAsync(log, Channels.ToList());
+            }
+            else if (_session?.GetDataService() is IDataServiceDIntel ds)
+            {
+                string lastError = "";
+                TimeLogService.SaveTimeLog(ds, log, Channels.ToList(), ref lastError);
             }
 
-            if (_fallbackTimeLog != null)
+            if (_fallbackTimeLog != null && !ReferenceEquals(_fallbackTimeLog, log))
             {
-                _fallbackTimeLog.nameLog = metadata.LogName;
-                _fallbackTimeLog.serviceCompany = metadata.ServiceCompany;
-                _fallbackTimeLog.EDRProvider = metadata.EdrProvider;
-                _fallbackTimeLog.runNumber = metadata.RunNo;
-                _fallbackTimeLog.description = metadata.Description;
-                _fallbackTimeLog.PrimaryLog = metadata.PrimaryLog;
-                _fallbackTimeLog.RemarksLog = metadata.RemarksLog;
-                _fallbackTimeLog.DontCalcHoleDepth = metadata.NoAutoCalc;
-                _fallbackTimeLog.StartingHoleDepth = metadata.StartingHoleDepth;
-                _fallbackTimeLog.LinkToParent = metadata.LinkToParent;
-                _fallbackTimeLog.LinkWellID = metadata.LinkWellId;
-                _fallbackTimeLog.LinkWellboreID = metadata.LinkWellboreId;
-                _fallbackTimeLog.LinkLogID = metadata.LinkLogId;
-                _fallbackTimeLog.DontMoveAhead = metadata.DontMoveAhead;
-                _fallbackTimeLog.DuplicateAction = metadata.DuplicateAction switch
-                {
-                    "Ignore" => enumDuplicateAction.SkipDuplicates,
-                    "Replace" => enumDuplicateAction.OverwriteDuplicates,
-                    _ => enumDuplicateAction.MergeColumns
-                };
+                _fallbackTimeLog.nameLog = log.nameLog;
+                _fallbackTimeLog.serviceCompany = log.serviceCompany;
+                _fallbackTimeLog.EDRProvider = log.EDRProvider;
+                _fallbackTimeLog.runNumber = log.runNumber;
+                _fallbackTimeLog.description = log.description;
+                _fallbackTimeLog.PrimaryLog = log.PrimaryLog;
+                _fallbackTimeLog.RemarksLog = log.RemarksLog;
+                _fallbackTimeLog.DontCalcHoleDepth = log.DontCalcHoleDepth;
+                _fallbackTimeLog.StartingHoleDepth = log.StartingHoleDepth;
+                _fallbackTimeLog.LinkToParent = log.LinkToParent;
+                _fallbackTimeLog.LinkWellID = log.LinkWellID;
+                _fallbackTimeLog.LinkWellboreID = log.LinkWellboreID;
+                _fallbackTimeLog.LinkLogID = log.LinkLogID;
+                _fallbackTimeLog.DontMoveAhead = log.DontMoveAhead;
+                _fallbackTimeLog.DuplicateAction = log.DuplicateAction;
             }
 
             StatusMessage = "Timelog updated successfully.";

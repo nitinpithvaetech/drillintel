@@ -380,7 +380,10 @@ public class EditTimeLogTests : IDisposable
         await vm.InitializeAsync();
 
         // Introduce duplicate mnemonic
-        vm.Channels.Add(new TimelogChannelItem
+        // --- [OLD LOGIC (TimelogChannelItem)] ---
+        // vm.Channels.Add(new TimelogChannelItem { Mnemonic = "DEPTH", Unit = "m", Description = "Duplicate depth" });
+        // --- [NEW LOGIC (LogChannel from DrillIntel.Data.Objects)] ---
+        vm.Channels.Add(new LogChannel
         {
             Mnemonic = "DEPTH",
             Unit = "m",
@@ -515,4 +518,369 @@ public class EditTimeLogTests : IDisposable
         var hiddenForWell = converter.Convert(WellTreeNodeType.Well, typeof(Visibility), "TimeLog", System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(Visibility.Collapsed, hiddenForWell);
     }
+
+    [Fact]
+    public async Task TimeLogService_UpdateData_UpdatesDataTableRowsMatchingDateTime()
+    {
+        var (wellId, wellboreId, logId, tableName) = await SeedTimelogAsync();
+        var dataService = _session.GetDataService();
+
+        // Create update DataTable
+        var updateTable = new System.Data.DataTable();
+        updateTable.Columns.Add("DATETIME", typeof(string));
+        updateTable.Columns.Add("DEPT", typeof(double)); // WITSML mnemonic mapped to DEPTH
+        updateTable.Columns.Add("HKLD", typeof(double)); // WITSML mnemonic mapped to HKLD
+
+        var row = updateTable.NewRow();
+        row["DATETIME"] = "01-Mar-2026 10:00:00";
+        row["DEPT"] = 1650.75;
+        row["HKLD"] = 520.25;
+        updateTable.Rows.Add(row);
+
+        string lastError = "";
+        bool ok = DrillIntel.Data.Objects.DataObjects.Services.TimeLogService.updateData(
+            dataService, wellId, wellboreId, logId, updateTable, "UTC", ref lastError);
+
+        Assert.True(ok, $"updateData failed: {lastError}");
+
+        // Verify updated values in SQLite table
+        var conn = _session.GetConnection();
+        var updatedDept = await conn.ExecuteScalarAsync<double>(
+            $"SELECT DEPTH FROM [{tableName}] WHERE DATETIME = '2026-03-01 10:00:00' OR DATETIME = '01-Mar-2026 10:00:00';");
+        var updatedHkld = await conn.ExecuteScalarAsync<double>(
+            $"SELECT HKLD FROM [{tableName}] WHERE DATETIME = '2026-03-01 10:00:00' OR DATETIME = '01-Mar-2026 10:00:00';");
+
+        Assert.Equal(1650.75, updatedDept);
+        Assert.Equal(520.25, updatedHkld);
+    }
+
+    [Fact]
+    public async Task TimeLog_UpdateData_Wrapper_SuccessfullyUpdatesData()
+    {
+        var (wellId, wellboreId, logId, tableName) = await SeedTimelogAsync();
+        var dataService = _session.GetDataService();
+
+        var updateTable = new System.Data.DataTable();
+        updateTable.Columns.Add("DATETIME", typeof(string));
+        updateTable.Columns.Add("HKLD", typeof(double));
+
+        var row = updateTable.NewRow();
+        row["DATETIME"] = "01-Mar-2026 10:00:00";
+        row["HKLD"] = 999.0;
+        updateTable.Rows.Add(row);
+
+        string lastError = "";
+        bool ok = DrillIntel.Data.Objects.DataObjects.Models.TimeLog.updateData(
+            dataService, wellId, wellboreId, logId, updateTable, "UTC", ref lastError);
+
+        Assert.True(ok, $"TimeLog.updateData failed: {lastError}");
+
+        var conn = _session.GetConnection();
+        var updatedHkld = await conn.ExecuteScalarAsync<double>(
+            $"SELECT HKLD FROM [{tableName}] WHERE DATETIME = '2026-03-01 10:00:00' OR DATETIME = '01-Mar-2026 10:00:00';");
+        Assert.Equal(999.0, updatedHkld);
+    }
+
+    [Fact]
+    public async Task TimeLogService_RemoveTimeLog_RemovesMetadataAndDropsTable()
+    {
+        var (wellId, wellboreId, logId, tableName) = await SeedTimelogAsync();
+        var dataService = _session.GetDataService();
+        var conn = _session.GetConnection();
+
+        // Verify table exists before deletion
+        int countBefore = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM [{tableName}];");
+        Assert.True(countBefore > 0);
+
+        string lastError = "";
+        bool ok = DrillIntel.Data.Objects.DataObjects.Services.TimeLogService.RemoveTimeLog(
+            dataService, wellId, wellboreId, logId, dropDataTable: true, ref lastError);
+
+        Assert.True(ok, $"RemoveTimeLog failed: {lastError}");
+
+        // Verify VMX_TIME_LOG row deleted
+        int logCount = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM VMX_TIME_LOG WHERE LOG_ID = '{logId}';");
+        Assert.Equal(0, logCount);
+
+        // Verify VMX_TIME_LOG_COLUMNS rows deleted
+        int colCount = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM VMX_TIME_LOG_COLUMNS WHERE LOG_ID = '{logId}';");
+        Assert.Equal(0, colCount);
+
+        // Verify physical table was dropped
+        int tableExists = await conn.ExecuteScalarAsync<int>(
+            $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}';");
+        Assert.Equal(0, tableExists);
+    }
+
+    [Fact]
+    public async Task TimeLog_Remove_InstanceMethod_SuccessfullyDeletes()
+    {
+        var (wellId, wellboreId, logId, tableName) = await SeedTimelogAsync();
+        var dataService = _session.GetDataService();
+        var conn = _session.GetConnection();
+
+        // Load TimeLog instance
+        var timeLog = DrillIntel.Data.Objects.DataObjects.Models.TimeLog.loadTimeLog(dataService, wellId, wellboreId, logId);
+        Assert.NotNull(timeLog);
+
+        // Call instance Remove with dropDataTable: true
+        bool ok = timeLog.Remove(dataService, dropDataTable: true);
+        Assert.True(ok);
+
+        // Verify metadata deleted
+        int logCount = await conn.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM VMX_TIME_LOG WHERE LOG_ID = '{logId}';");
+        Assert.Equal(0, logCount);
+
+        // Verify physical table dropped
+        int tableExists = await conn.ExecuteScalarAsync<int>(
+            $"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{tableName}';");
+        Assert.Equal(0, tableExists);
+    }
+
+    [Fact]
+    public async Task ChannelPropertiesViewModel_PopulatesUnitsFromProjectUnitMaster()
+    {
+        await SeedTimelogAsync();
+        var dataService = _session.GetDataService();
+
+        // Seed custom unit in VMX_UNIT_MASTER
+        DrillIntel.Models.Unit.Add(dataService, new DrillIntel.Models.Unit("custom_uom_test", "CustomCategory", "Custom UOM"), tableName: DrillIntel.Models.Unit.ProjectTableName);
+
+        var vm = new ChannelPropertiesViewModel(dataService);
+
+        Assert.Contains("custom_uom_test", vm.AvailableUnits);
+        Assert.Equal("Expression", vm.ValueType);
+    }
+
+    [Fact]
+    public void ChannelPropertiesViewModel_DefaultsToExpressionAndGeneratesLogChannel()
+    {
+        var vm = new ChannelPropertiesViewModel(null, null, null, 1)
+        {
+            Mnemonic = "TEST_EXPR",
+            Description = "Test Expression Channel",
+            SelectedUnit = "m/hr",
+            Expression = "DEPTH / 10.0",
+            IsStoredProcedure = true,
+            Parameters = "@Param1, @Param2"
+        };
+
+        Assert.Equal("Expression", vm.ValueType);
+
+        var ch = vm.ToLogChannel();
+        Assert.Equal("TEST_EXPR", ch.Mnemonic);
+        Assert.Equal("Test Expression Channel", ch.Description);
+        Assert.Equal("m/hr", ch.Unit);
+        Assert.Equal(1, ch.valueType); // Expression type is 1
+        Assert.Equal("1", ch.ValueType);
+        Assert.Equal("DEPTH / 10.0", ch.Expression);
+        Assert.True(ch.isStoredProc);
+        Assert.Equal("@Param1, @Param2", ch.StoredProcParams);
+        Assert.True(ch.Upload);
+    }
+
+    [Fact]
+    public void ChannelPropertiesViewModel_ValidatesBlankAndDuplicateMnemonic()
+    {
+        var existing = new List<string> { "DEPTH", "ROP" };
+        var vm = new ChannelPropertiesViewModel(null, existing)
+        {
+            Mnemonic = ""
+        };
+
+        vm.Ok();
+        Assert.True(vm.HasError);
+        Assert.Contains("blank", vm.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+
+        vm.Mnemonic = "depth"; // Duplicate case-insensitive
+        vm.Ok();
+        Assert.True(vm.HasError);
+        Assert.Contains("already exists", vm.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+
+        vm.Mnemonic = "NEW_MNEM";
+        vm.Ok();
+        Assert.False(vm.HasError);
+    }
+
+    [Fact]
+    public async Task EditTimeLogViewModel_AddChannel_OpensDialogAndAddsExpressionChannel()
+    {
+        await SeedTimelogAsync();
+        var vm = new EditTimeLogViewModel(_session, _repo, "TL-001");
+        await vm.InitializeAsync();
+
+        int initialCount = vm.Channels.Count;
+
+        // Mock dialog handler to simulate user filling the Channel Properties dialog
+        vm.OpenChannelPropertiesDialogHandler = dialogVm =>
+        {
+            dialogVm.Mnemonic = "CALC_ROP";
+            dialogVm.Description = "Calculated ROP";
+            dialogVm.SelectedUnit = "m/hr";
+            dialogVm.ValueType = "Expression";
+            dialogVm.Expression = "DEPTH_DIFF / TIME_DIFF";
+            dialogVm.IsStoredProcedure = true;
+            dialogVm.Parameters = "@WellID";
+            dialogVm.Ok();
+            return !dialogVm.HasError;
+        };
+
+        vm.AddChannelCommand.Execute(null);
+
+        Assert.Equal(initialCount + 1, vm.Channels.Count);
+        var added = vm.Channels.FirstOrDefault(c => c.Mnemonic == "CALC_ROP");
+        Assert.NotNull(added);
+        Assert.Equal("Calculated ROP", added.Description);
+        Assert.Equal("m/hr", added.Unit);
+        Assert.Equal(1, added.valueType);
+        Assert.Equal("DEPTH_DIFF / TIME_DIFF", added.Expression);
+        Assert.True(added.isStoredProc);
+        Assert.Equal("@WellID", added.StoredProcParams);
+        Assert.True(added.Upload);
+    }
+
+    [Fact]
+    public async Task EditTimeLogViewModel_EditChannel_OpensDialogAndUpdatesProperties()
+    {
+        await SeedTimelogAsync();
+        var vm = new EditTimeLogViewModel(_session, _repo, "TL-001");
+        await vm.InitializeAsync();
+
+        var hkldChannel = vm.Channels.First(c => c.Mnemonic == "HKLD");
+
+        // Mock dialog handler to simulate user editing properties
+        vm.OpenChannelPropertiesDialogHandler = dialogVm =>
+        {
+            Assert.Equal("HKLD", dialogVm.Mnemonic);
+            dialogVm.Description = "Updated Hookload Channel";
+            dialogVm.SelectedUnit = "klbf";
+            dialogVm.Expression = "HKLD_RAW * 1.05";
+            dialogVm.Ok();
+            return !dialogVm.HasError;
+        };
+
+        vm.EditChannelCommand.Execute(hkldChannel);
+
+        Assert.Equal("Updated Hookload Channel", hkldChannel.Description);
+        Assert.Equal("klbf", hkldChannel.Unit);
+        Assert.Equal("HKLD_RAW * 1.05", hkldChannel.Expression);
+    }
+
+    [Fact]
+    public void ChannelPropertiesViewModel_WhenEditing_LocksMnemonicAsPrimaryKey()
+    {
+        var existing = new LogChannel
+        {
+            Mnemonic = "IMMUTABLE_PK",
+            Description = "Immutable Primary Key Channel",
+            Unit = "psi",
+            valueType = 1,
+            Expression = "P1 * 2"
+        };
+
+        var vm = new ChannelPropertiesViewModel(null, new[] { "IMMUTABLE_PK", "OTHER" }, existing);
+
+        Assert.True(vm.IsEditMode);
+        Assert.False(vm.CanEditMnemonic);
+        Assert.Contains("primary key", vm.MnemonicToolTip, StringComparison.OrdinalIgnoreCase);
+
+        // Attempting to change mnemonic during edit mode
+        vm.Mnemonic = "ATTEMPTED_CHANGE";
+        vm.Ok();
+
+        // Mnemonic is locked to original PK
+        Assert.Equal("IMMUTABLE_PK", vm.Mnemonic);
+        Assert.False(vm.HasError);
+
+        vm.ApplyTo(existing);
+        Assert.Equal("IMMUTABLE_PK", existing.Mnemonic);
+    }
+
+    [Fact]
+    public void ExpressionEditorViewModel_InitializesWithChannelsAndInsertsTokens()
+    {
+        var channels = new List<LogChannel>
+        {
+            new() { Mnemonic = "DEPTH", Description = "Hole Depth", Unit = "m" },
+            new() { Mnemonic = "HKLD", Description = "Hook Load", Unit = "kN" },
+            new() { Mnemonic = "ROP", Description = "Rate of Penetration", Unit = "m/hr" }
+        };
+
+        var vm = new ExpressionEditorViewModel("", channels);
+
+        Assert.Equal(3, vm.AvailableChannels.Count);
+        Assert.Contains("abs()", vm.AvailableFunctions);
+        Assert.Contains("+", vm.AvailableOperators);
+
+        vm.InsertChannel(channels[0]);
+        vm.InsertOperator("+");
+        vm.InsertFunction("abs()");
+
+        Assert.Contains("DEPTH", vm.Expression);
+        Assert.Contains("+", vm.Expression);
+        Assert.Contains("abs()", vm.Expression);
+    }
+
+    [Fact]
+    public void ExpressionEditorViewModel_VerifySyntax_ValidatesCorrectly()
+    {
+        var vm = new ExpressionEditorViewModel("");
+
+        // Blank
+        vm.Verify();
+        Assert.True(vm.IsStatusError);
+        Assert.Contains("empty", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+
+        // Unbalanced parens
+        vm.Expression = "(DEPTH + 10";
+        vm.Verify();
+        Assert.True(vm.IsStatusError);
+        Assert.Contains("Unbalanced parentheses", vm.StatusMessage);
+
+        // Consecutive operators
+        vm.Expression = "DEPTH ++ 10";
+        vm.Verify();
+        Assert.True(vm.IsStatusError);
+        Assert.Contains("Consecutive operators", vm.StatusMessage);
+
+        // Trailing operator
+        vm.Expression = "DEPTH +";
+        vm.Verify();
+        Assert.True(vm.IsStatusError);
+        Assert.Contains("cannot end with an operator", vm.StatusMessage);
+
+        // Valid expression
+        vm.Expression = "DEPTH / 1000.0 + abs(HKLD)";
+        vm.Verify();
+        Assert.False(vm.IsStatusError);
+        Assert.Contains("valid", vm.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ChannelPropertiesViewModel_OpenEditor_OpensExpressionEditorAndAppliesFormula()
+    {
+        var channels = new List<LogChannel>
+        {
+            new() { Mnemonic = "DEPTH", Description = "Depth" }
+        };
+
+        var vm = new ChannelPropertiesViewModel(null, null, null, 1, channels)
+        {
+            Expression = "DEPTH * 1"
+        };
+
+        vm.OpenExpressionEditorHandler = exprVm =>
+        {
+            Assert.Equal("DEPTH * 1", exprVm.Expression);
+            Assert.Single(exprVm.AvailableChannels);
+            exprVm.Expression = "DEPTH * 2.5 + 10";
+            exprVm.Ok();
+            return true;
+        };
+
+        vm.OpenEditorCommand.Execute(null);
+
+        Assert.Equal("DEPTH * 2.5 + 10", vm.Expression);
+    }
 }
+

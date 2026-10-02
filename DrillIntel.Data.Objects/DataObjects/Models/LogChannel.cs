@@ -1,55 +1,213 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models
 {
-    public class LogChannel : IComparable
+    // --- [OLD LOGIC (LogChannel: without INotifyPropertyChanged)] ---
+    // public class LogChannel : IComparable
+
+    // --- [NEW LOGIC (LogChannel: implements INotifyPropertyChanged for WPF two-way data binding)] ---
+    public class LogChannel : IComparable, INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
         public enum enValueType
         {
             staticValue = 0,
             queryValue = 1
         }
 
-        public string mnemonic = ""; // Primary Key
-        public string classWitsml = "";
-        public string unit = "";
-        public string mnemAlias = "";
-        public string nullValue = "";
-        public string minIndex = "";
-        public string maxIndex = "";
-        public string minIndexUOM = "";
-        public string maxIndexUOM = "";
-        public string columnIndex = "";
-        public string curveDescription = "";
-        public string sensorOffset = "";
-        public string traceState = "";
-        public string typeLogData = "";
-        public string startIndex = "";
-        public string endIndex = "";
-        public string witsmlMnemonic = ""; // Server Mnemonic
-        public int valueType = 0;
-        public string valueQuery = "";
-        public string fieldName = "";
-        public int sourceColIndex = 0;
-        public int curveID = 0;
-        public int sourceColNo = 0;
-        public string VuMaxUnitID = "";
-        public string UnitID = "";
-        public int ColumnOrder = 0;
-        public int DoNotInterpolate = 0;
-        public bool WriteBack = false;
-        public string PiMnemonic = "";
-        public int AxisDataCount = 0;
+        public string mnemonic { get; set; } = ""; // Primary Key
+        public string classWitsml { get; set; } = "";
+        public string unit { get; set; } = "";
+        public string mnemAlias { get; set; } = "";
+        public string nullValue { get; set; }  = "";
+        public string minIndex { get; set; } = "";
+        public string maxIndex { get; set; } = "";
+        public string minIndexUOM { get; set; } = "";
+        public string maxIndexUOM { get; set; } = "";
+        public string  columnIndex { get; set; } = "";
+        public string curveDescription { get; set; } = "";
+        public string sensorOffset { get; set; } = "";
+        public string traceState { get; set; } = "";
+        public string typeLogData { get; set; } = "";
+        public string startIndex { get; set; } = "";
+        public string endIndex { get; set; } = "";
+        public string witsmlMnemonic { get; set; } = ""; // Server Mnemonic
+        public int valueType { get; set; } = 0;
+        public string valueQuery { get; set; } = "";
+        public string fieldName { get; set; } = "";
+        public int sourceColIndex { get; set; } = 0;
+        public int curveID { get; set; } = 0;
+        public int sourceColNo { get; set; } = 0;
+        public string VuMaxUnitID { get; set; } = "";
+        public string UnitID { get; set; } = "";
+        public int ColumnOrder { get; set; } = 0;
+        public int DoNotInterpolate { get; set; } = 0;
+        public bool WriteBack { get; set; } = false;
+        public string PiMnemonic { get; set; } = "";
+        public int AxisDataCount { get; set; } = 0;
 
-        public bool isStoredProc = false;
-        public string StoredProcParams = "";
+        public bool isStoredProc { get; set; } = false;
+        public string StoredProcParams { get; set; }  = "";
 
-        public bool processChannel = false;
-        public string parentMnemonic = "";
+        public bool processChannel { get; set; } = false;
+        public string parentMnemonic { get; set; } = "";
+
+        // --- [NEW LOGIC (WPF Data Binding & Model Compatibility Properties with INotifyPropertyChanged)] ---
+        public string? OriginalMnemonic { get; set; }
+
+        public bool Upload
+        {
+            get => WriteBack || processChannel;
+            set
+            {
+                if (WriteBack != value || processChannel != value)
+                {
+                    WriteBack = value;
+                    processChannel = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string Mnemonic
+        {
+            get => mnemonic;
+            set
+            {
+                if (mnemonic != value)
+                {
+                    mnemonic = value ?? "";
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string Unit
+        {
+            get => unit;
+            set
+            {
+                if (unit != value)
+                {
+                    unit = value ?? "";
+                    if (string.IsNullOrEmpty(UnitID)) UnitID = unit;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string VuMaxUnitId
+        {
+            get => !string.IsNullOrEmpty(VuMaxUnitID) ? VuMaxUnitID : UnitID;
+            set
+            {
+                if (VuMaxUnitID != value)
+                {
+                    VuMaxUnitID = value ?? "";
+                    if (string.IsNullOrEmpty(UnitID)) UnitID = VuMaxUnitID;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string Description
+        {
+            get => curveDescription;
+            set
+            {
+                if (curveDescription != value)
+                {
+                    curveDescription = value ?? "";
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string UploadMnemonic
+        {
+            get => witsmlMnemonic;
+            set
+            {
+                if (witsmlMnemonic != value)
+                {
+                    witsmlMnemonic = value ?? "";
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string ValueType
+        {
+            get => valueType.ToString();
+            set
+            {
+                int parsed = int.TryParse(value, out int v) ? v : 0;
+                if (valueType != parsed)
+                {
+                    valueType = parsed;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string Expression
+        {
+            get => valueQuery;
+            set
+            {
+                if (valueQuery != value)
+                {
+                    valueQuery = value ?? "";
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public bool DoNotInterpol
+        {
+            get => DoNotInterpolate != 0;
+            set
+            {
+                int val = value ? 1 : 0;
+                if (DoNotInterpolate != val)
+                {
+                    DoNotInterpolate = val;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public string DataType
+        {
+            get => string.IsNullOrEmpty(typeLogData) ? "Double" : typeLogData;
+            set
+            {
+                if (typeLogData != value)
+                {
+                    typeLogData = value ?? "Double";
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        public LogChannel Clone()
+        {
+            var copy = GetCopy();
+            copy.OriginalMnemonic = this.OriginalMnemonic;
+            copy.processChannel = this.processChannel;
+            return copy;
+        }
 
         public LogChannel GetCopy()
         {
@@ -89,7 +247,8 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                 objNew.StoredProcParams = this.StoredProcParams;
                 objNew.AxisDataCount = this.AxisDataCount;
                 objNew.parentMnemonic = this.parentMnemonic;
-                // Note: processChannel is not copied, same as the original VB code.
+                objNew.OriginalMnemonic = this.OriginalMnemonic;
+                objNew.processChannel = this.processChannel;
 
                 return objNew;
             }

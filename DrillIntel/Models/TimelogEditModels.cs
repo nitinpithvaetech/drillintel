@@ -4,9 +4,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DrillIntel.Models;
 
+// --- [OLD LOGIC (TimelogChannelItem and TimeLogEditMetadata: retired in favor of TimeLog.cs and LogChannel.cs)] ---
 /// <summary>
 /// Represents a channel item displayed in the Channels grid of the Timelog Edit Dialog.
+/// Replaced by DrillIntel.Data.Objects.DataObjects.Models.LogChannel.
 /// </summary>
+[Obsolete("Replaced by DrillIntel.Data.Objects.DataObjects.Models.LogChannel")]
 public partial class TimelogChannelItem : ObservableObject
 {
     [ObservableProperty]
@@ -62,7 +65,9 @@ public partial class TimelogChannelItem : ObservableObject
 
 /// <summary>
 /// Strongly-typed metadata loaded from vmx_time_log.
+/// Replaced by DrillIntel.Data.Objects.DataObjects.Models.TimeLog.
 /// </summary>
+[Obsolete("Replaced by DrillIntel.Data.Objects.DataObjects.Models.TimeLog")]
 public class TimeLogEditMetadata
 {
     public string LogId { get; set; } = string.Empty;
