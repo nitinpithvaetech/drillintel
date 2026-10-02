@@ -216,6 +216,7 @@ public partial class MainViewModel : ObservableObject
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenUnitMasterCommand.NotifyCanExecuteChanged();
         OpenWellEditorCommand.NotifyCanExecuteChanged();
         EditWellCommand.NotifyCanExecuteChanged();
         OpenTimelogEditorCommand.NotifyCanExecuteChanged();
@@ -419,6 +420,46 @@ public partial class MainViewModel : ObservableObject
 
         var vm = new RigStateViewModel(dataService, contextName);
         var window = new DrillIntel.Views.RigStateWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void OpenUnitMaster()
+    {
+        DrillIntel.Data.IDataServiceDIntel dataService;
+        string contextName;
+        string tableName;
+        string dbPath;
+
+        if (_session.IsProjectOpen)
+        {
+            dataService = _session.GetDataService();
+            tableName = DrillIntel.Models.Unit.ProjectTableName;
+            contextName = $"Project: {_session.ProjectName}";
+            dbPath = _session.ProjectFilePath ?? "Active Project Database";
+        }
+        else
+        {
+            var appDb = _appDatabaseService ?? App.AppDatabaseService;
+            dataService = appDb.GetDataService();
+            tableName = DrillIntel.Models.Unit.TableName;
+            contextName = "Application Master Template (DrillIntelApp.sqlite)";
+            dbPath = appDb.DatabasePath;
+        }
+
+        var vm = new UnitMasterViewModel(
+            dataService,
+            tableName: tableName,
+            contextName: contextName,
+            isProjectOpen: _session.IsProjectOpen,
+            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
+            databasePath: dbPath);
+
+        var window = new DrillIntel.Views.UnitMasterWindow
         {
             DataContext = vm,
             Owner = System.Windows.Application.Current?.MainWindow

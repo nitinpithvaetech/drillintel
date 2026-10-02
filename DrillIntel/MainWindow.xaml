@@ -184,6 +184,11 @@
             <!-- Masters Tab -->
             <Fluent:RibbonTabItem Header="Masters">
                 <Fluent:RibbonGroupBox Header="Configuration">
+                    <Fluent:Button Header="Unit Master" Command="{Binding OpenUnitMasterCommand}">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="RulerSquareCompass" Foreground="#3F51B5" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Rig State Master" Command="{Binding OpenRigStateMasterCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="CogSyncOutline" Foreground="#673AB7" Width="32" Height="32" />

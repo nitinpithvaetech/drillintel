@@ -74,6 +74,9 @@
             <DataTemplate DataType="{x:Type viewmodels:RigStateViewModel}">
                 <views:RigStateView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:UnitMasterViewModel}">
+                <views:UnitMasterView />
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -11,6 +11,7 @@ using System.Data.Common;
 using Microsoft.Win32;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Data.Objects.DataObjects.Services;
+using DrillIntel.Models;
 
 namespace DrillIntel.Projects
 {
@@ -635,6 +636,19 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
     MODIFIED_DATE               TEXT,
     PRIMARY KEY (WELL_ID, DEPTH)
 );
+
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS VMX_UNIT_MASTER (
+    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
+    UNIT_NAME     TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    CATEGORY      TEXT NOT NULL,
+    DESCRIPTION   TEXT,
+    IS_DEFAULT    INTEGER NOT NULL DEFAULT 0,
+    CREATED_BY    TEXT,
+    CREATED_DATE  TEXT,
+    MODIFIED_BY   TEXT,
+    MODIFIED_DATE TEXT
+);
 ";
     }
 
@@ -938,6 +952,21 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
                         if (masterSetup != null)
                         {
                             RigStateService.SaveCommonRigStateSetup(projectDataService, masterSetup);
+                        }
+
+                        // Copy master measurement units to project VMX_UNIT_MASTER
+                        Unit.EnsureTableExists(projectDataService, Unit.ProjectTableName);
+                        var masterUnits = Unit.GetList(appDataService, tableName: Unit.TableName);
+                        if (masterUnits.Count > 0)
+                        {
+                            foreach (var u in masterUnits)
+                            {
+                                Unit.Add(projectDataService, u, Unit.ProjectTableName);
+                            }
+                        }
+                        else
+                        {
+                            Unit.CreateDefaultUnits(projectDataService, Unit.ProjectTableName);
                         }
                     }
                 }
