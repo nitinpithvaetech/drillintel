@@ -100,6 +100,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
     private readonly IDataServiceDIntel _dataService;
     private readonly string _tableName;
     private readonly IAppDatabaseService? _appDatabaseService;
+    private readonly IDataServiceDIntel? _projectDataService;
     private readonly bool _isProjectOpen;
 
     public event Action<bool?>? RequestClose;
@@ -158,23 +159,23 @@ public partial class UnitConversionMasterViewModel : ObservableObject
         string? contextName = null,
         bool isProjectOpen = false,
         IAppDatabaseService? appDatabaseService = null,
-        string? databasePath = null)
+        string? databasePath = null,
+        IDataServiceDIntel? projectDataService = null)
     {
-        _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
         _isProjectOpen = isProjectOpen;
         IsProjectActive = isProjectOpen;
         _appDatabaseService = appDatabaseService;
+        _projectDataService = projectDataService;
 
-        // When project is Open -> table VMX_UNIT_CONVERSIONS; when Closed -> table APP_UNIT_CONVERSIONS
-        _tableName = !string.IsNullOrWhiteSpace(tableName)
-            ? tableName
-            : (_isProjectOpen ? UnitConverter.ProjectTableName : UnitConverter.TableName);
+        // Base database is always the single source of truth for Unit Conversions (APP_UNIT_CONVERSIONS)
+        _dataService = (_appDatabaseService != null ? _appDatabaseService.GetDataService() : null)
+            ?? UnitConverter.ResolveDataService(dataService);
 
+        _tableName = UnitConverter.NormalizeTableName(tableName);
         TableNameText = _tableName;
 
-        DatabasePath = databasePath ?? (_isProjectOpen
-            ? (App.Session?.ProjectFilePath ?? "Active Project Database")
-            : (_appDatabaseService?.DatabasePath ?? "DrillIntelApp.sqlite"));
+        DatabasePath = databasePath ?? (_appDatabaseService?.DatabasePath 
+            ?? (App.AppDatabaseService != null ? App.AppDatabaseService.DatabasePath : "DrillIntelApp.sqlite"));
 
         if (!string.IsNullOrWhiteSpace(contextName))
         {
@@ -182,11 +183,11 @@ public partial class UnitConversionMasterViewModel : ObservableObject
         }
         else if (_isProjectOpen)
         {
-            Subtitle = $"Project Database: {App.Session?.ProjectName ?? "Active Project"}";
+            Subtitle = $"Base Database (APP_UNIT_CONVERSIONS) — Active Project: {App.Session?.ProjectName ?? "Active Project"}";
         }
         else
         {
-            Subtitle = "Application Master Database (Standard Conversions)";
+            Subtitle = "Application Base Database (APP_UNIT_CONVERSIONS)";
         }
 
         LoadConversions();
@@ -206,45 +207,29 @@ public partial class UnitConversionMasterViewModel : ObservableObject
     {
         Conversions.Clear();
 
-        UnitConverter.EnsureTableExists(_dataService, _tableName);
-        var list = UnitConverter.GetList(_dataService, tableName: _tableName);
-
-        // If empty in an active project (VMX_UNIT_CONVERSIONS), seed from master template
-        if (list.Count == 0 && _isProjectOpen)
+        try
         {
-            var masterDb = _appDatabaseService?.GetDataService();
-            if (masterDb != null)
-            {
-                var masterList = UnitConverter.GetList(masterDb, tableName: UnitConverter.TableName);
-                if (masterList.Count > 0)
-                {
-                    foreach (var c in masterList)
-                    {
-                        UnitConverter.Add(_dataService, c, _tableName);
-                    }
-                    list = UnitConverter.GetList(_dataService, tableName: _tableName);
-                }
-            }
+            UnitConverter.EnsureTableExists(_dataService, _tableName);
+            var list = UnitConverter.GetList(_dataService, tableName: _tableName);
 
             if (list.Count == 0)
             {
                 UnitConverter.CreateDefaultConversion(_dataService, _tableName);
                 list = UnitConverter.GetList(_dataService, tableName: _tableName);
             }
-        }
-        else if (list.Count == 0 && !_isProjectOpen)
-        {
-            UnitConverter.CreateDefaultConversion(_dataService, _tableName);
-            list = UnitConverter.GetList(_dataService, tableName: _tableName);
-        }
 
-        foreach (var conv in list)
-        {
-            Conversions.Add(UnitConversionItemModel.FromUnitConverter(conv));
-        }
+            foreach (var conv in list)
+            {
+                Conversions.Add(UnitConversionItemModel.FromUnitConverter(conv));
+            }
 
-        UpdateCategories();
-        ApplyFilter();
+            UpdateCategories();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to load unit conversions from {_tableName}: {ex.Message}", isError: true);
+        }
     }
 
     private void UpdateCategories()
@@ -314,6 +299,32 @@ public partial class UnitConversionMasterViewModel : ObservableObject
         }
     }
 
+    private void SyncSaveConversion(UnitConverter conversion, bool isNew)
+    {
+        // Centralized Access in Base Database:
+        // All operations (Access, Insert, Update, Delete) are performed ONLY on the Base database (APP_UNIT_CONVERSIONS)
+        if (isNew)
+        {
+            UnitConverter.Add(_dataService, conversion, _tableName);
+        }
+        else
+        {
+            UnitConverter.Edit(_dataService, conversion, _tableName);
+        }
+    }
+
+    private bool SyncDeleteConversion(UnitConversionItemModel item)
+    {
+        // Centralized Access in Base Database:
+        // All operations (Access, Insert, Update, Delete) are performed ONLY on the Base database (APP_UNIT_CONVERSIONS)
+        bool deleted = UnitConverter.Delete(_dataService, item.Id, _tableName);
+        if (!deleted && !string.IsNullOrWhiteSpace(item.FromUnit) && !string.IsNullOrWhiteSpace(item.ToUnit))
+        {
+            deleted = UnitConverter.Delete(_dataService, item.FromUnit, item.ToUnit, _tableName);
+        }
+        return deleted;
+    }
+
     [RelayCommand]
     public void EditConversion(UnitConversionItemModel? item)
     {
@@ -325,7 +336,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
         {
             if (OpenEditDialogHandler(convToEdit))
             {
-                UnitConverter.Edit(_dataService, convToEdit, _tableName);
+                SyncSaveConversion(convToEdit, isNew: false);
                 LoadConversions();
                 ShowStatus($"Conversion rule '{convToEdit.FromUnit} → {convToEdit.ToUnit}' updated successfully.", isError: false);
             }
@@ -342,7 +353,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true && dialogVm.ResultConversion != null)
         {
-            UnitConverter.Edit(_dataService, dialogVm.ResultConversion, _tableName);
+            SyncSaveConversion(dialogVm.ResultConversion, isNew: false);
             LoadConversions();
             ShowStatus($"Conversion rule '{dialogVm.ResultConversion.FromUnit} → {dialogVm.ResultConversion.ToUnit}' updated successfully.", isError: false);
         }
@@ -374,7 +385,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
 
         try
         {
-            bool deleted = UnitConverter.Delete(_dataService, item.Id, _tableName);
+            bool deleted = SyncDeleteConversion(item);
             if (deleted)
             {
                 LoadConversions();
@@ -399,7 +410,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
             var newConv = new UnitConverter();
             if (OpenAddDialogHandler(newConv))
             {
-                UnitConverter.Add(_dataService, newConv, _tableName);
+                SyncSaveConversion(newConv, isNew: true);
                 LoadConversions();
                 ShowStatus($"Conversion rule '{newConv.FromUnit} → {newConv.ToUnit}' added successfully.", isError: false);
             }
@@ -416,7 +427,7 @@ public partial class UnitConversionMasterViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true && dialogVm.ResultConversion != null)
         {
-            UnitConverter.Add(_dataService, dialogVm.ResultConversion, _tableName);
+            SyncSaveConversion(dialogVm.ResultConversion, isNew: true);
             LoadConversions();
             ShowStatus($"Conversion rule '{dialogVm.ResultConversion.FromUnit} → {dialogVm.ResultConversion.ToUnit}' added successfully.", isError: false);
         }

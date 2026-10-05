@@ -224,15 +224,15 @@
                                          ToolTip="{Binding MnemonicToolTip}" />
                             </StackPanel>
 
-                            <!-- Unit (Populated from Project Unit Master: VMX_UNIT_MASTER) -->
+                            <!-- Unit (Populated from Unit Master: APP_UNIT_MASTER) -->
                             <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
-                                <TextBlock Text="Unit (from Project Unit Master)" Style="{StaticResource FieldLabel}" />
+                                <TextBlock Text="Unit (from Unit Master)" Style="{StaticResource FieldLabel}" />
                                 <ComboBox Style="{StaticResource BoxedComboBox}"
                                           ItemsSource="{Binding AvailableUnits}"
                                           SelectedItem="{Binding SelectedUnit, UpdateSourceTrigger=PropertyChanged}"
                                           Text="{Binding SelectedUnit, UpdateSourceTrigger=PropertyChanged}"
                                           IsEditable="True"
-                                          ToolTip="Select unit of measure (loaded from VMX_UNIT_MASTER)" />
+                                          ToolTip="Select unit of measure (loaded from APP_UNIT_MASTER)" />
                             </StackPanel>
 
                             <!-- Description -->

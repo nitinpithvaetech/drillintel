@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
@@ -13,7 +14,7 @@ namespace DrillIntel.ViewModels;
 /// <summary>
 /// ViewModel for Channel Properties dialog in Timelog Editor.
 /// Supports adding and editing expression and calculated log channels.
-/// Populates available units from Project Unit Master (VMX_UNIT_MASTER).
+/// Populates available units from Unit Master (APP_UNIT_MASTER).
 /// Locks Mnemonic during editing as it serves as the primary key.
 /// </summary>
 public partial class ChannelPropertiesViewModel : ObservableObject
@@ -126,7 +127,7 @@ public partial class ChannelPropertiesViewModel : ObservableObject
             _existingMnemonics.Remove(_originalChannel.Mnemonic.Trim());
         }
 
-        // Populate units from Project Unit Master (VMX_UNIT_MASTER)
+        // Populate units from Unit Master (APP_UNIT_MASTER)
         LoadUnits(_dataService);
 
         if (_originalChannel != null)
@@ -162,22 +163,26 @@ public partial class ChannelPropertiesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Loads units from Project Unit Master (VMX_UNIT_MASTER) with fallback to Application Unit Master.
+    /// Loads units from Base Database Unit Master (APP_UNIT_MASTER) with fallback to defaults.
     /// </summary>
     public void LoadUnits(IDataServiceDIntel? dataService)
     {
         AvailableUnits.Clear();
         var loadedUnits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (dataService != null)
+        // Unit master is centralized in Base Database (APP_UNIT_MASTER)
+        var baseDb = Unit.DefaultDataService 
+            ?? (Application.Current != null ? App.AppDatabaseService?.GetDataService() : null)
+            ?? BaseDatabaseProvider.GetBaseDataService();
+
+        if (baseDb != null)
         {
             try
             {
-                // Populate from Project Unit Master (table: VMX_UNIT_MASTER)
-                var projectUnits = Unit.GetList(dataService, tableName: Unit.ProjectTableName);
-                if (projectUnits != null && projectUnits.Count > 0)
+                var appUnits = Unit.GetList(baseDb, tableName: Unit.TableName);
+                if (appUnits != null && appUnits.Count > 0)
                 {
-                    foreach (var u in projectUnits)
+                    foreach (var u in appUnits)
                     {
                         if (!string.IsNullOrWhiteSpace(u.UnitName))
                         {
@@ -185,19 +190,26 @@ public partial class ChannelPropertiesViewModel : ObservableObject
                         }
                     }
                 }
+            }
+            catch
+            {
+                // Graceful fallback
+            }
+        }
 
-                // If project table had no records, load from APP_UNIT_MASTER
-                if (loadedUnits.Count == 0)
+        // Merge units from passed dataService (project database or test database)
+        if (dataService != null && dataService != baseDb)
+        {
+            try
+            {
+                var projectUnits = Unit.GetList(dataService, tableName: Unit.TableName);
+                if (projectUnits != null && projectUnits.Count > 0)
                 {
-                    var appUnits = Unit.GetList(dataService, tableName: Unit.TableName);
-                    if (appUnits != null && appUnits.Count > 0)
+                    foreach (var u in projectUnits)
                     {
-                        foreach (var u in appUnits)
+                        if (!string.IsNullOrWhiteSpace(u.UnitName))
                         {
-                            if (!string.IsNullOrWhiteSpace(u.UnitName))
-                            {
-                                loadedUnits.Add(u.UnitName.Trim());
-                            }
+                            loadedUnits.Add(u.UnitName.Trim());
                         }
                     }
                 }

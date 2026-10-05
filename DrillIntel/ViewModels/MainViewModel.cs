@@ -216,6 +216,8 @@ public partial class MainViewModel : ObservableObject
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenProjectRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenUnitMasterCommand.NotifyCanExecuteChanged();
         OpenWellEditorCommand.NotifyCanExecuteChanged();
         EditWellCommand.NotifyCanExecuteChanged();
@@ -401,22 +403,27 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenRigStateMaster()
+    private void OpenGlobalRigStateMaster()
     {
-        DrillIntel.Data.IDataServiceDIntel dataService;
-        string contextName;
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var contextName = "Application Master Template (Default for New Projects)";
 
-        if (_session.IsProjectOpen)
+        var vm = new RigStateViewModel(dataService, contextName);
+        var window = new DrillIntel.Views.RigStateWindow
         {
-            dataService = _session.GetDataService();
-            contextName = $"Project: {_session.ProjectName}";
-        }
-        else
-        {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            contextName = "Application Master Template (Default for New Projects)";
-        }
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void OpenProjectRigStateMaster()
+    {
+        if (!_session.IsProjectOpen) return;
+        var dataService = _session.GetDataService();
+        var contextName = $"Project: {_session.ProjectName}";
 
         var vm = new RigStateViewModel(dataService, contextName);
         var window = new DrillIntel.Views.RigStateWindow
@@ -428,36 +435,37 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenUnitMaster()
+    private void OpenRigStateMaster()
     {
-        DrillIntel.Data.IDataServiceDIntel dataService;
-        string contextName;
-        string tableName;
-        string dbPath;
-
         if (_session.IsProjectOpen)
         {
-            dataService = _session.GetDataService();
-            tableName = DrillIntel.Models.Unit.ProjectTableName;
-            contextName = $"Project: {_session.ProjectName}";
-            dbPath = _session.ProjectFilePath ?? "Active Project Database";
+            OpenProjectRigStateMaster();
         }
         else
         {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            tableName = DrillIntel.Models.Unit.TableName;
-            contextName = "Application Master Template (DrillIntelApp.sqlite)";
-            dbPath = appDb.DatabasePath;
+            OpenGlobalRigStateMaster();
         }
+    }
+
+    [RelayCommand]
+    private void OpenUnitMaster()
+    {
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var tableName = DrillIntel.Models.Unit.TableName;
+        var contextName = _session.IsProjectOpen
+            ? $"Global Unit Master (APP_UNIT_MASTER) — Active Project: {_session.ProjectName}"
+            : "Global Unit Master (APP_UNIT_MASTER)";
+        var dbPath = appDb.DatabasePath;
 
         var vm = new UnitMasterViewModel(
             dataService,
             tableName: tableName,
             contextName: contextName,
             isProjectOpen: _session.IsProjectOpen,
-            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
-            databasePath: dbPath);
+            appDatabaseService: appDb,
+            databasePath: dbPath,
+            projectDataService: null);
 
         var window = new DrillIntel.Views.UnitMasterWindow
         {
@@ -470,34 +478,22 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void OpenUnitConversion()
     {
-        IDataServiceDIntel dataService;
-        string tableName;
-        string contextName;
-        string dbPath;
-
-        if (_session.IsProjectOpen)
-        {
-            dataService = _session.GetDataService();
-            tableName = DrillIntel.Models.UnitConverter.ProjectTableName;
-            contextName = $"Project: {_session.ProjectName}";
-            dbPath = _session.ProjectFilePath ?? "Active Project Database";
-        }
-        else
-        {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            tableName = DrillIntel.Models.UnitConverter.TableName;
-            contextName = "Application Master Template (DrillIntelApp.sqlite)";
-            dbPath = appDb.DatabasePath;
-        }
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var tableName = DrillIntel.Models.UnitConverter.TableName;
+        var contextName = _session.IsProjectOpen
+            ? $"Global Unit Conversions (APP_UNIT_CONVERSIONS) — Active Project: {_session.ProjectName}"
+            : "Global Unit Conversions (APP_UNIT_CONVERSIONS)";
+        var dbPath = appDb.DatabasePath;
 
         var vm = new UnitConversionMasterViewModel(
             dataService,
             tableName: tableName,
             contextName: contextName,
             isProjectOpen: _session.IsProjectOpen,
-            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
-            databasePath: dbPath);
+            appDatabaseService: appDb,
+            databasePath: dbPath,
+            projectDataService: null);
 
         var window = new DrillIntel.Views.UnitConversionMasterWindow
         {

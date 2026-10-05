@@ -14,9 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="DrillIntel.DataService">
-      <HintPath>libs\DrillIntel.DataService.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\DrillIntel.DataService\DrillIntel.DataService.csproj" />
   </ItemGroup>
 
   <ItemGroup>

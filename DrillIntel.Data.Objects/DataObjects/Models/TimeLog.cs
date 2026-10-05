@@ -507,11 +507,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                 double offset = 0.0;
                 bool found = false;
 
-                // Check VMX_UNIT_CONVERSIONS first
-                string sqlConv = "SELECT MULTIPLIER, OFFSET FROM VMX_UNIT_CONVERSIONS WHERE LOWER(FROM_UNIT)='" 
+                // Centralized access: query APP_UNIT_CONVERSIONS from the Base database (single source of truth)
+                var baseDb = BaseDatabaseProvider.GetBaseDataService();
+                IDataServiceDIntel convDb = baseDb ?? objDataService;
+
+                string sqlConv = "SELECT MULTIPLIER, OFFSET FROM APP_UNIT_CONVERSIONS WHERE LOWER(FROM_UNIT)='" 
                     + fromUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' AND LOWER(TO_UNIT)='" 
                     + toUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' LIMIT 1;";
-                DataTable dtConv = objDataService.GetTable(sqlConv);
+                DataTable dtConv = convDb.GetTable(sqlConv);
                 if (dtConv != null && dtConv.Rows.Count > 0)
                 {
                     multiplier = Convert.ToDouble(dtConv.Rows[0]["MULTIPLIER"], CultureInfo.InvariantCulture);
@@ -519,19 +522,23 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                     found = true;
                     dtConv.Dispose();
                 }
-                else
+                else if (convDb != objDataService)
                 {
-                    // Fallback to APP_UNIT_CONVERSIONS if present
-                    string sqlAppConv = "SELECT MULTIPLIER, OFFSET FROM APP_UNIT_CONVERSIONS WHERE LOWER(FROM_UNIT)='" 
-                        + fromUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' AND LOWER(TO_UNIT)='" 
-                        + toUnit.Trim().ToLowerInvariant().Replace("'", "''") + "' LIMIT 1;";
-                    DataTable dtAppConv = objDataService.GetTable(sqlAppConv);
-                    if (dtAppConv != null && dtAppConv.Rows.Count > 0)
+                    // Fallback check on objDataService if Base DB didn't contain it (e.g. mock test harnesses)
+                    try
                     {
-                        multiplier = Convert.ToDouble(dtAppConv.Rows[0]["MULTIPLIER"], CultureInfo.InvariantCulture);
-                        offset = Convert.ToDouble(dtAppConv.Rows[0]["OFFSET"], CultureInfo.InvariantCulture);
-                        found = true;
-                        dtAppConv.Dispose();
+                        var dtLocal = objDataService.GetTable(sqlConv);
+                        if (dtLocal != null && dtLocal.Rows.Count > 0)
+                        {
+                            multiplier = Convert.ToDouble(dtLocal.Rows[0]["MULTIPLIER"], CultureInfo.InvariantCulture);
+                            offset = Convert.ToDouble(dtLocal.Rows[0]["OFFSET"], CultureInfo.InvariantCulture);
+                            found = true;
+                            dtLocal.Dispose();
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore fallback failure
                     }
                 }
 

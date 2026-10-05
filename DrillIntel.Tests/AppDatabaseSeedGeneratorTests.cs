@@ -222,6 +222,9 @@ public class AppDatabaseSeedGeneratorTests
                 ('N-m', 'Torque', 'Newton meters', 0),
                 -- Rotary Speed
                 ('rpm', 'Rotary Speed', 'Revolutions per minute', 1);
+
+                CREATE VIEW IF NOT EXISTS VMX_UNIT_MASTER AS 
+                SELECT * FROM APP_UNIT_MASTER;
             ";
             cmd.ExecuteNonQuery();
 

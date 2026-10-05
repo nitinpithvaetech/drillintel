@@ -78,7 +78,7 @@ public partial class UnitConversionEditViewModel : ObservableObject
         IEnumerable<string>? existingUnits = null)
     {
         _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
-        _tableName = !string.IsNullOrWhiteSpace(tableName) ? tableName : UnitConverter.TableName;
+        _tableName = UnitConverter.NormalizeTableName(tableName);
         IsNew = isNew || conversion == null || conversion.ID <= 0;
 
         if (existingCategories != null)

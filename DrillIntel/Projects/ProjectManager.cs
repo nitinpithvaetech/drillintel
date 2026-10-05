@@ -636,34 +636,6 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
     MODIFIED_DATE               TEXT,
     PRIMARY KEY (WELL_ID, DEPTH)
 );
-
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS VMX_UNIT_MASTER (
-    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
-    UNIT_NAME     TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    CATEGORY      TEXT NOT NULL,
-    DESCRIPTION   TEXT,
-    IS_DEFAULT    INTEGER NOT NULL DEFAULT 0,
-    CREATED_BY    TEXT,
-    CREATED_DATE  TEXT,
-    MODIFIED_BY   TEXT,
-    MODIFIED_DATE TEXT
-);
-
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS VMX_UNIT_CONVERSIONS (
-    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
-    FROM_UNIT     TEXT NOT NULL COLLATE NOCASE,
-    TO_UNIT       TEXT NOT NULL COLLATE NOCASE,
-    MULTIPLIER    REAL NOT NULL,
-    OFFSET        REAL NOT NULL DEFAULT 0.0,
-    CATEGORY      TEXT NOT NULL,
-    CREATED_BY    TEXT,
-    CREATED_DATE  TEXT,
-    MODIFIED_BY   TEXT,
-    MODIFIED_DATE TEXT,
-    UNIQUE(FROM_UNIT, TO_UNIT)
-);
 ";
     }
 
@@ -713,6 +685,10 @@ CREATE TABLE IF NOT EXISTS VMX_UNIT_CONVERSIONS (
 
             // Check Schema Version & Migrate if necessary
             EnsureSchemaVersion(dataService);
+
+            // Centralized Base database: Remove any project-level unit tables/views and migrate legacy data if present
+            DrillIntel.Models.Unit.RemoveProjectLevelTables(dataService);
+            DrillIntel.Models.UnitConverter.RemoveProjectLevelTables(dataService);
 
             _dataService = dataService;
             ProjectFilePath = dintelFilePath;
@@ -969,35 +945,6 @@ CREATE TABLE IF NOT EXISTS VMX_UNIT_CONVERSIONS (
                             RigStateService.SaveCommonRigStateSetup(projectDataService, masterSetup);
                         }
 
-                        // Copy master measurement units to project VMX_UNIT_MASTER
-                        Unit.EnsureTableExists(projectDataService, Unit.ProjectTableName);
-                        var masterUnits = Unit.GetList(appDataService, tableName: Unit.TableName);
-                        if (masterUnits.Count > 0)
-                        {
-                            foreach (var u in masterUnits)
-                            {
-                                Unit.Add(projectDataService, u, Unit.ProjectTableName);
-                            }
-                        }
-                        else
-                        {
-                            Unit.CreateDefaultUnits(projectDataService, Unit.ProjectTableName);
-                        }
-
-                        // Copy master unit conversions to project VMX_UNIT_CONVERSIONS
-                        DrillIntel.Models.UnitConverter.EnsureTableExists(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
-                        var masterConversions = DrillIntel.Models.UnitConverter.GetList(appDataService, tableName: DrillIntel.Models.UnitConverter.TableName);
-                        if (masterConversions.Count > 0)
-                        {
-                            foreach (var c in masterConversions)
-                            {
-                                DrillIntel.Models.UnitConverter.Add(projectDataService, c, DrillIntel.Models.UnitConverter.ProjectTableName);
-                            }
-                        }
-                        else
-                        {
-                            DrillIntel.Models.UnitConverter.CreateDefaultConversion(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
-                        }
                     }
                 }
             }

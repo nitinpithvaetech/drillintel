@@ -2085,12 +2085,16 @@ public partial class ImportDataViewModel : ObservableObject
             var finalLogName = string.IsNullOrWhiteSpace(LogName) ? System.IO.Path.GetFileNameWithoutExtension(FileName) : LogName;
 
             await _repository.EnsureWellAsync(effectiveWellName);
+            var projectWell = await _repository.GetProjectWellAsync();
+            var primaryWellboreId = projectWell?.wellbores?.Values?.FirstOrDefault()?.ObjectID ?? string.Empty;
 
             if (isDepthLog)
             {
                 depthLog = new DepthLog
                 {
                     ObjectID = Guid.NewGuid().ToString(),
+                    WellID = projectWell?.ObjectID ?? string.Empty,
+                    WellboreID = primaryWellboreId,
                     nameLog = finalLogName,
                     nameWell = effectiveWellName,
                     __WellName = effectiveWellName,
@@ -2103,7 +2107,7 @@ public partial class ImportDataViewModel : ObservableObject
                 var distinctMnemonic = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var map in activeMappings)
                 {
-                    var targetChannel = map.MappedVumaxChannel;
+                    var targetChannel = map.MappedVumaxChannel == "Dynamic (New Column)" ? map.CsvColumnHeader : map.MappedVumaxChannel;
                     var safeMnemonic = WellDataRepository.SanitizeIdentifier(targetChannel, order - 1);
                     var finalMnemonic = safeMnemonic;
                     int suffix = 1;
@@ -2112,6 +2116,7 @@ public partial class ImportDataViewModel : ObservableObject
                         finalMnemonic = $"{safeMnemonic}_{suffix++}";
                     }
                     distinctMnemonic.Add(finalMnemonic);
+                    map.MappedVumaxChannel = finalMnemonic;
 
                     var channel = new LogChannel
                     {
@@ -2131,7 +2136,7 @@ public partial class ImportDataViewModel : ObservableObject
                 bool addSuccess = DepthLogService.AddDepthLog(dataService, depthLog, ref lastError);
                 if (!addSuccess)
                 {
-                    MessageBox.Show($"Failed to initialize DepthLog using AddDepthLog: {lastError}", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                    ShowMessageBox($"Failed to initialize DepthLog using AddDepthLog: {lastError}", "Import Failed", MessageBoxButton.OK, MessageBoxImage.Error);
                     return;
                 }
 
@@ -2142,6 +2147,8 @@ public partial class ImportDataViewModel : ObservableObject
                 timeLog = new TimeLog
                 {
                     ObjectID = Guid.NewGuid().ToString(),
+                    WellID = projectWell?.ObjectID ?? string.Empty,
+                    WellboreID = primaryWellboreId,
                     nameLog = finalLogName,
                     nameWell = effectiveWellName,
                     __WellName = effectiveWellName,
@@ -2232,6 +2239,7 @@ public partial class ImportDataViewModel : ObservableObject
                         finalMnemonic = $"{safeMnemonic}_{suffix++}";
                     }
                     distinctMnemonic.Add(finalMnemonic);
+                    map.MappedVumaxChannel = finalMnemonic;
 
                     bool isDateTime = finalMnemonic.Equals("DATE_TIME", StringComparison.OrdinalIgnoreCase) ||
                                       finalMnemonic.Equals("TIME", StringComparison.OrdinalIgnoreCase) ||
