@@ -15,6 +15,7 @@ public class VHTracksInfo
     public string CustomizationData { get; set; } = string.Empty;
 
     // TypeScript compatibility aliases
+    [System.Text.Json.Serialization.JsonIgnore]
     public string themeId { get => ThemeId; set => ThemeId = value; }
 
     public VHTracksInfo()

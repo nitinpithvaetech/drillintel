@@ -15,11 +15,17 @@ public class RTRectangle
     public double Bottom { get; set; } = 0;
 
     // TypeScript compatibility aliases
+    [System.Text.Json.Serialization.JsonIgnore]
     public double height { get => Height; set => Height = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double width { get => Width; set => Width = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double left { get => Left; set => Left = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double top { get => Top; set => Top = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double right { get => Right; set => Right = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double bottom { get => Bottom; set => Bottom = value; }
 
     public RTRectangle()

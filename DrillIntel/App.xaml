@@ -21,9 +21,13 @@
             <!-- Wizard Converters -->
             <conv:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+            <conv:BoolToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
+            <conv:InverseBoolToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
             <conv:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+            <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
             <conv:HexToBrushConverter x:Key="HexToBrushConverter" />
 
             <!-- Wizard Shared Styles -->

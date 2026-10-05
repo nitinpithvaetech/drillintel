@@ -236,18 +236,16 @@ public class TChartModelTests
                 new VHTrack { ID = "t1", Title = "Track 1" }
             }
         };
-        console.WellList["well1"] = new MultiWellInfoEx { WellID = "well1", WellName = "Well 1" };
-        console.RoadmapEntry["rm1"] = new RMEx { ID = "rm1", Name = "Roadmap 1", Value = 42 };
+        console.DataSource.TimeLogID = "timelog-123";
+        console.DataSource.WellID = "well-456";
 
         var copy = console.GetCopy();
         Assert.Equal("console-1", copy.ID);
         Assert.Equal("Master Console", copy.Name);
         Assert.Single(copy.Tracks);
         Assert.Equal("Track 1", copy.Tracks[0].Title);
-        Assert.True(copy.WellList.ContainsKey("well1"));
-        Assert.Equal("Well 1", copy.WellList["well1"].WellName);
-        Assert.True(copy.RoadmapEntry.ContainsKey("rm1"));
-        Assert.Equal(42, copy.RoadmapEntry["rm1"].Value);
+        Assert.Equal("timelog-123", copy.DataSource.TimeLogID);
+        Assert.Equal("well-456", copy.DataSource.WellID);
 
         // Ensure mutations on copy do not affect original
         copy.Tracks[0].Title = "Modified Track 1";

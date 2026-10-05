@@ -22,7 +22,7 @@ namespace DrillIntel.Projects
     // =====================================================================
     public static class SchemaInitializer
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         public static void CreateDatabase(string dintelFilePath)
         {
@@ -713,7 +713,64 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
 
             if (version < SchemaInitializer.CurrentSchemaVersion)
             {
-                // Execute migration logic here if needed in the future
+                try
+                {
+                    // Ensure VMX_DOC_TEMPLATES exists and has all required columns
+                    dataService.ExecuteNonQuery(@"
+CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
+    TEMPLATE_TYPE   TEXT NOT NULL,
+    TEMPLATE_ID     TEXT NOT NULL,
+    DOCUMENT_NAME   TEXT NOT NULL DEFAULT '',
+    WELL_ID         TEXT,
+    WELLBORE_ID     TEXT,
+    LOG_ID          TEXT,
+    DESCRIPTION     TEXT,
+    TEMPLATE_DATA   BLOB,
+    IS_DEFAULT      INTEGER NOT NULL DEFAULT 0,
+    CREATED_BY      TEXT,
+    CREATED_DATE    TEXT,
+    MODIFIED_BY     TEXT,
+    MODIFIED_DATE   TEXT,
+    PRIMARY KEY (TEMPLATE_TYPE, TEMPLATE_ID)
+);
+CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_TYPE ON VMX_DOC_TEMPLATES(TEMPLATE_TYPE);
+CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUMENT_NAME);
+");
+
+                    // Check for missing columns if table pre-existed (e.g. from VuMaxDR)
+                    var tableInfo = dataService.GetTable("PRAGMA table_info(VMX_DOC_TEMPLATES);");
+                    var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (tableInfo != null)
+                    {
+                        foreach (System.Data.DataRow row in tableInfo.Rows)
+                        {
+                            existingCols.Add(row["name"]?.ToString() ?? "");
+                        }
+                    }
+
+                    if (!existingCols.Contains("DOCUMENT_NAME"))
+                    {
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DOCUMENT_NAME TEXT NOT NULL DEFAULT '';");
+                        dataService.ExecuteNonQuery("UPDATE VMX_DOC_TEMPLATES SET DOCUMENT_NAME = TEMPLATE_ID WHERE DOCUMENT_NAME IS NULL OR DOCUMENT_NAME = '';");
+                    }
+                    if (!existingCols.Contains("WELL_ID"))
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELL_ID TEXT;");
+                    if (!existingCols.Contains("WELLBORE_ID"))
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELLBORE_ID TEXT;");
+                    if (!existingCols.Contains("LOG_ID"))
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN LOG_ID TEXT;");
+                    if (!existingCols.Contains("DESCRIPTION"))
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DESCRIPTION TEXT;");
+                    if (!existingCols.Contains("IS_DEFAULT"))
+                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN IS_DEFAULT INTEGER NOT NULL DEFAULT 0;");
+
+                    dataService.ExecuteNonQuery("UPDATE VMX_SCHEMA_INFO SET SCHEMA_VERSION = @v;",
+                        new Dictionary<string, object?> { ["@v"] = SchemaInitializer.CurrentSchemaVersion });
+                }
+                catch
+                {
+                    // Non-fatal if database is read-only or in locked state
+                }
             }
         }
 

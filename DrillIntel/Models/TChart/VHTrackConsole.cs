@@ -19,7 +19,7 @@ public class VHTrackConsole
 
     public List<VHTrack> Tracks { get; set; } = new List<VHTrack>();
     public string WellID { get; set; } = string.Empty;
-    public RTYAxis objYAxis { get; set; } = new RTYAxis();
+    // public RTYAxis objYAxis { get; set; } = new RTYAxis();
 
     public double displayResolution { get; set; } = 100;
     public string LastError { get; set; } = string.Empty;
@@ -33,9 +33,13 @@ public class VHTrackConsole
     //public List<VHColorDepthRange> ColorDepthRanges { get; set; } = new List<VHColorDepthRange>();
 
     // Common scales for runtime rendering
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __yScale { get; set; } = null;
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __depthYScale { get; set; } = null;
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __dateTimeYScale { get; set; } = null;
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __xScale { get; set; } = null;
 
     //public string operationMode { get; set; } = string.Empty;
@@ -50,6 +54,8 @@ public class VHTrackConsole
 
     public bool showFormationTops { get; set; } = true;
     public bool showCasingDepth { get; set; } = true;
+    public bool ShowLegend { get; set; } = true;
+    public bool ShowAxisTitles { get; set; } = true;
 
     // Multi-well collections
     public Dictionary<string, MultiWellInfoEx> WellList { get; set; } = new Dictionary<string, MultiWellInfoEx>();
@@ -60,6 +66,10 @@ public class VHTrackConsole
     public VHTrackConsole()
     {
     }
+
+    //public VHTrackConsole()
+    //{
+    //}
 
     /// <summary>
     /// Factory method to instantiate a VHTrackConsole configured for a given index type.
@@ -143,7 +153,7 @@ public class VHTrackConsole
                 DataSource = RTDataSource.GetCopy(obj.DataSource),
                 Name = obj.Name,
                 Tracks = obj.Tracks.Select(t => t.GetCopy()).ToList(),
-                objYAxis = RTYAxis.GetCopy(obj.objYAxis),
+                //objYAxis = RTYAxis.GetCopy(obj.objYAxis),
                 displayResolution = obj.displayResolution,
                 DepthUnit = obj.DepthUnit,
                 realTime = obj.realTime,
@@ -164,6 +174,8 @@ public class VHTrackConsole
                 __templateUpdatedOn = obj.__templateUpdatedOn,
                 showFormationTops = obj.showFormationTops,
                 showCasingDepth = obj.showCasingDepth,
+                ShowLegend = obj.ShowLegend,
+                ShowAxisTitles = obj.ShowAxisTitles,
                 LastError = obj.LastError
             };
 

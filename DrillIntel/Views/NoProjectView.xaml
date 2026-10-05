@@ -92,7 +92,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Row 0, Column 0: Recent Projects Card (Same Height as Get Started Card) -->
-                <materialDesign:Card Grid.Row="0" Grid.Column="0" VerticalAlignment="Stretch" Padding="20" UniformCornerRadius="14" materialDesign:ElevationAssist.Elevation="Dp2">
+                <materialDesign:Card Grid.Row="0" Grid.Column="0" Height="470" VerticalAlignment="Top" Padding="20" UniformCornerRadius="14" materialDesign:ElevationAssist.Elevation="Dp2">
                     <DockPanel LastChildFill="True">
                         <!-- Card Header -->
                         <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
@@ -321,7 +321,7 @@
                 </materialDesign:Card>
 
                 <!-- Row 0, Column 2: Get Started Card (Same Height as Recent Projects Card) -->
-                <materialDesign:Card Grid.Row="0" Grid.Column="2" VerticalAlignment="Stretch" Padding="22" UniformCornerRadius="14" materialDesign:ElevationAssist.Elevation="Dp2">
+                <materialDesign:Card Grid.Row="0" Grid.Column="2" Height="470" VerticalAlignment="Top" Padding="22" UniformCornerRadius="14" materialDesign:ElevationAssist.Elevation="Dp2">
                     <DockPanel LastChildFill="True">
                         <!-- Section Title -->
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,16">
@@ -329,7 +329,7 @@
                             <TextBlock Text="Get Started" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" />
                         </StackPanel>
 
-                        <StackPanel VerticalAlignment="Center">
+                        <StackPanel VerticalAlignment="Top">
                             <!-- New Project Action Card -->
                             <Border Style="{StaticResource ActionCardBorder}" Margin="0,0,0,16">
                                 <Grid>
