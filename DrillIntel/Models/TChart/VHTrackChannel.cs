@@ -20,6 +20,58 @@ public class VHTrackChannel
     public string Unit { get; set; } = string.Empty;
     public string Mnemonic { get; set; } = string.Empty;
 
+    // Runtime effective min/max scale values for legend display
+    public double EffectiveMin { get; set; } = 0;
+    public double EffectiveMax { get; set; } = 0;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string FormattedMin
+    {
+        get
+        {
+            double min = EffectiveMin;
+            if (min == 0 && EffectiveMax == 0 && objXAxis != null && objXAxis.Max > objXAxis.Min)
+                min = objXAxis.Min;
+            return FormatAxisValue(min);
+        }
+    }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string FormattedMax
+    {
+        get
+        {
+            double max = EffectiveMax;
+            if (EffectiveMin == 0 && max == 0 && objXAxis != null && objXAxis.Max > objXAxis.Min)
+                max = objXAxis.Max;
+            return FormatAxisValue(max);
+        }
+    }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string FormattedRange
+    {
+        get
+        {
+            if (Math.Abs(EffectiveMin) < 1e-6 && Math.Abs(EffectiveMax) < 1e-6)
+            {
+                if (objXAxis != null && objXAxis.Max > objXAxis.Min)
+                    return $"{FormatAxisValue(objXAxis.Min)} - {FormatAxisValue(objXAxis.Max)}";
+                return objXAxis?.AutoScale == true ? "Auto" : "0 - 0";
+            }
+            return $"{FormattedMin} - {FormattedMax}";
+        }
+    }
+
+    public static string FormatAxisValue(double val)
+    {
+        if (double.IsNaN(val) || double.IsInfinity(val)) return "--";
+        if (Math.Abs(val) < 1e-9) return "0";
+        if (Math.Abs(val % 1) < 0.001) return val.ToString("#,##0");
+        if (Math.Abs(val) < 10) return val.ToString("0.0#");
+        return val.ToString("#,##0.#");
+    }
+
     // Grouping & Smoothing (0 - Avg, 1 - Min, 2 - Max)
     public int GroupMethod { get; set; } = 0;
     public int SmoothMethod { get; set; } = 0;
@@ -99,8 +151,11 @@ public class VHTrackChannel
     public enumRTLineStyle RMALineStyle { get; set; } = enumRTLineStyle.Dot;
 
     // Runtime / Layout
+    [System.Text.Json.Serialization.JsonIgnore]
     public RTRectangle? headerRect { get; set; } = new RTRectangle();
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __scale { get; set; } = null;
+    [System.Text.Json.Serialization.JsonIgnore]
     public object? __chartSeries { get; set; } = null;
 
     // Multiwell Track Fields
@@ -128,6 +183,8 @@ public class VHTrackChannel
             objXAxis = this.objXAxis?.GetCopy() ?? new RTAxis(),
             Unit = this.Unit,
             Mnemonic = this.Mnemonic,
+            EffectiveMin = this.EffectiveMin,
+            EffectiveMax = this.EffectiveMax,
             GroupMethod = this.GroupMethod,
             SmoothMethod = this.SmoothMethod,
             SmoothData = this.SmoothData,

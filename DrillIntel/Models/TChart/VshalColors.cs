@@ -12,8 +12,11 @@ public class VshalColors
     public string Color3 { get; set; } = "#DA4848";
 
     // TypeScript compatibility aliases
+    [System.Text.Json.Serialization.JsonIgnore]
     public string color1 { get => Color1; set => Color1 = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public string color2 { get => Color2; set => Color2 = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public string color3 { get => Color3; set => Color3 = value; }
 
     public VshalColors()

@@ -19,6 +19,7 @@ public class RTAxis
     public double Max { get; set; } = 0;
     public double LabelAngle { get; set; } = 0;
     public bool Logarighmic { get; set; } = false;
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool Logarithmic { get => Logarighmic; set => Logarighmic = value; }
     public bool ShowMajorGrids { get; set; } = true;
     public int MajorTickCount { get; set; } = 4;

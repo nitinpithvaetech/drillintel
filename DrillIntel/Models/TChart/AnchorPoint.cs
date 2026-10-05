@@ -12,8 +12,11 @@ public class AnchorPoint
     public double Size { get; set; } = 0;
 
     // TypeScript compatibility aliases
+    [System.Text.Json.Serialization.JsonIgnore]
     public double x { get => X; set => X = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double y { get => Y; set => Y = value; }
+    [System.Text.Json.Serialization.JsonIgnore]
     public double size { get => Size; set => Size = value; }
 
     public AnchorPoint()

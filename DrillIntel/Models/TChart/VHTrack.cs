@@ -12,6 +12,7 @@ public class VHTrack
 {
     public string ID { get; set; } = string.Empty;
     public enumRTTrackType TrackType { get; set; } = enumRTTrackType.Regular;
+    //Not to Use dataSource
     public RTDataSource DataSource { get; set; } = new RTDataSource();
     public bool ShowIndexDateTimeTrack { get; set; } = false;
 
@@ -20,7 +21,7 @@ public class VHTrack
     public double Width { get; set; } = 2;
     public int DisplayOrder { get; set; } = 0;
     public List<VHTrackChannel> Channels { get; set; } = new List<VHTrackChannel>();
-    public string BHAProfileId { get; set; } = string.Empty;
+    //public string BHAProfileId { get; set; } = string.Empty;
 
     // Track Font
     public string FontName { get; set; } = "Tahoma";
@@ -34,7 +35,9 @@ public class VHTrack
     public List<RTAxis> axisList { get; set; } = new List<RTAxis>();
 
     // Runtime layout rectangles
+    [System.Text.Json.Serialization.JsonIgnore]
     public RTRectangle? headerRect { get; set; } = new RTRectangle();
+    [System.Text.Json.Serialization.JsonIgnore]
     public RTRectangle? contentRect { get; set; } = new RTRectangle();
 
     public VHTrack()
@@ -67,7 +70,7 @@ public class VHTrack
                 FontItalic = paramSource.FontItalic,
                 FontUnderline = paramSource.FontUnderline,
                 Visible = paramSource.Visible,
-                BHAProfileId = paramSource.BHAProfileId,
+                //BHAProfileId = paramSource.BHAProfileId,
                 axisList = paramSource.axisList.Select(ax => ax.GetCopy()).ToList()
             };
 
@@ -102,7 +105,7 @@ public class VHTrack
                 FontItalic = paramSource.FontItalic,
                 FontUnderline = paramSource.FontUnderline,
                 Visible = paramSource.Visible,
-                BHAProfileId = paramSource.BHAProfileId,
+                //BHAProfileId = paramSource.BHAProfileId,
                 axisList = paramSource.axisList.Select(ax => ax.GetCopy()).ToList(),
                 ShowIndexDateTimeTrack = paramSource.ShowIndexDateTimeTrack,
                 headerRect = paramSource.headerRect?.GetCopy(),
