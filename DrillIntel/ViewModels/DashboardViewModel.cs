@@ -455,6 +455,53 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
+    public EditDepthLogViewModel? LastEditDepthLogViewModel { get; private set; }
+    public Func<EditDepthLogViewModel, bool?>? OpenEditDepthLogDialogHandler { get; set; }
+
+    [RelayCommand]
+    public async Task EditDepthLogAsync(WellTreeNode? targetNode = null)
+    {
+        var node = targetNode ?? ContextSelectedNode ?? SelectedNode;
+        if (node == null || _session?.IsProjectOpen != true || _repository == null) return;
+
+        DepthLog? targetLog = node.Tag as DepthLog
+            ?? (node.Children.Count > 0 ? node.Children[0].Tag as DepthLog : null);
+
+        string logId = targetLog?.ObjectID ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(logId))
+        {
+            var depthLogs = await _repository.GetDepthLogsAsync();
+            targetLog = depthLogs.FirstOrDefault(t => t.ObjectID == node.Name || t.nameLog == node.Name)
+                     ?? depthLogs.FirstOrDefault();
+            logId = targetLog?.ObjectID ?? node.Name;
+        }
+
+        var vm = new EditDepthLogViewModel(_session, _repository, logId, targetLog);
+        await vm.InitializeAsync();
+        LastEditDepthLogViewModel = vm;
+
+        bool? result = false;
+        if (OpenEditDepthLogDialogHandler != null)
+        {
+            result = OpenEditDepthLogDialogHandler(vm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.EditDepthLogWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            _session?.NotifyDataChanged();
+            await RefreshAsync();
+        }
+    }
+
     [RelayCommand]
     public async Task ViewDataAsync(WellTreeNode? targetNode = null)
     {

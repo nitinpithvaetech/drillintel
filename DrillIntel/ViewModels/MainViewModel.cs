@@ -206,6 +206,40 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenDepthlogEditor()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (CurrentViewModel is DashboardViewModel dashboardVm)
+        {
+            await dashboardVm.EditDepthLogAsync();
+        }
+        else
+        {
+            var repo = new WellDataRepository(_session);
+            var depthLogs = await repo.GetDepthLogsAsync();
+            var targetLog = depthLogs.FirstOrDefault();
+            if (targetLog != null)
+            {
+                var vm = new EditDepthLogViewModel(_session, repo, targetLog.ObjectID, targetLog);
+                await vm.InitializeAsync();
+                var window = new DrillIntel.Views.EditDepthLogWindow
+                {
+                    DataContext = vm,
+                    Owner = Application.Current?.MainWindow
+                };
+                if (window.ShowDialog() == true)
+                {
+                    _session.NotifyDataChanged();
+                }
+            }
+            else
+            {
+                MessageBox.Show("No Depthlog available to edit. Please import a depth log first.", "Edit Depthlog", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+    }
+
     private void OnProjectStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsProjectOpen));
@@ -222,6 +256,7 @@ public partial class MainViewModel : ObservableObject
         OpenWellEditorCommand.NotifyCanExecuteChanged();
         EditWellCommand.NotifyCanExecuteChanged();
         OpenTimelogEditorCommand.NotifyCanExecuteChanged();
+        OpenDepthlogEditorCommand.NotifyCanExecuteChanged();
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();

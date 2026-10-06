@@ -546,6 +546,364 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
             }
         }
 
+        public static DepthLog? LoadObject(IDataServiceDIntel objDataService, string logID, ref string lastError)
+        {
+            try
+            {
+                if (objDataService == null)
+                {
+                    lastError = "Data service is not initialized.";
+                    return null;
+                }
+
+                DataTable dt = objDataService.GetTable("SELECT * FROM VMX_DEPTH_LOG WHERE LOG_ID='" 
+                    + logID.Replace("'", "''") + "' LIMIT 1;");
+
+                if (dt == null || dt.Rows.Count == 0)
+                {
+                    dt = objDataService.GetTable("SELECT * FROM VMX_DEPTH_LOG WHERE LOG_NAME='" 
+                        + logID.Replace("'", "''") + "' OR DATA_TABLE_NAME='" 
+                        + logID.Replace("'", "''") + "' LIMIT 1;");
+                }
+
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    var log = MapRowToDepthLog(dt.Rows[0]);
+                    dt.Dispose();
+                    LoadLogCurves(objDataService, log);
+                    return log;
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message + ":" + ex.StackTrace;
+                return null;
+            }
+        }
+
+        public static void LoadLogCurves(IDataServiceDIntel objDataService, DepthLog log)
+        {
+            if (objDataService == null || log == null) return;
+            try
+            {
+                bool customTableHasChannels = false;
+
+                // 1. If DATA_TABLE_NAME stores channel rows directly (contains MNEMONIC column)
+                if (!string.IsNullOrWhiteSpace(log.__dataTableName))
+                {
+                    try
+                    {
+                        bool tableExists = objDataService.IsRecordExist("SELECT name FROM sqlite_master WHERE type='table' AND name='" 
+                            + log.__dataTableName.Replace("'", "''") + "';");
+
+                        if (tableExists)
+                        {
+                            DataTable pragmaCols = objDataService.GetTable("PRAGMA table_info('" + log.__dataTableName.Replace("'", "''") + "');");
+                            bool hasMnemCol = false;
+                            if (pragmaCols != null)
+                            {
+                                foreach (DataRow r in pragmaCols.Rows)
+                                {
+                                    string colName = Convert.ToString(r["name"]) ?? "";
+                                    if (colName.Equals("MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        hasMnemCol = true;
+                                        break;
+                                    }
+                                }
+                                pragmaCols.Dispose();
+                            }
+
+                            if (hasMnemCol)
+                            {
+                                customTableHasChannels = true;
+                                DataTable dtDirect = objDataService.GetTable("SELECT * FROM [" + log.__dataTableName.Replace("'", "''") + "];");
+                                if (dtDirect != null)
+                                {
+                                    int order = 1;
+                                    foreach (DataRow r in dtDirect.Rows)
+                                    {
+                                        var ch = new LogChannel();
+                                        foreach (DataColumn dc in dtDirect.Columns)
+                                        {
+                                            object v = r[dc];
+                                            if (v == null || v == DBNull.Value) continue;
+                                            string col = dc.ColumnName;
+
+                                            if (col.Equals("Upload", StringComparison.OrdinalIgnoreCase) || col.Equals("WRITE_BACK", StringComparison.OrdinalIgnoreCase))
+                                                ch.Upload = Convert.ToInt64(v) != 0 || (v is bool b && b);
+                                            else if (col.Equals("Mnemonic", StringComparison.OrdinalIgnoreCase) || col.Equals("MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                                ch.Mnemonic = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("Unit", StringComparison.OrdinalIgnoreCase) || col.Equals("UNIT", StringComparison.OrdinalIgnoreCase))
+                                                ch.Unit = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("VuMax Unit ID", StringComparison.OrdinalIgnoreCase) || col.Equals("VUMAX_UNIT_ID", StringComparison.OrdinalIgnoreCase) || col.Equals("UnitID", StringComparison.OrdinalIgnoreCase))
+                                                ch.VuMaxUnitId = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("Description", StringComparison.OrdinalIgnoreCase) || col.Equals("CHANNEL_NAME", StringComparison.OrdinalIgnoreCase) || col.Equals("curveDescription", StringComparison.OrdinalIgnoreCase))
+                                                ch.Description = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("Upload Mnemonic", StringComparison.OrdinalIgnoreCase) || col.Equals("WITSML_MNEMONIC", StringComparison.OrdinalIgnoreCase) || col.Equals("PI_MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                                ch.UploadMnemonic = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("Value Type", StringComparison.OrdinalIgnoreCase) || col.Equals("VALUE_TYPE", StringComparison.OrdinalIgnoreCase))
+                                                ch.ValueType = Convert.ToString(v) ?? "0";
+                                            else if (col.Equals("Expression", StringComparison.OrdinalIgnoreCase) || col.Equals("VALUE_QUERY", StringComparison.OrdinalIgnoreCase))
+                                                ch.Expression = Convert.ToString(v) ?? "";
+                                            else if (col.Equals("Do Not Interpol", StringComparison.OrdinalIgnoreCase) || col.Equals("NO_INTERPOLATE", StringComparison.OrdinalIgnoreCase))
+                                                ch.DoNotInterpol = Convert.ToInt64(v) != 0 || (v is bool b && b);
+                                        }
+
+                                        ch.OriginalMnemonic = ch.Mnemonic;
+                                        ch.ColumnOrder = order++;
+                                        if (!string.IsNullOrWhiteSpace(ch.Mnemonic) && !log.LogCurves.ContainsKey(ch.Mnemonic))
+                                        {
+                                            log.LogCurves.Add(ch.Mnemonic, ch);
+                                        }
+                                    }
+                                    dtDirect.Dispose();
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 2. Query VMX_DEPTH_LOG_COLUMNS
+                if (!customTableHasChannels)
+                {
+                    string colWhere = "LOG_ID='" + log.ObjectID.Replace("'", "''") + "'";
+                    if (!string.IsNullOrWhiteSpace(log.WellID))
+                        colWhere += " AND WELL_ID='" + log.WellID.Replace("'", "''") + "'";
+                    if (!string.IsNullOrWhiteSpace(log.WellboreID))
+                        colWhere += " AND WELLBORE_ID='" + log.WellboreID.Replace("'", "''") + "'";
+
+                    bool hasColsTable = objDataService.IsRecordExist("SELECT name FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_COLUMNS';");
+                    if (hasColsTable)
+                    {
+                        DataTable dtCols = objDataService.GetTable("SELECT * FROM VMX_DEPTH_LOG_COLUMNS WHERE " + colWhere + " ORDER BY COLUMN_ORDER ASC;");
+
+                        if (dtCols != null)
+                        {
+                            foreach (DataRow r in dtCols.Rows)
+                            {
+                                var channel = new LogChannel
+                                {
+                                    mnemonic = DataService.checkNull(r["MNEMONIC"], ""),
+                                    curveDescription = r.Table.Columns.Contains("CHANNEL_NAME") ? DataService.checkNull(r["CHANNEL_NAME"], "") : "",
+                                    typeLogData = r.Table.Columns.Contains("DATA_TYPE") ? DataService.checkNull(r["DATA_TYPE"], "") : "Double",
+                                    unit = r.Table.Columns.Contains("UNIT") ? DataService.checkNull(r["UNIT"], "") : "",
+                                    UnitID = r.Table.Columns.Contains("UNIT_ID") ? DataService.checkNull(r["UNIT_ID"], "") : "",
+                                    VuMaxUnitID = r.Table.Columns.Contains("VUMAX_UNIT_ID") ? DataService.checkNull(r["VUMAX_UNIT_ID"], "") : "",
+                                    valueType = r.Table.Columns.Contains("VALUE_TYPE") ? Convert.ToInt32(DataService.checkNull(r["VALUE_TYPE"], 0)) : 0,
+                                    valueQuery = r.Table.Columns.Contains("VALUE_QUERY") ? DataService.checkNull(r["VALUE_QUERY"], "") : "",
+                                    witsmlMnemonic = r.Table.Columns.Contains("WITSML_MNEMONIC") ? DataService.checkNull(r["WITSML_MNEMONIC"], "") : "",
+                                    WriteBack = !r.Table.Columns.Contains("WRITE_BACK") || Convert.ToInt32(DataService.checkNull(r["WRITE_BACK"], 0)) == 1,
+                                    DoNotInterpolate = r.Table.Columns.Contains("NO_INTERPOLATE") ? Convert.ToInt32(DataService.checkNull(r["NO_INTERPOLATE"], 0)) : 0,
+                                    ColumnOrder = r.Table.Columns.Contains("COLUMN_ORDER") ? Convert.ToInt32(DataService.checkNull(r["COLUMN_ORDER"], 0)) : 0
+                                };
+                                channel.OriginalMnemonic = channel.mnemonic;
+                                if (!string.IsNullOrWhiteSpace(channel.mnemonic) && !log.LogCurves.ContainsKey(channel.mnemonic))
+                                {
+                                    log.LogCurves.Add(channel.mnemonic, channel);
+                                }
+                            }
+                            dtCols.Dispose();
+                        }
+                    }
+
+                    // 3. Supplement any missing columns from physical depth-series table
+                    if (!string.IsNullOrWhiteSpace(log.__dataTableName))
+                    {
+                        try
+                        {
+                            DataTable pragmaCols = objDataService.GetTable("PRAGMA table_info('" + log.__dataTableName.Replace("'", "''") + "');");
+                            if (pragmaCols != null)
+                            {
+                                int order = log.LogCurves.Count + 1;
+                                foreach (DataRow r in pragmaCols.Rows)
+                                {
+                                    string col = Convert.ToString(r["name"]) ?? "";
+                                    if (string.IsNullOrWhiteSpace(col) || col.Equals("DATA_INDEX", StringComparison.OrdinalIgnoreCase)) continue;
+
+                                    if (!log.LogCurves.ContainsKey(col))
+                                    {
+                                        bool isDepth = col.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+                                                       col.Equals("DEPT", StringComparison.OrdinalIgnoreCase) ||
+                                                       col.Equals("MD", StringComparison.OrdinalIgnoreCase);
+
+                                        var ch = new LogChannel
+                                        {
+                                            mnemonic = col,
+                                            curveDescription = col,
+                                            typeLogData = "Double",
+                                            unit = isDepth ? "m" : "",
+                                            UnitID = isDepth ? "m" : "",
+                                            VuMaxUnitID = isDepth ? "m" : "",
+                                            witsmlMnemonic = col,
+                                            WriteBack = true,
+                                            processChannel = true,
+                                            ColumnOrder = order++,
+                                            OriginalMnemonic = col
+                                        };
+                                        log.LogCurves.Add(col, ch);
+                                    }
+                                }
+                                pragmaCols.Dispose();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static bool SaveDepthLog(IDataServiceDIntel objDataService, DepthLog log, IEnumerable<LogChannel> channels, ref string lastError)
+        {
+            if (objDataService == null)
+            {
+                lastError = "Data service is not initialized.";
+                return false;
+            }
+
+            if (log == null || string.IsNullOrWhiteSpace(log.ObjectID))
+            {
+                lastError = "DepthLog or LogID cannot be empty.";
+                return false;
+            }
+
+            try
+            {
+                int dupCode = (int)log.DuplicateAction;
+                string modDate = DateTime.Now.ToString("dd-MMM-yyyy HH:mm:ss");
+
+                double.TryParse(log.startIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double minDepth);
+                double.TryParse(log.endIndex, NumberStyles.Any, CultureInfo.InvariantCulture, out double maxDepth);
+
+                string sql = "UPDATE VMX_DEPTH_LOG SET "
+                    + "LOG_NAME='" + (log.nameLog ?? "").Replace("'", "''") + "', "
+                    + "SERVICE_COMPANY='" + (log.serviceCompany ?? "").Replace("'", "''") + "', "
+                    + "EDR_PROVIDER='" + (log.EDRProvider ?? "").Replace("'", "''") + "', "
+                    + "RUN_NO='" + (log.runNumber ?? "").Replace("'", "''") + "', "
+                    + "DESCRIPTION='" + (log.description ?? "").Replace("'", "''") + "', "
+                    + "COMMENTS='" + (log.comments ?? "").Replace("'", "''") + "', "
+                    + "PRIMARY_LOG=" + (log.PrimaryLog ? 1 : 0) + ", "
+                    + "LINK_TO_PARENT=" + (log.LinkToParent ? 1 : 0) + ", "
+                    + "LINK_WELL_ID='" + (log.LinkWellID ?? "").Replace("'", "''") + "', "
+                    + "LINK_WELLBORE_ID='" + (log.LinkWellboreID ?? "").Replace("'", "''") + "', "
+                    + "LINK_LOG_ID='" + (log.LinkLogID ?? "").Replace("'", "''") + "', "
+                    + "DUPLICATE_ACTION=" + dupCode + ", "
+                    + "MIN_DEPTH=" + minDepth.ToString(CultureInfo.InvariantCulture) + ", "
+                    + "MAX_DEPTH=" + maxDepth.ToString(CultureInfo.InvariantCulture) + ", "
+                    + "MODIFIED_DATE='" + modDate + "' "
+                    + "WHERE LOG_ID='" + log.ObjectID.Replace("'", "''") + "';";
+
+                objDataService.ExecuteNonQuery(sql);
+
+                // 2. Update summary table if exists
+                try
+                {
+                    if (objDataService.IsRecordExist("SELECT name FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';"))
+                    {
+                        objDataService.ExecuteNonQuery("UPDATE VMX_DEPTH_LOG_SUMMARY SET LogName='" 
+                            + (log.nameLog ?? "").Replace("'", "''") + "' WHERE LogId='" 
+                            + log.ObjectID.Replace("'", "''") + "';");
+                    }
+                }
+                catch { }
+
+                // 3. Persist channels into VMX_DEPTH_LOG_COLUMNS
+                bool hasVmxCols = objDataService.IsRecordExist("SELECT name FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_COLUMNS';");
+                if (hasVmxCols)
+                {
+                    objDataService.ExecuteNonQuery("DELETE FROM VMX_DEPTH_LOG_COLUMNS WHERE LOG_ID='" + log.ObjectID.Replace("'", "''") + "';");
+
+                    int order = 1;
+                    foreach (var ch in channels)
+                    {
+                        int vt = ch.valueType;
+                        string insertCol = "INSERT INTO VMX_DEPTH_LOG_COLUMNS ("
+                            + "WELL_ID, WELLBORE_ID, LOG_ID, MNEMONIC, CHANNEL_NAME, DATA_TYPE, "
+                            + "UNIT, UNIT_ID, VUMAX_UNIT_ID, VALUE_TYPE, VALUE_QUERY, WITSML_MNEMONIC, "
+                            + "CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE, COLUMN_ORDER, "
+                            + "WRITE_BACK, PI_MNEMONIC) VALUES ("
+                            + "'" + (log.WellID ?? "").Replace("'", "''") + "', "
+                            + "'" + (log.WellboreID ?? "").Replace("'", "''") + "', "
+                            + "'" + log.ObjectID.Replace("'", "''") + "', "
+                            + "'" + ch.Mnemonic.Replace("'", "''") + "', "
+                            + "'" + ch.Description.Replace("'", "''") + "', "
+                            + "'" + (string.IsNullOrWhiteSpace(ch.DataType) ? "Double" : ch.DataType.Replace("'", "''")) + "', "
+                            + "'" + ch.Unit.Replace("'", "''") + "', "
+                            + "'" + ch.VuMaxUnitId.Replace("'", "''") + "', "
+                            + "'" + ch.VuMaxUnitId.Replace("'", "''") + "', "
+                            + vt + ", "
+                            + "'" + ch.Expression.Replace("'", "''") + "', "
+                            + "'" + (string.IsNullOrWhiteSpace(ch.UploadMnemonic) ? ch.Mnemonic : ch.UploadMnemonic).Replace("'", "''") + "', "
+                            + "'System', '" + modDate + "', 'System', '" + modDate + "', "
+                            + (ch.ColumnOrder > 0 ? ch.ColumnOrder : order++) + ", "
+                            + (ch.Upload ? 1 : 0) + ", "
+                            + "'" + (ch.PiMnemonic ?? "").Replace("'", "''") + "');";
+
+                        objDataService.ExecuteNonQuery(insertCol);
+                    }
+                }
+
+                // 4. If DATA_TABLE_NAME stores channel rows directly (contains MNEMONIC column)
+                if (!string.IsNullOrWhiteSpace(log.__dataTableName))
+                {
+                    try
+                    {
+                        DataTable dtDirectCols = objDataService.GetTable("PRAGMA table_info('" + log.__dataTableName.Replace("'", "''") + "');");
+                        bool hasMnemCol = false;
+                        if (dtDirectCols != null)
+                        {
+                            foreach (DataRow r in dtDirectCols.Rows)
+                            {
+                                if (string.Equals(Convert.ToString(r["name"]), "MNEMONIC", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    hasMnemCol = true;
+                                    break;
+                                }
+                            }
+                            dtDirectCols.Dispose();
+                        }
+
+                        if (hasMnemCol)
+                        {
+                            foreach (var ch in channels)
+                            {
+                                string targetKey = !string.IsNullOrWhiteSpace(ch.OriginalMnemonic) ? ch.OriginalMnemonic : ch.Mnemonic;
+                                string updDirect = "UPDATE [" + log.__dataTableName.Replace("'", "''") + "] SET "
+                                    + "MNEMONIC='" + ch.Mnemonic.Replace("'", "''") + "', "
+                                    + "UNIT='" + ch.Unit.Replace("'", "''") + "', "
+                                    + "DESCRIPTION='" + ch.Description.Replace("'", "''") + "' "
+                                    + "WHERE MNEMONIC='" + targetKey.Replace("'", "''") + "';";
+                                objDataService.ExecuteNonQuery(updDirect);
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // 5. Update log.LogCurves in memory
+                log.LogCurves.Clear();
+                foreach (var ch in channels)
+                {
+                    log.LogCurves[ch.Mnemonic] = ch;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex.Message + ":" + ex.StackTrace;
+                return false;
+            }
+        }
+
+        public static bool SaveDepthLog(IDataServiceDIntel objDataService, DepthLog log, ref string lastError)
+        {
+            return SaveDepthLog(objDataService, log, log.LogCurves.Values, ref lastError);
+        }
+
         private static DepthLog MapRowToDepthLog(DataRow row)
         {
             var log = new DepthLog

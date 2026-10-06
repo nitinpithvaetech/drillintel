@@ -2431,6 +2431,70 @@ public class WellDataRepository : IWellDataRepository
         });
     }
 
+    // --- [NEW LOGIC (DepthLog and LogChannel operations using DepthLogService and SQLite)] ---
+    public async Task<DepthLog?> GetDepthLogAsync(string logId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(logId)) return null;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return null;
+
+        return await Task.Run(() =>
+        {
+            string lastError = "";
+            var log = DepthLogService.LoadObject(dataService, logId, ref lastError);
+            if (log != null) return log;
+
+            var dt = dataService.GetTable("SELECT WELL_ID, WELLBORE_ID, LOG_ID FROM VMX_DEPTH_LOG WHERE LOG_NAME = '" 
+                + logId.Replace("'", "''") + "' OR DATA_TABLE_NAME = '" 
+                + logId.Replace("'", "''") + "' LIMIT 1;");
+            if (dt != null && dt.Rows.Count > 0)
+            {
+                string foundLogId = DataService.checkNull(dt.Rows[0]["LOG_ID"], "");
+                string wId = DataService.checkNull(dt.Rows[0]["WELL_ID"], "");
+                string wbId = DataService.checkNull(dt.Rows[0]["WELLBORE_ID"], "");
+                dt.Dispose();
+                return DepthLogService.LoadObject(dataService, wId, wbId, foundLogId, ref lastError);
+            }
+
+            return null;
+        });
+    }
+
+    public async Task<List<LogChannel>> GetDepthLogChannelsAsync(string logId, string? dataTableName)
+    {
+        var log = await GetDepthLogAsync(logId);
+        if (log != null && log.LogCurves.Count > 0)
+        {
+            return log.LogCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        var dataService = _session.GetDataService();
+        if (dataService != null)
+        {
+            if (log == null)
+            {
+                log = new DepthLog { ObjectID = logId, __dataTableName = dataTableName ?? "" };
+            }
+            DepthLogService.LoadLogCurves(dataService, log);
+            return log.LogCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        return new List<LogChannel>();
+    }
+
+    public async Task SaveDepthLogAsync(DepthLog depthLog, List<LogChannel> channels)
+    {
+        if (!_session.IsProjectOpen || depthLog == null || string.IsNullOrWhiteSpace(depthLog.ObjectID)) return;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return;
+
+        await Task.Run(() =>
+        {
+            string lastError = "";
+            DepthLogService.SaveDepthLog(dataService, depthLog, channels, ref lastError);
+        });
+    }
+
     // --- [OLD LOGIC (Legacy TimeLogEditMetadata methods maintained for backwards compatibility)] ---
     public async Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId)
     {
@@ -3059,6 +3123,75 @@ public class WellDataRepository : IWellDataRepository
                         continue;
 
                     list.Add(new TimeLogOption
+                    {
+                        LogId = id,
+                        LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                        WellId = wellId ?? "",
+                        WellboreId = wellboreId ?? ""
+                    });
+                }
+            }
+        }
+
+        return list;
+    }
+
+    public async Task<List<DepthLogOption>> GetDepthLogsForLinkingAsync(string? wellId = null, string? wellboreId = null, string? excludeLogId = null)
+    {
+        var list = new List<DepthLogOption>();
+        if (!_session.IsProjectOpen) return list;
+        var connection = _session.GetConnection();
+
+        bool hasVmxDepthLog = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG';") > 0;
+
+        if (hasVmxDepthLog)
+        {
+            var rows = await connection.QueryAsync<dynamic>("SELECT WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME FROM VMX_DEPTH_LOG;");
+            foreach (var r in rows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string id = dict.TryGetValue("LOG_ID", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                string name = dict.TryGetValue("LOG_NAME", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+                string wId = dict.TryGetValue("WELL_ID", out var wVal) && wVal != null ? Convert.ToString(wVal)! : "";
+                string wbId = dict.TryGetValue("WELLBORE_ID", out var wbVal) && wbVal != null ? Convert.ToString(wbVal)! : "";
+
+                if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellId) && !wId.Equals(wellId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellboreId) && !wbId.Equals(wellboreId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                list.Add(new DepthLogOption
+                {
+                    LogId = id,
+                    LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                    WellId = wId,
+                    WellboreId = wbId
+                });
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            var hasSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+            if (hasSummary > 0)
+            {
+                var rows = await connection.QueryAsync<dynamic>("SELECT LogId, LogName FROM VMX_DEPTH_LOG_SUMMARY;");
+                foreach (var r in rows)
+                {
+                    var dict = (IDictionary<string, object>)r;
+                    string id = dict.TryGetValue("LogId", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                    string name = dict.TryGetValue("LogName", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+
+                    if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    list.Add(new DepthLogOption
                     {
                         LogId = id,
                         LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
