@@ -1,0 +1,106 @@
+<Window x:Class="DrillIntel.Views.DataSelectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=viewmodels:DataSelectorViewModel}"
+        Title="Data Selector Window"
+        Width="460" Height="380"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="#F1F5F9"
+        FontFamily="Segoe UI, Segoe UI Variable, Arial"
+        FontSize="12">
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <!-- 0: Target Series -->
+            <RowDefinition Height="Auto" />
+            <!-- 1: Field Mapping Rules Group -->
+            <RowDefinition Height="*" />
+            <!-- 2: Action Buttons (Apply / Cancel) -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 0: Target Series Row -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="110" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="Target Series:" FontWeight="Bold" FontSize="12.5" Foreground="#1E293B" VerticalAlignment="Center" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableSeries}" 
+                      SelectedItem="{Binding TargetSeries, Mode=TwoWay}"
+                      Height="32" FontSize="12" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+        </Grid>
+
+        <!-- 1: Field Mapping Rules Group -->
+        <GroupBox Grid.Row="1" Header="Field Mapping Rules" Margin="0,0,0,16"
+                  Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1"
+                  FontWeight="Bold" Foreground="#334155" Padding="12,10">
+            <StackPanel Margin="0,6,0,0">
+                <!-- Labels Field -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Labels Field:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableLabelFields}" 
+                              SelectedItem="{Binding LabelsField, Mode=TwoWay}"
+                              Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+                </Grid>
+
+                <!-- X Coordinate -->
+                <Grid Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="X Coordinate:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableXCoordinates}" 
+                              SelectedItem="{Binding XCoordinate, Mode=TwoWay}"
+                              Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+                </Grid>
+
+                <!-- Y Coordinate -->
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Y Coordinate:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableYCoordinates}" 
+                              SelectedItem="{Binding YCoordinate, Mode=TwoWay}"
+                              Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+                </Grid>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 2: Action Buttons: Apply Changes (Green) & Cancel -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Command="{Binding ApplyChangesCommand}" 
+                    Background="#2E7D32" Foreground="White" BorderBrush="#1B5E20"
+                    Height="34" Padding="18,0" Margin="0,0,12,0"
+                    FontWeight="Bold" FontSize="12" Cursor="Hand">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Check" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="Apply Changes" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+
+            <Button Command="{Binding CancelCommand}" 
+                    Background="#E2E8F0" Foreground="#1E293B" BorderBrush="#CBD5E1"
+                    Height="34" Padding="20,0"
+                    FontWeight="SemiBold" FontSize="12" Cursor="Hand">
+                <TextBlock Text="Cancel" VerticalAlignment="Center" />
+            </Button>
+        </StackPanel>
+    </Grid>
+</Window>
+

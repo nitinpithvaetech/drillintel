@@ -533,62 +533,65 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;
+
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task OpenRigStateDocument()
     {
-        if (!_session.IsProjectOpen) return;
-        var vm = new RigStateDocumentViewModel(_session);
-        await vm.InitializeAsync();
-        var window = new DrillIntel.Views.RigStateDocumentWindow
-        {
-            DataContext = vm,
-            Owner = Application.Current?.MainWindow
-        };
-        window.Show();
+        await ShowRigStateWorkspaceAsync(triggerNew: false);
     }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task ManageRigStateDocuments()
     {
-        if (!_session.IsProjectOpen) return;
-        var repo = new DrillIntel.Data.DocTemplateRepository(_session);
-        var mgrVm = new RigStateDocumentManagerViewModel(repo);
-        await mgrVm.InitializeAsync();
-        var dialog = new DrillIntel.Views.RigStateDocumentManagerDialog
-        {
-            DataContext = mgrVm,
-            Owner = Application.Current?.MainWindow
-        };
-        mgrVm.RequestClose = () => dialog.DialogResult = mgrVm.DialogResult;
-        bool? res = dialog.ShowDialog();
-
-        if (res == true && mgrVm.DialogResult && mgrVm.SelectedTemplateForOpen != null)
-        {
-            var vm = new RigStateDocumentViewModel(_session);
-            await vm.InitializeAsync();
-            await vm.LoadFromTemplateAsync(mgrVm.SelectedTemplateForOpen, refreshData: true);
-            var window = new DrillIntel.Views.RigStateDocumentWindow
-            {
-                DataContext = vm,
-                Owner = Application.Current?.MainWindow
-            };
-            window.Show();
-        }
+        await ShowRigStateWorkspaceAsync(triggerNew: false);
     }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task NewRigStateDocument()
     {
+        await ShowRigStateWorkspaceAsync(triggerNew: true);
+    }
+
+    private async Task ShowRigStateWorkspaceAsync(bool triggerNew)
+    {
         if (!_session.IsProjectOpen) return;
-        var vm = new RigStateDocumentViewModel(_session);
-        await vm.InitializeAsync();
-        await vm.NewDocumentAsync();
-        var window = new DrillIntel.Views.RigStateDocumentWindow
+
+        if (_activeWorkspaceWindow != null && _activeWorkspaceWindow.IsLoaded)
         {
-            DataContext = vm,
+            _activeWorkspaceWindow.Activate();
+            if (_activeWorkspaceWindow.WindowState == WindowState.Minimized)
+            {
+                _activeWorkspaceWindow.WindowState = WindowState.Normal;
+            }
+            if (triggerNew && _activeWorkspaceWindow.DataContext is RigStateWorkspaceViewModel existingVm)
+            {
+                await existingVm.NewDocumentAsync();
+            }
+            return;
+        }
+
+        var repo = new DrillIntel.Data.DocTemplateRepository(_session);
+        var chartDataService = new DrillIntel.Data.ChartDataService(_session);
+        var wellRepo = new DrillIntel.Data.WellDataRepository(_session);
+
+        var workspaceVm = new RigStateWorkspaceViewModel(_session, repo, chartDataService, wellRepo);
+        await workspaceVm.InitializeAsync();
+
+        var window = new DrillIntel.Views.RigStateWorkspaceWindow
+        {
+            DataContext = workspaceVm,
             Owner = Application.Current?.MainWindow
         };
+
+        _activeWorkspaceWindow = window;
+        window.Closed += (s, e) => _activeWorkspaceWindow = null;
         window.Show();
+
+        if (triggerNew)
+        {
+            await workspaceVm.NewDocumentAsync();
+        }
     }
 }
 

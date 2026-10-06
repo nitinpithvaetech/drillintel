@@ -1,0 +1,180 @@
+<UserControl x:Class="DrillIntel.Controls.RangeTrackBarControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d" 
+             d:DesignHeight="70" d:DesignWidth="900"
+             Background="Transparent">
+
+    <UserControl.Resources>
+        <!-- Nudge Stepper Button Style -->
+        <Style x:Key="StepperButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Background" Value="#334155" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#475569" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btnBorder" Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#1E293B" />
+                                <Setter TargetName="btnBorder" Property="BorderBrush" Value="#64748B" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="btnBorder" Property="Background" Value="#0F172A" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="btnBorder" Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="0,2,0,2">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Main TrackBar Scroller Strip -->
+        <Border Grid.Row="0" Background="#E2E8F0" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="4,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <!-- 0: Stepper Left [ ◄ ] -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- 1: Interactive TrackBar Canvas -->
+                    <ColumnDefinition Width="*" />
+                    <!-- 2: Stepper Right [ ► ] -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- 3: Separator -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- 4: Period Dropdown -->
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- 0: Stepper Left [ ◄ ] -->
+                <Button Grid.Column="0" Click="OnStepLeftClick" Style="{StaticResource StepperButtonStyle}" ToolTip="Scroll Backward (Left)">
+                    <materialDesign:PackIcon Kind="ChevronLeft" Width="18" Height="18" VerticalAlignment="Center" />
+                </Button>
+
+                <!-- 1: Interactive Range TrackBar Area -->
+                <Border x:Name="TrackBarContainer" Grid.Column="1" Margin="6,0" Height="34" 
+                        Background="#CBD5E1" BorderBrush="#94A3B8" BorderThickness="1" CornerRadius="4" 
+                        ClipToBounds="True" MouseLeftButtonDown="OnTrackBarContainerMouseDown">
+                    <Grid x:Name="TrackGrid">
+                        <!-- Background Subtle Waveform / Grid Visual -->
+                        <Canvas x:Name="OverviewCanvas" IsHitTestVisible="False">
+                            <Polygon x:Name="OverviewPolygon" Fill="#201976D2" Visibility="Collapsed" />
+                            <Polyline x:Name="OverviewPolyline" Stroke="#94A3B8" StrokeThickness="1.5" />
+                        </Canvas>
+
+                        <!-- Overview Channel Label Watermark -->
+                        <TextBlock x:Name="TxtOverviewChannel" IsHitTestVisible="False"
+                                   Margin="8,2,0,0" FontSize="9.5" FontWeight="Bold"
+                                   Foreground="#475569" Opacity="0.75"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                                   Visibility="Collapsed" />
+
+                        <!-- Draggable & Resizable Selection Window Frame: [ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ] -->
+                        <Canvas x:Name="SelectionCanvas" ClipToBounds="True">
+                            <Border x:Name="SelectionWindow" Height="34" CornerRadius="3"
+                                    Background="#331976D2" BorderBrush="#1976D2" BorderThickness="2"
+                                    Cursor="Hand" MouseLeftButtonDown="OnSelectionWindowMouseDown">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="10" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="10" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Left Resize Grip -->
+                                    <Border Grid.Column="0" Background="#1976D2" Cursor="SizeWE" CornerRadius="2,0,0,2"
+                                            MouseLeftButtonDown="OnLeftGripMouseDown">
+                                        <Rectangle Width="2" Height="14" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+
+                                    <!-- Middle Grab Handle / Grip Indicator -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                                        <Rectangle Width="2" Height="12" Fill="#1976D2" Margin="1,0" Opacity="0.7" />
+                                        <Rectangle Width="2" Height="12" Fill="#1976D2" Margin="1,0" Opacity="0.7" />
+                                        <Rectangle Width="2" Height="12" Fill="#1976D2" Margin="1,0" Opacity="0.7" />
+                                    </StackPanel>
+
+                                    <!-- Right Resize Grip -->
+                                    <Border Grid.Column="2" Background="#1976D2" Cursor="SizeWE" CornerRadius="0,2,2,0"
+                                            MouseLeftButtonDown="OnRightGripMouseDown">
+                                        <Rectangle Width="2" Height="14" Fill="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </Canvas>
+                    </Grid>
+                </Border>
+
+                <!-- 2: Stepper Right [ ► ] -->
+                <Button Grid.Column="2" Click="OnStepRightClick" Style="{StaticResource StepperButtonStyle}" ToolTip="Scroll Forward (Right)">
+                    <materialDesign:PackIcon Kind="ChevronRight" Width="18" Height="18" VerticalAlignment="Center" />
+                </Button>
+
+                <!-- 3: Separator -->
+                <Rectangle Grid.Column="3" Width="1" Fill="#CBD5E1" Margin="8,4" />
+
+                <!-- 4: Period Dropdown -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Period:" FontSize="11" FontWeight="Bold" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ComboBox x:Name="CmbPeriod" Width="110" Height="30" FontSize="11.5" FontWeight="SemiBold"
+                              VerticalContentAlignment="Center"
+                              SelectionChanged="OnPeriodSelectionChanged">
+                        <ComboBoxItem Content="15 Mins" />
+                        <ComboBoxItem Content="30 Mins" />
+                        <ComboBoxItem Content="1 Hour" />
+                        <ComboBoxItem Content="2 Hours" IsSelected="True" />
+                        <ComboBoxItem Content="4 Hours" />
+                        <ComboBoxItem Content="8 Hours" />
+                        <ComboBoxItem Content="12 Hours" />
+                        <ComboBoxItem Content="24 Hours" />
+                        <ComboBoxItem Content="Entire Log" />
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Bottom Caption / Readout Status -->
+        <Grid Grid.Row="1" Margin="4,3,4,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: Sliding Node Caption -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="^--- [ TrackBar Node Slid to Frame: " FontSize="10.5" Foreground="#64748B" FontWeight="Medium" />
+                <TextBlock x:Name="TxtFrameSummary" Text="Index 10.0 - 25.0" FontSize="10.5" FontWeight="Bold" Foreground="#1976D2" />
+                <TextBlock Text=" ]" FontSize="10.5" Foreground="#64748B" FontWeight="Medium" />
+            </StackPanel>
+
+            <!-- Right: Exact Window Duration -->
+            <Border Grid.Column="1" Background="#EEF2F6" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="3" Padding="6,1">
+                <TextBlock x:Name="TxtSpanDuration" Text="Window: 2.0 Hours" FontSize="10" FontWeight="Bold" Foreground="#334155" />
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
+

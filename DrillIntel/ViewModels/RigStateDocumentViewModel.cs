@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
@@ -33,6 +34,7 @@ public partial class RigStateDocumentViewModel : ObservableObject
     public Func<TrackPropertiesViewModel, bool?>? OpenTrackPropertiesDialogHandler { get; set; }
     public Func<SaveDocumentAsViewModel, bool?>? OpenSaveAsDialogHandler { get; set; }
     public Func<RigStateDocumentManagerViewModel, bool?>? OpenDocumentManagerDialogHandler { get; set; }
+    public Func<DataSelectorViewModel, bool?>? OpenDataSelectorDialogHandler { get; set; }
 
     [ObservableProperty]
     private string _currentTemplateId = string.Empty;
@@ -156,6 +158,35 @@ public partial class RigStateDocumentViewModel : ObservableObject
 
     [ObservableProperty]
     private DateTime _logMaxDate = DateTime.MinValue;
+
+    // TrackBar DataSelector Properties
+    [ObservableProperty]
+    private double _trackBarMin = 0.0;
+
+    [ObservableProperty]
+    private double _trackBarMax = 100.0;
+
+    [ObservableProperty]
+    private double _trackBarSelectionStart = 0.0;
+
+    [ObservableProperty]
+    private double _trackBarSelectionEnd = 25.0;
+
+    [ObservableProperty]
+    private string _selectedTrackBarPeriod = "2 Hours";
+
+    // TrackBar Background Overview Plot Properties
+    [ObservableProperty]
+    private string _selectedOverviewChannelMnemonic = string.Empty;
+
+    [ObservableProperty]
+    private PointCollection? _trackBarOverviewPoints;
+
+    [ObservableProperty]
+    private string _trackBarOverviewChannelName = string.Empty;
+
+    [ObservableProperty]
+    private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
 
     // Telemetry & Cursor Info
     [ObservableProperty]
@@ -630,6 +661,25 @@ public partial class RigStateDocumentViewModel : ObservableObject
                 }
             }
 
+            if (IsTimeLog)
+            {
+                if (LogMinDate != DateTime.MinValue) TrackBarMin = LogMinDate.ToOADate();
+                if (LogMaxDate != DateTime.MinValue) TrackBarMax = LogMaxDate.ToOADate();
+
+                if (fullFrom.HasValue) TrackBarSelectionStart = fullFrom.Value.ToOADate();
+                else if (LogMinDate != DateTime.MinValue) TrackBarSelectionStart = LogMinDate.ToOADate();
+
+                if (fullTo.HasValue) TrackBarSelectionEnd = fullTo.Value.ToOADate();
+                else if (LogMaxDate != DateTime.MinValue) TrackBarSelectionEnd = LogMaxDate.ToOADate();
+            }
+            else
+            {
+                TrackBarMin = ConsoleModel.currentMinDepth;
+                TrackBarMax = ConsoleModel.currentMaxDepth;
+                TrackBarSelectionStart = FromDepth;
+                TrackBarSelectionEnd = ToDepth;
+            }
+
             // Update channel scale min/max for track legends
             foreach (var track in ConsoleModel.Tracks)
             {
@@ -663,6 +713,7 @@ public partial class RigStateDocumentViewModel : ObservableObject
                 }
             }
             SyncDisplayTracks();
+            await UpdateTrackBarOverviewAsync();
 
             StatusMessage = $"Loaded {LoadedPointsCount:N0} samples across {ConsoleModel.Tracks.Count} tracks.";
             ChartNeedsRepaint?.Invoke();
@@ -675,6 +726,205 @@ public partial class RigStateDocumentViewModel : ObservableObject
         {
             IsLoading = false;
         }
+    }
+
+    public async Task UpdateTrackBarOverviewAsync()
+    {
+        var allChannels = ConsoleModel.Tracks.SelectMany(t => t.Channels).ToList();
+        if (allChannels.Count == 0 && string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
+        {
+            TrackBarOverviewPoints = null;
+            TrackBarOverviewChannelName = string.Empty;
+            return;
+        }
+
+        VHTrackChannel? targetChannel = null;
+        if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
+        {
+            targetChannel = allChannels.FirstOrDefault(c =>
+                string.Equals(c.Mnemonic, SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(c.Title, SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (targetChannel == null)
+        {
+            targetChannel = allChannels.FirstOrDefault(c => !string.IsNullOrWhiteSpace(c.Mnemonic));
+            if (targetChannel != null)
+            {
+                SelectedOverviewChannelMnemonic = targetChannel.Mnemonic;
+            }
+        }
+
+        string mnemonic = targetChannel?.Mnemonic ?? SelectedOverviewChannelMnemonic;
+        if (string.IsNullOrWhiteSpace(mnemonic))
+        {
+            TrackBarOverviewPoints = null;
+            TrackBarOverviewChannelName = string.Empty;
+            return;
+        }
+
+        string channelTitle = !string.IsNullOrWhiteSpace(targetChannel?.Title) ? targetChannel.Title : mnemonic;
+        string channelUnit = targetChannel?.Unit ?? string.Empty;
+        TrackBarOverviewChannelName = !string.IsNullOrWhiteSpace(channelUnit)
+            ? $"{channelTitle} ({channelUnit})"
+            : channelTitle;
+
+        TrackBarOverviewBrush = ParseColorBrush(targetChannel?.LineColor);
+
+        ChartDataSeriesResult? overviewData = null;
+        if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
+        {
+            try
+            {
+                if (IsTimeLog)
+                {
+                    overviewData = await _chartDataService.GetTimelogDataAsync(
+                        ConsoleModel.WellID,
+                        ConsoleModel.DataSource.WellboreID,
+                        LogId,
+                        new[] { mnemonic },
+                        fromDate: null,
+                        toDate: null,
+                        maxPoints: 800);
+                }
+                else
+                {
+                    overviewData = await _chartDataService.GetDepthLogDataAsync(
+                        ConsoleModel.WellID,
+                        ConsoleModel.DataSource.WellboreID,
+                        LogId,
+                        new[] { mnemonic },
+                        fromDepth: null,
+                        toDepth: null,
+                        maxPoints: 800);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        if ((overviewData == null || overviewData.IndexValues.Count == 0) &&
+            CurrentDataResult != null && CurrentDataResult.IndexValues.Count > 0)
+        {
+            overviewData = CurrentDataResult;
+        }
+
+        if (overviewData != null && overviewData.IndexValues.Count > 0)
+        {
+            List<double>? vals = null;
+            if (overviewData.ChannelValues.TryGetValue(mnemonic, out var exactVals))
+            {
+                vals = exactVals;
+            }
+            else
+            {
+                var kvp = overviewData.ChannelValues.FirstOrDefault(kv => string.Equals(kv.Key.Trim(), mnemonic.Trim(), StringComparison.OrdinalIgnoreCase));
+                vals = kvp.Value;
+            }
+
+            if (vals != null && vals.Count == overviewData.IndexValues.Count)
+            {
+                var pts = new PointCollection(overviewData.IndexValues.Count);
+                for (int i = 0; i < overviewData.IndexValues.Count; i++)
+                {
+                    pts.Add(new System.Windows.Point(overviewData.IndexValues[i], vals[i]));
+                }
+                if (pts.CanFreeze) pts.Freeze();
+                TrackBarOverviewPoints = pts;
+                return;
+            }
+        }
+
+        TrackBarOverviewPoints = null;
+    }
+
+    private static Brush ParseColorBrush(string? colorStr)
+    {
+        if (string.IsNullOrWhiteSpace(colorStr))
+        {
+            var defBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+            if (defBrush.CanFreeze) defBrush.Freeze();
+            return defBrush;
+        }
+
+        try
+        {
+            var converted = new BrushConverter().ConvertFromString(colorStr);
+            if (converted is Brush b)
+            {
+                if (b.CanFreeze) b.Freeze();
+                return b;
+            }
+        }
+        catch
+        {
+        }
+
+        var fallbackBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+        if (fallbackBrush.CanFreeze) fallbackBrush.Freeze();
+        return fallbackBrush;
+    }
+
+    [RelayCommand]
+    public async Task OpenDataSelectorAsync()
+    {
+        var vm = new DataSelectorViewModel(ConsoleModel);
+        if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
+        {
+            var match = vm.AvailableSeries.FirstOrDefault(s => s.Contains(SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+            if (match != null) vm.TargetSeries = match;
+            if (vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+                vm.YCoordinate = SelectedOverviewChannelMnemonic;
+        }
+
+        bool? result;
+        if (OpenDataSelectorDialogHandler != null)
+        {
+            result = OpenDataSelectorDialogHandler(vm);
+        }
+        else
+        {
+            var win = new Views.DataSelectorWindow(vm)
+            {
+                Owner = Application.Current?.MainWindow
+            };
+            result = win.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            IsDirty = true;
+            if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
+            {
+                SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
+            }
+            await RefreshDataAsync();
+        }
+    }
+
+    public void OpenDataSelector() => _ = OpenDataSelectorAsync();
+
+    [RelayCommand]
+    public async Task RangeTrackBarChangedAsync()
+    {
+        if (IsTimeLog && TrackBarSelectionStart > 1000)
+        {
+            var startDt = DateTime.FromOADate(TrackBarSelectionStart);
+            var endDt = DateTime.FromOADate(TrackBarSelectionEnd);
+
+            FromDate = startDt.Date;
+            FromTime = startDt;
+            ToDate = endDt.Date;
+            ToTime = endDt;
+        }
+        else if (!IsTimeLog)
+        {
+            FromDepth = TrackBarSelectionStart;
+            ToDepth = TrackBarSelectionEnd;
+        }
+
+        await RefreshDataAsync();
     }
 
     [RelayCommand]

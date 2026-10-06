@@ -1,0 +1,19 @@
+<Window x:Class="DrillIntel.Views.RigStateWorkspaceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DrillIntel.Views"
+        xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=viewmodels:RigStateWorkspaceViewModel}"
+        Title="Rig State Document Workspace" 
+        Height="900" Width="1440"
+        MinHeight="600" MinWidth="900"
+        WindowState="Maximized"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <local:RigStateWorkspaceView />
+    </Grid>
+</Window>
+
