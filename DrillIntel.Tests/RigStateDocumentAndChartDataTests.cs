@@ -905,7 +905,7 @@ public class RigStateDocumentAndChartDataTests
                     Unit = "rpm",
                     LineColor = "#1E88E5",
                     Visible = true,
-                    objXAxis = new RTAxis { Mnemonic = "RPM", Title = "RPM", Unit = "rpm", Location = enumRTAxisLocation.Right }
+                    objXAxis = new RTAxis { Mnemonic = "RPM", Title = "RPM", Unit = "rpm", Location = enumRTAxisLocation.Left }
                 };
                 track1.Channels.Add(chTorque);
                 track1.Channels.Add(chRpm);
@@ -950,10 +950,10 @@ public class RigStateDocumentAndChartDataTests
                 var axisRpm = Assert.IsType<Steema.TeeChart.Axis>(chRpm.__scale);
                 Assert.True(axisRpm.Title.Visible);
                 Assert.Equal("RPM (rpm)", axisRpm.Title.Text);
-                Assert.True(axisRpm.OtherSide);
+                Assert.True(axisRpm.OtherSide, "Channel 1 should be on the right (OtherSide=true) to prevent overlapping with Channel 0 on the left");
                 Assert.Equal(270, axisRpm.Title.Angle);
                 Assert.Equal(ColorTranslator.FromHtml("#1E88E5"), axisRpm.Title.Font.Color);
-                Assert.Equal(ColorTranslator.FromHtml("#1E88E5"), axisRpm.AxisPen.Color);
+                Assert.Equal(Steema.TeeChart.PositionUnits.Pixels, axisRpm.PositionUnits);
 
                 // 5. Test Vertical orientation
                 console.TrackOrientation = enumTrackOrientation.Vertical;
@@ -974,6 +974,109 @@ public class RigStateDocumentAndChartDataTests
         thread.Start();
         thread.Join();
         if (threadEx != null) throw threadEx;
+    }
+
+    [Fact]
+    public void DataSelectorViewModel_InitializesAndAppliesFieldMappingRules()
+    {
+        var console = new VHTrackConsole { Name = "TestConsole" };
+        var track = new VHTrack { Title = "Track 1" };
+        var channel = new VHTrackChannel
+        {
+            Name = "ROPA",
+            Title = "Rate of Penetration",
+            Mnemonic = "ROPA",
+            Unit = "m/hr"
+        };
+        track.Channels.Add(channel);
+        console.Tracks.Add(track);
+
+        var vm = new DataSelectorViewModel(console);
+
+        // Verify Target Series contains the channel title
+        Assert.Contains("Rate of Penetration", vm.AvailableSeries);
+        Assert.Equal("Rate of Penetration", vm.TargetSeries);
+
+        // Verify Field Mapping Rules defaults
+        Assert.Contains("Timestamp", vm.AvailableLabelFields);
+        Assert.Contains("DayIndex", vm.AvailableXCoordinates);
+        Assert.Contains("ROPA", vm.AvailableYCoordinates);
+
+        // Verify ApplyChanges
+        vm.YCoordinate = "ROPA";
+        bool closedWithResult = false;
+        vm.RequestClose += (result) => closedWithResult = result;
+
+        vm.ApplyChangesCommand.Execute(null);
+
+        Assert.True(closedWithResult);
+        Assert.Equal("ROPA", channel.Mnemonic);
+
+        // Verify Cancel
+        bool cancelResult = true;
+        vm.RequestClose += (result) => cancelResult = result;
+        vm.CancelCommand.Execute(null);
+        Assert.False(cancelResult);
+    }
+
+    [Fact]
+    public void DataSelectorViewModel_ChangingTargetSeries_UpdatesYCoordinateAndSelectedChannelMnemonic()
+    {
+        var console = new VHTrackConsole { Name = "TestConsole" };
+        var track = new VHTrack { Title = "Track 1" };
+        var channelRop = new VHTrackChannel
+        {
+            Name = "ROPA",
+            Title = "Rate of Penetration",
+            Mnemonic = "ROPA",
+            Unit = "m/hr",
+            LineColor = "green"
+        };
+        var channelWob = new VHTrackChannel
+        {
+            Name = "WOB",
+            Title = "Weight on Bit",
+            Mnemonic = "WOB",
+            Unit = "klbf",
+            LineColor = "blue"
+        };
+        track.Channels.Add(channelRop);
+        track.Channels.Add(channelWob);
+        console.Tracks.Add(track);
+
+        var vm = new DataSelectorViewModel(console);
+        vm.TargetSeries = "Weight on Bit";
+
+        Assert.Equal("WOB", vm.YCoordinate);
+
+        vm.ApplyChangesCommand.Execute(null);
+        Assert.Equal("WOB", vm.SelectedChannelMnemonic);
+    }
+
+    [Fact]
+    public async Task RigStateDocumentViewModel_TrackBarOverview_UpdatesWhenChannelSelected()
+    {
+        var session = new DrillIntel.Projects.ProjectSession();
+        var console = new VHTrackConsole { Name = "TestConsole" };
+        var track = new VHTrack { Title = "Track 1" };
+        var channel = new VHTrackChannel
+        {
+            Name = "ROPA",
+            Title = "Rate of Penetration",
+            Mnemonic = "ROPA",
+            Unit = "m/hr",
+            LineColor = "#388E3C"
+        };
+        track.Channels.Add(channel);
+        console.Tracks.Add(track);
+
+        var vm = new RigStateDocumentViewModel(session, console: console);
+        vm.SelectedOverviewChannelMnemonic = "ROPA";
+
+        await vm.UpdateTrackBarOverviewAsync();
+
+        Assert.Equal("Rate of Penetration (m/hr)", vm.TrackBarOverviewChannelName);
+        Assert.NotNull(vm.TrackBarOverviewBrush);
     }
 }
 

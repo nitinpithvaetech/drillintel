@@ -151,26 +151,26 @@
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
-                <Fluent:RibbonGroupBox Header="Charts">
-                    <Fluent:SplitButton Header="Rig State Document" 
+                <Fluent:RibbonGroupBox Header="Rig State">
+                    <Fluent:SplitButton Header="Rig State Workspace" 
                                         Command="{Binding OpenRigStateDocumentCommand}" 
-                                        ToolTip="Open the default Rig State document. Click dropdown for saved documents or management.">
+                                        ToolTip="Open the Rig State Document Workspace (TreeView + Multi-Tab Chart view).">
                         <Fluent:SplitButton.LargeIcon>
                             <materialDesign:PackIcon Kind="ChartTimelineVariant" Foreground="#673AB7" Width="32" Height="32" />
                         </Fluent:SplitButton.LargeIcon>
-                        <Fluent:MenuItem Header="Open Default Document" Command="{Binding OpenRigStateDocumentCommand}">
+                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenRigStateDocumentCommand}">
                             <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="StarOutline" Foreground="#F59E0B" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                        <Fluent:MenuItem Header="Manage Documents..." Command="{Binding ManageRigStateDocumentsCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="FolderMultipleOutline" Foreground="#512DA8" Width="16" Height="16" />
+                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#673AB7" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
                         <Fluent:MenuItem Header="New Document..." Command="{Binding NewRigStateDocumentCommand}">
                             <Fluent:MenuItem.Icon>
                                 <materialDesign:PackIcon Kind="FilePlusOutline" Foreground="#00796B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Manage Documents (Tree)..." Command="{Binding ManageRigStateDocumentsCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FileTree" Foreground="#512DA8" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
                     </Fluent:SplitButton>

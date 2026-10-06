@@ -84,6 +84,9 @@
             <DataTemplate DataType="{x:Type viewmodels:UnitConversionMasterViewModel}">
                 <views:UnitConversionMasterView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:RigStateWorkspaceViewModel}">
+                <views:RigStateWorkspaceView />
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

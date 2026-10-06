@@ -140,12 +140,24 @@ public class TChartTrackConsoleRenderer
                 {
                     var ch = chList[cIdx];
                     bool otherSide;
-                    if (ch.objXAxis.Location == enumRTAxisLocation.Top || ch.objXAxis.Location == enumRTAxisLocation.Right)
-                        otherSide = true;
-                    else if (ch.objXAxis.Location == enumRTAxisLocation.Bottom || ch.objXAxis.Location == enumRTAxisLocation.Left)
-                        otherSide = false;
+                    if (isHorizontal)
+                    {
+                        if (ch.objXAxis.Location == enumRTAxisLocation.Right)
+                            otherSide = true;
+                        else if (ch.objXAxis.Location == enumRTAxisLocation.Left && chList.Count == 1)
+                            otherSide = false;
+                        else
+                            otherSide = (cIdx % 2 != 0);
+                    }
                     else
-                        otherSide = (cIdx % 2 != 0);
+                    {
+                        if (ch.objXAxis.Location == enumRTAxisLocation.Top)
+                            otherSide = true;
+                        else if (ch.objXAxis.Location == enumRTAxisLocation.Bottom && chList.Count == 1)
+                            otherSide = false;
+                        else
+                            otherSide = (cIdx % 2 != 0);
+                    }
 
                     if (isHorizontal)
                     {
@@ -381,7 +393,7 @@ public class TChartTrackConsoleRenderer
             {
                 if (channel.objXAxis.Location == enumRTAxisLocation.Right)
                     placeOnOtherSide = true;
-                else if (channel.objXAxis.Location == enumRTAxisLocation.Left)
+                else if (channel.objXAxis.Location == enumRTAxisLocation.Left && visibleChannels.Count == 1)
                     placeOnOtherSide = false;
                 else
                     placeOnOtherSide = (chIdx % 2 != 0);
@@ -390,7 +402,7 @@ public class TChartTrackConsoleRenderer
             {
                 if (channel.objXAxis.Location == enumRTAxisLocation.Top)
                     placeOnOtherSide = true;
-                else if (channel.objXAxis.Location == enumRTAxisLocation.Bottom)
+                else if (channel.objXAxis.Location == enumRTAxisLocation.Bottom && visibleChannels.Count == 1)
                     placeOnOtherSide = false;
                 else
                     placeOnOtherSide = (chIdx % 2 != 0);
@@ -404,7 +416,8 @@ public class TChartTrackConsoleRenderer
                 Inverted = channel.objXAxis.Inverted,
                 Logarithmic = channel.objXAxis.Logarithmic,
                 Visible = channel.objXAxis.Visible,
-                OtherSide = placeOnOtherSide
+                OtherSide = placeOnOtherSide,
+                PositionUnits = Steema.TeeChart.PositionUnits.Pixels
             };
 
             // Count previous visible channels placed on the same side in this track to stagger them cleanly
@@ -416,13 +429,13 @@ public class TChartTrackConsoleRenderer
                 if (isHorizontal)
                 {
                     prevSide = prevLoc == enumRTAxisLocation.Right ? true :
-                               prevLoc == enumRTAxisLocation.Left ? false :
+                               (prevLoc == enumRTAxisLocation.Left && visibleChannels.Count == 1) ? false :
                                (prev % 2 != 0);
                 }
                 else
                 {
                     prevSide = prevLoc == enumRTAxisLocation.Top ? true :
-                               prevLoc == enumRTAxisLocation.Bottom ? false :
+                               (prevLoc == enumRTAxisLocation.Bottom && visibleChannels.Count == 1) ? false :
                                (prev % 2 != 0);
                 }
 
@@ -432,7 +445,16 @@ public class TChartTrackConsoleRenderer
 
             if (sideIndex > 0)
             {
-                customAxis.RelativePosition = sideIndex * 34;
+                // In horizontal orientation: Left axis offsets negative (into left margin); Right axis offsets positive (into right margin)
+                // In vertical orientation: Bottom axis offsets positive (down into bottom margin); Top axis offsets negative (up into top margin)
+                if (isHorizontal)
+                {
+                    customAxis.RelativePosition = placeOnOtherSide ? (sideIndex * 34) : (-sideIndex * 34);
+                }
+                else
+                {
+                    customAxis.RelativePosition = placeOnOtherSide ? (-sideIndex * 34) : (sideIndex * 34);
+                }
             }
 
             // Match axis line and labels to the channel color
