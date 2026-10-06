@@ -61,7 +61,7 @@ public class VHTrackConsole
     public Dictionary<string, MultiWellInfoEx> WellList { get; set; } = new Dictionary<string, MultiWellInfoEx>();
     public Dictionary<string, List<object>> data { get; set; } = new Dictionary<string, List<object>>();
     public Dictionary<string, Dictionary<string, string>> channelUnits { get; set; } = new Dictionary<string, Dictionary<string, string>>();
-    public Dictionary<string, RMEx> RoadmapEntry { get; set; } = new Dictionary<string, RMEx>();
+    //public Dictionary<string, RMEx> RoadmapEntry { get; set; } = new Dictionary<string, RMEx>();
 
     public VHTrackConsole()
     {
@@ -179,29 +179,29 @@ public class VHTrackConsole
                 LastError = obj.LastError
             };
 
-            // Copy WellList
-            foreach (var kvp in obj.WellList)
-            {
-                objNew.WellList[kvp.Key] = kvp.Value.GetCopy();
-            }
+            //// Copy WellList
+            //foreach (var kvp in obj.WellList)
+            //{
+            //    objNew.WellList[kvp.Key] = kvp.Value.GetCopy();
+            //}
 
-            // Copy data
-            foreach (var kvp in obj.data)
-            {
-                objNew.data[kvp.Key] = new List<object>(kvp.Value);
-            }
+            //// Copy data
+            //foreach (var kvp in obj.data)
+            //{
+            //    objNew.data[kvp.Key] = new List<object>(kvp.Value);
+            //}
 
-            // Copy channelUnits
-            foreach (var kvp in obj.channelUnits)
-            {
-                objNew.channelUnits[kvp.Key] = new Dictionary<string, string>(kvp.Value);
-            }
+            //// Copy channelUnits
+            //foreach (var kvp in obj.channelUnits)
+            //{
+            //    objNew.channelUnits[kvp.Key] = new Dictionary<string, string>(kvp.Value);
+            //}
 
-            // Copy RoadmapEntry
-            foreach (var kvp in obj.RoadmapEntry)
-            {
-                objNew.RoadmapEntry[kvp.Key] = kvp.Value.GetCopy();
-            }
+            //// Copy RoadmapEntry
+            //foreach (var kvp in obj.RoadmapEntry)
+            //{
+            //    objNew.RoadmapEntry[kvp.Key] = kvp.Value.GetCopy();
+            //}
 
             return objNew;
         }

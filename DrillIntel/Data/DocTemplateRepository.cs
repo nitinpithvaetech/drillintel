@@ -18,9 +18,43 @@ public class DocTemplateRepository : IDocTemplateRepository
 {
     private readonly ProjectSession _session;
 
+    private bool _tableEnsured;
+
     public DocTemplateRepository(ProjectSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+    }
+
+    private async Task EnsureTableAsync(IDbConnection conn)
+    {
+        if (_tableEnsured) return;
+        try
+        {
+            await conn.ExecuteAsync(@"
+CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
+    TEMPLATE_TYPE   TEXT NOT NULL,
+    TEMPLATE_ID     TEXT NOT NULL,
+    DOCUMENT_NAME   TEXT NOT NULL DEFAULT '',
+    WELL_ID         TEXT,
+    WELLBORE_ID     TEXT,
+    LOG_ID          TEXT,
+    DESCRIPTION     TEXT,
+    TEMPLATE_DATA   BLOB,
+    IS_DEFAULT      INTEGER NOT NULL DEFAULT 0,
+    CREATED_BY      TEXT,
+    CREATED_DATE    TEXT,
+    MODIFIED_BY     TEXT,
+    MODIFIED_DATE   TEXT,
+    PRIMARY KEY (TEMPLATE_TYPE, TEMPLATE_ID)
+);
+CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_TYPE ON VMX_DOC_TEMPLATES(TEMPLATE_TYPE);
+CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUMENT_NAME);");
+            _tableEnsured = true;
+        }
+        catch
+        {
+            // Non-fatal if read-only
+        }
     }
 
     public async Task<List<DocTemplateItem>> GetTemplatesAsync(string templateType = DocTemplateItem.TypeRigState)
@@ -28,6 +62,7 @@ public class DocTemplateRepository : IDocTemplateRepository
         if (!_session.IsProjectOpen) return new List<DocTemplateItem>();
 
         var conn = _session.GetConnection();
+        await EnsureTableAsync(conn);
         string sql = @"
             SELECT 
                 TEMPLATE_TYPE   AS TemplateType,
@@ -99,6 +134,7 @@ public class DocTemplateRepository : IDocTemplateRepository
         if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(documentName)) return false;
 
         var conn = _session.GetConnection();
+        await EnsureTableAsync(conn);
         string sql = @"
             SELECT COUNT(1) 
             FROM VMX_DOC_TEMPLATES 
@@ -115,6 +151,7 @@ public class DocTemplateRepository : IDocTemplateRepository
         if (!_session.IsProjectOpen || item == null) return;
 
         var conn = _session.GetConnection();
+        await EnsureTableAsync(conn);
         string nowIso = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
         if (item.CreatedDate == null) item.CreatedDate = DateTime.Now;
@@ -198,6 +235,7 @@ public class DocTemplateRepository : IDocTemplateRepository
         if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(templateId)) return;
 
         var conn = _session.GetConnection();
+        await EnsureTableAsync(conn);
         await conn.ExecuteAsync(
             "DELETE FROM VMX_DOC_TEMPLATES WHERE TEMPLATE_TYPE = @templateType AND TEMPLATE_ID = @templateId;",
             new { templateType, templateId });
@@ -208,6 +246,7 @@ public class DocTemplateRepository : IDocTemplateRepository
         if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(templateId)) return;
 
         var conn = _session.GetConnection();
+        await EnsureTableAsync(conn);
         await conn.ExecuteAsync("UPDATE VMX_DOC_TEMPLATES SET IS_DEFAULT = 0 WHERE TEMPLATE_TYPE = @templateType;", new { templateType });
         await conn.ExecuteAsync("UPDATE VMX_DOC_TEMPLATES SET IS_DEFAULT = 1 WHERE TEMPLATE_TYPE = @templateType AND TEMPLATE_ID = @templateId;", new { templateType, templateId });
     }
