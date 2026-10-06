@@ -274,6 +274,56 @@ public class WellInformationTests
         Assert.Equal("6", targetWell.Pump1Liner);
     }
 
+    [Fact]
+    public void MainViewModel_SyncDataToParentTimelogCommand_CanExecute_And_Executes()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"main_sync_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+
+        var session = new ProjectSession();
+        try
+        {
+            var dummyProjectService = new DummyProjectService();
+            var mainVm = new MainViewModel(session, dummyProjectService);
+
+            // Cannot execute when no project is open
+            Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // Load project - initially no tree node selected, so CanExecute is false
+            session.Load(tempDb);
+            Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // Select a timelog from the well tree
+            if (mainVm.CurrentViewModel is DashboardViewModel db)
+            {
+                var timeLog = new DrillIntel.Data.Objects.DataObjects.Models.TimeLog { ObjectID = "TL_1", nameLog = "Test Log" };
+                db.OnTreeNodeSelected(new DrillIntel.Models.WellTreeNode { Name = "Test Log", Type = DrillIntel.Models.WellTreeNodeType.TimeLog, Tag = timeLog });
+            }
+            Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            bool handlerCalled = false;
+            mainVm.SyncDataToParentTimelogHandler = () =>
+            {
+                handlerCalled = true;
+            };
+
+            mainVm.SyncDataToParentTimelogCommand.Execute(null);
+            Assert.True(handlerCalled);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb))
+                {
+                    File.Delete(tempDb);
+                }
+            }
+            catch { }
+        }
+    }
+
     private class DummyProjectService : IProjectService
     {
         public bool CreateNewProject() => true;

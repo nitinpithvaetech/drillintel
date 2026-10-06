@@ -175,6 +175,24 @@
                         </Fluent:MenuItem>
                     </Fluent:SplitButton>
                 </Fluent:RibbonGroupBox>
+                <Fluent:RibbonGroupBox Header="Functions">
+                    <Fluent:DropDownButton Header="Functions" 
+                                           ToolTip="Processing Functions">
+                        <Fluent:DropDownButton.LargeIcon>
+                            <materialDesign:PackIcon Kind="Function" Foreground="#FF9800" Width="32" Height="32" />
+                        </Fluent:DropDownButton.LargeIcon>
+                        <Fluent:DropDownButton.Icon>
+                            <materialDesign:PackIcon Kind="Function" Foreground="#FF9800" Width="16" Height="16" />
+                        </Fluent:DropDownButton.Icon>
+                        <Fluent:MenuItem Header="Sync data to Parent Timelog" 
+                                         Command="{Binding SyncDataToParentTimelogCommand}"
+                                         ToolTip="Synchronize data to Parent Timelog (Select a Timelog in the Well Tree to enable)">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="Sync" Foreground="#0284C7" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                    </Fluent:DropDownButton>
+                </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
 
             <!-- Reports Tab -->

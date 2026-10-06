@@ -54,6 +54,33 @@ public partial class MainViewModel : ObservableObject
         _currentViewModel = _session.IsProjectOpen 
             ? new DashboardViewModel(_session) 
             : new NoProjectViewModel(_session, _projectService, _recentProjectsService);
+        if (_currentViewModel is DashboardViewModel initDb)
+        {
+            initDb.PropertyChanged += OnDashboardPropertyChanged;
+        }
+    }
+
+    partial void OnCurrentViewModelChanged(ObservableObject? oldValue, ObservableObject newValue)
+    {
+        if (oldValue is DashboardViewModel oldDb)
+        {
+            oldDb.PropertyChanged -= OnDashboardPropertyChanged;
+        }
+        if (newValue is DashboardViewModel newDb)
+        {
+            newDb.PropertyChanged += OnDashboardPropertyChanged;
+        }
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
+    }
+
+    private void OnDashboardPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DashboardViewModel.SelectedNode))
+        {
+            SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
+        }
     }
 
     private void OnRecentProjectsChanged(object? sender, EventArgs e)
@@ -260,6 +287,8 @@ public partial class MainViewModel : ObservableObject
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
 
         if (Application.Current?.Dispatcher != null)
         {
@@ -623,6 +652,66 @@ public partial class MainViewModel : ObservableObject
         {
             await workspaceVm.NewDocumentAsync();
         }
+    }
+
+    public bool CanSyncDataToParentTimelog =>
+        _session.IsProjectOpen &&
+        CurrentViewModel is DashboardViewModel db &&
+        db.SelectedNode?.IsTimeLogNode == true;
+
+    public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
+    public Action? SyncDataToParentTimelogHandler { get; set; }
+
+    [RelayCommand(CanExecute = nameof(CanSyncDataToParentTimelog))]
+    private async Task SyncDataToParentTimelog()
+    {
+        if (!CanSyncDataToParentTimelog) return;
+
+        TimeLog? timeLog = null;
+        if (CurrentViewModel is DashboardViewModel db)
+        {
+            if (db.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (db.SelectedNode != null)
+            {
+                var repo = new WellDataRepository(_session);
+                var timeLogs = await repo.GetTimeLogsAsync();
+                timeLog = timeLogs.FirstOrDefault(t => t.ObjectID == db.SelectedNode.Name || t.nameLog == db.SelectedNode.Name);
+            }
+        }
+
+        if (timeLog != null)
+        {
+            await OpenSyncDataDialogAsync(timeLog);
+        }
+
+        SyncDataToParentTimelogHandler?.Invoke();
+    }
+
+    public async Task<bool?> OpenSyncDataDialogAsync(TimeLog timeLog)
+    {
+        var repo = new WellDataRepository(_session);
+        var vm = new SyncDataWithParentTimelogViewModel(_session, timeLog, repo);
+        await vm.InitializeAsync();
+
+        if (OpenSyncDataDialogHandler != null)
+        {
+            return OpenSyncDataDialogHandler(vm);
+        }
+
+        if (Application.Current != null)
+        {
+            var window = new DrillIntel.Views.SyncDataWithParentTimelogWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            return window.ShowDialog();
+        }
+
+        return false;
     }
 }
 
