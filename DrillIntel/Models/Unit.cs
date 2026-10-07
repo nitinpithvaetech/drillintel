@@ -6,14 +6,27 @@ using DrillIntel.Data;
 namespace DrillIntel.Models
 {
     /// <summary>
-    /// Represents a measurement unit registered in the Application Database (table APP_UNIT_MASTER)
-    /// or Project Database (table VMX_UNIT_MASTER).
+    /// Represents a measurement unit registered in the Application Database (table APP_UNIT_MASTER).
+    /// APP_UNIT_MASTER is the authoritative single source of truth across the entire application and projects.
     /// Provides CRUD operations, category filtering, and default unit initialization.
     /// </summary>
     public class Unit
     {
         public const string TableName = "APP_UNIT_MASTER";
-        public const string ProjectTableName = "VMX_UNIT_MASTER";
+        public const string ProjectTableName = "APP_UNIT_MASTER";
+        public const string LegacyProjectTableName = "VMX_UNIT_MASTER";
+
+        /// <summary>
+        /// Normalizes table name, ensuring any reference to legacy VMX_UNIT_MASTER redirects to APP_UNIT_MASTER.
+        /// </summary>
+        public static string NormalizeTableName(string? tableName)
+        {
+            if (string.IsNullOrWhiteSpace(tableName) || string.Equals(tableName, "VMX_UNIT_MASTER", StringComparison.OrdinalIgnoreCase))
+            {
+                return TableName;
+            }
+            return tableName;
+        }
 
         /// <summary>
         /// Optional application-wide default data service for Unit operations when not explicitly passed.
@@ -71,9 +84,121 @@ namespace DrillIntel.Models
 
         #region Database Operations
 
-        private static IDataServiceDIntel ResolveDataService(IDataServiceDIntel? db)
+        /// <summary>
+        /// Determines whether the given data service points to a project-level database (.dintel / .drint).
+        /// Project databases contain schema metadata tables such as VMX_SCHEMA_INFO or VMX_WELL_LIST.
+        /// </summary>
+        public static bool IsProjectDatabase(IDataServiceDIntel? db)
         {
-            var service = db ?? DefaultDataService;
+            if (db == null) return false;
+            try
+            {
+                var result = db.GetValue("SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('VMX_SCHEMA_INFO', 'VMX_WELL_LIST') LIMIT 1;");
+                return result != null && result != DBNull.Value;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes all project-level Unit Master tables and views (APP_UNIT_MASTER, VMX_UNIT_MASTER)
+        /// and migrates any unique units to the Base Database.
+        /// </summary>
+        public static void RemoveProjectLevelTables(IDataServiceDIntel? projectDb)
+        {
+            if (projectDb == null) return;
+
+            try
+            {
+                var exists = projectDb.GetValue("SELECT 1 FROM sqlite_master WHERE name IN ('APP_UNIT_MASTER', 'VMX_UNIT_MASTER') LIMIT 1;");
+                if (exists == null || exists == DBNull.Value) return;
+
+                // Migrate any existing units to Base Database before dropping
+                var baseDb = DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
+                if (baseDb != null && baseDb != projectDb)
+                {
+                    string[] sourceTables = { "APP_UNIT_MASTER", "VMX_UNIT_MASTER" };
+                    foreach (var srcTable in sourceTables)
+                    {
+                        try
+                        {
+                            var hasTable = projectDb.GetValue($"SELECT 1 FROM sqlite_master WHERE name='{srcTable}' LIMIT 1;");
+                            if (hasTable == null || hasTable == DBNull.Value) continue;
+
+                            var dt = projectDb.GetTable($"SELECT UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT FROM {srcTable};");
+                            if (dt != null)
+                            {
+                                EnsureTableExists(baseDb, TableName);
+                                foreach (DataRow row in dt.Rows)
+                                {
+                                    string name = row["UNIT_NAME"]?.ToString() ?? "";
+                                    if (!string.IsNullOrWhiteSpace(name))
+                                    {
+                                        var existing = GetUnit(baseDb, name, TableName);
+                                        if (existing == null)
+                                        {
+                                            Add(baseDb, new Unit(
+                                                unitName: name,
+                                                category: row["CATEGORY"]?.ToString() ?? "",
+                                                description: row["DESCRIPTION"]?.ToString() ?? "",
+                                                isDefault: row["IS_DEFAULT"] != DBNull.Value && Convert.ToInt32(row["IS_DEFAULT"]) == 1
+                                            ), TableName);
+                                        }
+                                    }
+                                }
+                                dt.Dispose();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Drop triggers, view, and table from project database
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_master_insert;"); } catch { }
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_master_update;"); } catch { }
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_master_delete;"); } catch { }
+
+                try
+                {
+                    var appType = projectDb.GetValue("SELECT type FROM sqlite_master WHERE name='APP_UNIT_MASTER' LIMIT 1;")?.ToString();
+                    if (string.Equals(appType, "view", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP VIEW IF EXISTS APP_UNIT_MASTER;");
+                    else if (string.Equals(appType, "table", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP TABLE IF EXISTS APP_UNIT_MASTER;");
+                }
+                catch { }
+
+                try
+                {
+                    var vmxType = projectDb.GetValue("SELECT type FROM sqlite_master WHERE name='VMX_UNIT_MASTER' LIMIT 1;")?.ToString();
+                    if (string.Equals(vmxType, "view", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP VIEW IF EXISTS VMX_UNIT_MASTER;");
+                    else if (string.Equals(vmxType, "table", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP TABLE IF EXISTS VMX_UNIT_MASTER;");
+                }
+                catch { }
+            }
+            catch
+            {
+                // Best-effort
+            }
+        }
+
+        public static IDataServiceDIntel ResolveDataService(IDataServiceDIntel? db)
+        {
+            // If db is a project-level database, redirect to Base Database (single source of truth)
+            if (db == null || IsProjectDatabase(db))
+            {
+                var baseDb = DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
+                if (baseDb != null)
+                {
+                    return baseDb;
+                }
+            }
+
+            var service = db ?? DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
             if (service == null)
             {
                 throw new InvalidOperationException("No database service provided or configured for Unit operations.");
@@ -83,10 +208,21 @@ namespace DrillIntel.Models
 
         /// <summary>
         /// Ensures the unit master table exists in the target database and contains audit columns.
+        /// Also redirects any legacy references to VMX_UNIT_MASTER to APP_UNIT_MASTER in the Base database.
+        /// Project-level databases will have any legacy unit tables/views removed.
         /// </summary>
         public static void EnsureTableExists(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            if (db != null && IsProjectDatabase(db))
+            {
+                // Project-level database should not contain unit master tables
+                RemoveProjectLevelTables(db);
+                return;
+            }
+
             var dataService = ResolveDataService(db);
+            tableName = NormalizeTableName(tableName);
+
             string sql = $@"
                 CREATE TABLE IF NOT EXISTS {tableName} (
                     ID            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,6 +266,57 @@ namespace DrillIntel.Models
             {
                 // Best-effort
             }
+
+            // Ensure backward compatibility: redirect VMX_UNIT_MASTER to APP_UNIT_MASTER
+            try
+            {
+                var vmxCheck = dataService.GetValue("SELECT type FROM sqlite_master WHERE name = 'VMX_UNIT_MASTER';");
+                if (vmxCheck != null && string.Equals(vmxCheck.ToString(), "table", StringComparison.OrdinalIgnoreCase))
+                {
+                    dataService.ExecuteNonQuery($@"
+                        INSERT OR IGNORE INTO {tableName} (UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE)
+                        SELECT UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE
+                        FROM VMX_UNIT_MASTER;
+                    ");
+                    dataService.ExecuteNonQuery("DROP TABLE IF EXISTS VMX_UNIT_MASTER;");
+                }
+
+                dataService.ExecuteNonQuery($@"
+                    CREATE VIEW IF NOT EXISTS VMX_UNIT_MASTER AS 
+                    SELECT ID, UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE 
+                    FROM {tableName};
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_master_insert
+                    INSTEAD OF INSERT ON VMX_UNIT_MASTER
+                    BEGIN
+                        INSERT INTO {tableName} (UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE)
+                        VALUES (NEW.UNIT_NAME, NEW.CATEGORY, NEW.DESCRIPTION, NEW.IS_DEFAULT, NEW.CREATED_BY, NEW.CREATED_DATE, NEW.MODIFIED_BY, NEW.MODIFIED_DATE);
+                    END;
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_master_update
+                    INSTEAD OF UPDATE ON VMX_UNIT_MASTER
+                    BEGIN
+                        UPDATE {tableName} SET
+                            UNIT_NAME = NEW.UNIT_NAME,
+                            CATEGORY = NEW.CATEGORY,
+                            DESCRIPTION = NEW.DESCRIPTION,
+                            IS_DEFAULT = NEW.IS_DEFAULT,
+                            MODIFIED_BY = NEW.MODIFIED_BY,
+                            MODIFIED_DATE = NEW.MODIFIED_DATE
+                        WHERE ID = OLD.ID OR (OLD.ID IS NULL AND UNIT_NAME = OLD.UNIT_NAME);
+                    END;
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_master_delete
+                    INSTEAD OF DELETE ON VMX_UNIT_MASTER
+                    BEGIN
+                        DELETE FROM {tableName} WHERE ID = OLD.ID OR UNIT_NAME = OLD.UNIT_NAME;
+                    END;
+                ");
+            }
+            catch
+            {
+                // Best-effort
+            }
         }
 
         /// <summary>
@@ -140,6 +327,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql;
@@ -187,6 +375,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"SELECT ID, UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE FROM {tableName} WHERE UNIT_NAME = @UnitName LIMIT 1;";
@@ -221,6 +410,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"SELECT ID, UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE FROM {tableName} WHERE ID = @ID LIMIT 1;";
@@ -255,6 +445,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"SELECT ID, UNIT_NAME, CATEGORY, DESCRIPTION, IS_DEFAULT, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE FROM {tableName} WHERE CATEGORY = @Category AND IS_DEFAULT = 1 LIMIT 1;";
@@ -287,6 +478,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"SELECT DISTINCT CATEGORY FROM {tableName} WHERE CATEGORY IS NOT NULL AND CATEGORY <> '' ORDER BY CATEGORY ASC;";
@@ -324,6 +516,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 if (unit.IsDefault)
@@ -391,6 +584,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 if (unit.IsDefault)
@@ -468,6 +662,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"DELETE FROM {tableName} WHERE ID = @ID;";
@@ -496,6 +691,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"DELETE FROM {tableName} WHERE UNIT_NAME = @UnitName;";
@@ -520,6 +716,7 @@ namespace DrillIntel.Models
         public static void CreateDefaultUnits(IDataServiceDIntel? db = null, string tableName = TableName)
         {
             var dataService = ResolveDataService(db);
+            tableName = NormalizeTableName(tableName);
             EnsureTableExists(dataService, tableName);
 
             var defaultUnits = new (string UnitName, string Category, string Description, bool IsDefault)[]
@@ -593,6 +790,7 @@ namespace DrillIntel.Models
         /// </summary>
         public bool Save(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            tableName = NormalizeTableName(tableName);
             return ID <= 0 ? Add(db, this, tableName) : Edit(db, this, tableName);
         }
 
@@ -601,6 +799,7 @@ namespace DrillIntel.Models
         /// </summary>
         public bool DeleteSelf(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            tableName = NormalizeTableName(tableName);
             if (ID > 0) return Delete(db, ID, tableName);
             if (!string.IsNullOrWhiteSpace(UnitName)) return Delete(db, UnitName, tableName);
             return false;

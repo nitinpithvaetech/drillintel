@@ -671,12 +671,37 @@ public class WellDataRepository : IWellDataRepository
 
         if (list.Count > 0)
         {
-            if (hasDepthSummary > 0)
+            var wellMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var hasWellTable = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_WELL';");
+            if (hasWellTable > 0)
             {
-                var summaries = (await connection.QueryAsync<dynamic>(
-                    "SELECT * FROM VMX_DEPTH_LOG_SUMMARY;")).ToList();
+                var wellRows = await connection.QueryAsync<dynamic>("SELECT WELL_ID, WELL_NAME FROM VMX_WELL;");
+                foreach (var w in wellRows)
+                {
+                    var wDict = w as IDictionary<string, object>;
+                    if (wDict != null &&
+                        wDict.TryGetValue("WELL_ID", out var wId) && wId != null &&
+                        wDict.TryGetValue("WELL_NAME", out var wName) && wName != null)
+                    {
+                        wellMap[Convert.ToString(wId)!] = Convert.ToString(wName)!;
+                    }
+                }
+            }
 
-                foreach (var dl in list)
+            var summaries = hasDepthSummary > 0
+                ? (await connection.QueryAsync<dynamic>("SELECT * FROM VMX_DEPTH_LOG_SUMMARY;")).ToList()
+                : new List<dynamic>();
+
+            foreach (var dl in list)
+            {
+                if (string.IsNullOrWhiteSpace(dl.nameWell) && !string.IsNullOrWhiteSpace(dl.WellID) && wellMap.TryGetValue(dl.WellID, out var mappedWellName))
+                {
+                    dl.nameWell = mappedWellName;
+                    dl.__WellName = mappedWellName;
+                }
+
+                if (summaries.Count > 0)
                 {
                     var match = summaries.FirstOrDefault(s =>
                     {
@@ -690,16 +715,26 @@ public class WellDataRepository : IWellDataRepository
                                (!string.IsNullOrWhiteSpace(sName) && sName == dl.nameLog);
                     });
 
-                    if (match is IDictionary<string, object> rowDict && string.IsNullOrWhiteSpace(dl.description))
+                    if (match is IDictionary<string, object> rowDict)
                     {
-                        if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
+                        if (string.IsNullOrWhiteSpace(dl.nameWell) && rowDict.TryGetValue("WellName", out var wellObj) && wellObj != null && wellObj != DBNull.Value)
                         {
-                            DateTime dt = DateTime.Now;
-                            if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
+                            var wName = Convert.ToString(wellObj)!;
+                            dl.nameWell = wName;
+                            dl.__WellName = wName;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(dl.description))
+                        {
+                            if (rowDict.TryGetValue("QcScore", out var qcObj) && qcObj != null && qcObj != DBNull.Value)
                             {
-                                DateTime.TryParse(Convert.ToString(dateObj), out dt);
+                                DateTime dt = DateTime.Now;
+                                if (rowDict.TryGetValue("ImportDate", out var dateObj) && dateObj != null && dateObj != DBNull.Value)
+                                {
+                                    DateTime.TryParse(Convert.ToString(dateObj), out dt);
+                                }
+                                dl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
                             }
-                            dl.description = $"QC: {Convert.ToDouble(qcObj):F1}% • {dt:dd-MM-yyyy hh:mm tt}";
                         }
                     }
                 }
@@ -888,6 +923,20 @@ public class WellDataRepository : IWellDataRepository
             clean = "col_" + clean;
 
         return clean;
+    }
+
+    public static bool IsNullOrSentinelValue(string? rawVal, string? fileNullValue)
+    {
+        if (string.IsNullOrWhiteSpace(rawVal)) return true;
+        var trimmed = rawVal.Trim();
+        if (trimmed == "-999.25" || trimmed == "-9999" || trimmed == "-999") return true;
+        if (!string.IsNullOrEmpty(fileNullValue) && trimmed == fileNullValue.Trim()) return true;
+        if (double.TryParse(trimmed, NumberStyles.Any, CultureInfo.InvariantCulture, out double d))
+        {
+            if (Math.Abs(d - (-999.25)) < 0.0001 || Math.Abs(d - (-9999.0)) < 0.0001 || Math.Abs(d - (-999.0)) < 0.0001)
+                return true;
+        }
+        return false;
     }
 
     private class ColumnPlan
@@ -1432,7 +1481,7 @@ public class WellDataRepository : IWellDataRepository
                     int srcIdx = columnPlans[i].SourceIndex;
                     string? rawVal = (srcIdx >= 0 && srcIdx < tokens.Length) ? tokens[srcIdx] : null;
 
-                    if (string.IsNullOrWhiteSpace(rawVal) || rawVal == "-999.25" || rawVal == "-9999" || (fileMetadata?.NullValue != null && rawVal == fileMetadata.NullValue))
+                    if (IsNullOrSentinelValue(rawVal, fileMetadata?.NullValue))
                     {
                         cmdParams[i].Value = DBNull.Value;
                         if (columnPlans[i].IsDepthColumn)
@@ -1777,10 +1826,7 @@ public class WellDataRepository : IWellDataRepository
                 totalRows++;
 
                 string? rawDepth = (depthSourceIndex >= 0 && depthSourceIndex < tokens.Length) ? tokens[depthSourceIndex] : null;
-                if (string.IsNullOrWhiteSpace(rawDepth) ||
-                    rawDepth == "-999.25" ||
-                    rawDepth == "-9999" ||
-                    (fileMetadata?.NullValue != null && rawDepth == fileMetadata.NullValue) ||
+                if (IsNullOrSentinelValue(rawDepth, fileMetadata?.NullValue) ||
                     !double.TryParse(rawDepth, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblDepth))
                 {
                     // Invalid depth: skip row
@@ -1811,10 +1857,7 @@ public class WellDataRepository : IWellDataRepository
                     int sIdx = curvePlans[i].SourceIndex;
                     string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
 
-                    if (string.IsNullOrWhiteSpace(raw) ||
-                        raw == "-999.25" ||
-                        raw == "-9999" ||
-                        (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
+                    if (IsNullOrSentinelValue(raw, fileMetadata?.NullValue))
                     {
                         curveParams[i].Value = DBNull.Value;
                     }
@@ -2208,7 +2251,7 @@ public class WellDataRepository : IWellDataRepository
                 else
                 {
                     string? rawDepth = (keySourceIndex >= 0 && keySourceIndex < tokens.Length) ? tokens[keySourceIndex] : null;
-                    if (string.IsNullOrWhiteSpace(rawDepth) || !double.TryParse(rawDepth, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblDepth))
+                    if (IsNullOrSentinelValue(rawDepth, fileMetadata?.NullValue) || !double.TryParse(rawDepth, NumberStyles.Any, CultureInfo.InvariantCulture, out double dblDepth))
                     {
                         continue;
                     }
@@ -2223,10 +2266,7 @@ public class WellDataRepository : IWellDataRepository
                     int sIdx = curvePlans[i].SourceIndex;
                     string? raw = (sIdx >= 0 && sIdx < tokens.Length) ? tokens[sIdx] : null;
 
-                    if (string.IsNullOrWhiteSpace(raw) ||
-                        raw == "-999.25" ||
-                        raw == "-9999" ||
-                        (fileMetadata?.NullValue != null && raw == fileMetadata.NullValue))
+                    if (IsNullOrSentinelValue(raw, fileMetadata?.NullValue))
                     {
                         curveParams[i].Value = DBNull.Value;
                     }
@@ -2388,6 +2428,70 @@ public class WellDataRepository : IWellDataRepository
         {
             string lastError = "";
             TimeLogService.SaveTimeLog(dataService, timeLog, channels, ref lastError);
+        });
+    }
+
+    // --- [NEW LOGIC (DepthLog and LogChannel operations using DepthLogService and SQLite)] ---
+    public async Task<DepthLog?> GetDepthLogAsync(string logId)
+    {
+        if (!_session.IsProjectOpen || string.IsNullOrWhiteSpace(logId)) return null;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return null;
+
+        return await Task.Run(() =>
+        {
+            string lastError = "";
+            var log = DepthLogService.LoadObject(dataService, logId, ref lastError);
+            if (log != null) return log;
+
+            var dt = dataService.GetTable("SELECT WELL_ID, WELLBORE_ID, LOG_ID FROM VMX_DEPTH_LOG WHERE LOG_NAME = '" 
+                + logId.Replace("'", "''") + "' OR DATA_TABLE_NAME = '" 
+                + logId.Replace("'", "''") + "' LIMIT 1;");
+            if (dt != null && dt.Rows.Count > 0)
+            {
+                string foundLogId = DataService.checkNull(dt.Rows[0]["LOG_ID"], "");
+                string wId = DataService.checkNull(dt.Rows[0]["WELL_ID"], "");
+                string wbId = DataService.checkNull(dt.Rows[0]["WELLBORE_ID"], "");
+                dt.Dispose();
+                return DepthLogService.LoadObject(dataService, wId, wbId, foundLogId, ref lastError);
+            }
+
+            return null;
+        });
+    }
+
+    public async Task<List<LogChannel>> GetDepthLogChannelsAsync(string logId, string? dataTableName)
+    {
+        var log = await GetDepthLogAsync(logId);
+        if (log != null && log.LogCurves.Count > 0)
+        {
+            return log.LogCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        var dataService = _session.GetDataService();
+        if (dataService != null)
+        {
+            if (log == null)
+            {
+                log = new DepthLog { ObjectID = logId, __dataTableName = dataTableName ?? "" };
+            }
+            DepthLogService.LoadLogCurves(dataService, log);
+            return log.LogCurves.Values.OrderBy(c => c.ColumnOrder).ToList();
+        }
+
+        return new List<LogChannel>();
+    }
+
+    public async Task SaveDepthLogAsync(DepthLog depthLog, List<LogChannel> channels)
+    {
+        if (!_session.IsProjectOpen || depthLog == null || string.IsNullOrWhiteSpace(depthLog.ObjectID)) return;
+        var dataService = _session.GetDataService();
+        if (dataService == null) return;
+
+        await Task.Run(() =>
+        {
+            string lastError = "";
+            DepthLogService.SaveDepthLog(dataService, depthLog, channels, ref lastError);
         });
     }
 
@@ -3019,6 +3123,75 @@ public class WellDataRepository : IWellDataRepository
                         continue;
 
                     list.Add(new TimeLogOption
+                    {
+                        LogId = id,
+                        LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                        WellId = wellId ?? "",
+                        WellboreId = wellboreId ?? ""
+                    });
+                }
+            }
+        }
+
+        return list;
+    }
+
+    public async Task<List<DepthLogOption>> GetDepthLogsForLinkingAsync(string? wellId = null, string? wellboreId = null, string? excludeLogId = null)
+    {
+        var list = new List<DepthLogOption>();
+        if (!_session.IsProjectOpen) return list;
+        var connection = _session.GetConnection();
+
+        bool hasVmxDepthLog = await connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG';") > 0;
+
+        if (hasVmxDepthLog)
+        {
+            var rows = await connection.QueryAsync<dynamic>("SELECT WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME FROM VMX_DEPTH_LOG;");
+            foreach (var r in rows)
+            {
+                var dict = (IDictionary<string, object>)r;
+                string id = dict.TryGetValue("LOG_ID", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                string name = dict.TryGetValue("LOG_NAME", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+                string wId = dict.TryGetValue("WELL_ID", out var wVal) && wVal != null ? Convert.ToString(wVal)! : "";
+                string wbId = dict.TryGetValue("WELLBORE_ID", out var wbVal) && wbVal != null ? Convert.ToString(wbVal)! : "";
+
+                if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellId) && !wId.Equals(wellId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(wellboreId) && !wbId.Equals(wellboreId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                list.Add(new DepthLogOption
+                {
+                    LogId = id,
+                    LogName = !string.IsNullOrWhiteSpace(name) ? name : id,
+                    WellId = wId,
+                    WellboreId = wbId
+                });
+            }
+        }
+
+        if (list.Count == 0)
+        {
+            var hasSummary = await connection.ExecuteScalarAsync<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_DEPTH_LOG_SUMMARY';");
+            if (hasSummary > 0)
+            {
+                var rows = await connection.QueryAsync<dynamic>("SELECT LogId, LogName FROM VMX_DEPTH_LOG_SUMMARY;");
+                foreach (var r in rows)
+                {
+                    var dict = (IDictionary<string, object>)r;
+                    string id = dict.TryGetValue("LogId", out var idVal) && idVal != null ? Convert.ToString(idVal)! : "";
+                    string name = dict.TryGetValue("LogName", out var nmVal) && nmVal != null ? Convert.ToString(nmVal)! : "";
+
+                    if (!string.IsNullOrWhiteSpace(excludeLogId) && id.Equals(excludeLogId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    list.Add(new DepthLogOption
                     {
                         LogId = id,
                         LogName = !string.IsNullOrWhiteSpace(name) ? name : id,

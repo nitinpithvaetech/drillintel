@@ -342,5 +342,72 @@ public class DepthLogImportRulesTests : IDisposable
             if (File.Exists(csvPath)) File.Delete(csvPath);
         }
     }
+
+    [Theory]
+    [InlineData(@"D:\DrillIntelProject-OTHER-FILES\CSV_FILES\DepthLog\dephlog.csv")]
+    [InlineData(@"D:\DrillIntelProject-OTHER-FILES\CSV_FILES\DepthLog\depthlog1.las")]
+    [InlineData(@"D:\Vumax-Well-Raw-Data\WGH-2 ST 5Sec Dataset\DepthLog\depthlog.csv")]
+    [InlineData(@"D:\Vumax-Well-Raw-Data\WGH-2 ST 5Sec Dataset\DepthLog\Depthlog.las")]
+    [InlineData(@"D:\Vumax-Well-Raw-Data\WGH-2 ST 5Sec Dataset\DepthLog\depthlog.xlsx")]
+    [InlineData(@"D:\Vumax-Well-Raw-Data\WellS well data\WellS-DepthLog-Data.csv")]
+    [InlineData(@"D:\Vumax-Well-Raw-Data\WellS well data\WellS-DepthLog-ImageLogData.csv")]
+    public async Task ImportDepthLog_AllFiles_Test(string filePath)
+    {
+        if (!File.Exists(filePath)) return;
+
+        var vm = new ImportDataViewModel(_session)
+        {
+            TypeOfDataInput = ImportDataType.DepthLogData,
+            SuppressMessageBoxes = true
+        };
+
+        await vm.ProcessFileAsync(filePath);
+        while (vm.IsLoading) await Task.Delay(50);
+
+        Assert.True(vm.ColumnMappings.Count > 0, $"No column mappings generated for {filePath}");
+        var depthMap = vm.ColumnMappings.FirstOrDefault(m => m.VuMaxColumnID == "DEPTH");
+        Assert.NotNull(depthMap);
+
+        // Check if depth mapping was auto-selected by the view model
+        Assert.False(string.IsNullOrEmpty(depthMap.SourceColumnName), $"Depth column could not be auto-mapped for {filePath}. PreviewColumns: {string.Join(", ", vm.PreviewColumns)}");
+
+        await vm.SaveAsync();
+        while (vm.IsLoading) await Task.Delay(50);
+
+        var depthLogs = await _repo.GetDepthLogsAsync();
+        Assert.NotEmpty(depthLogs);
+        var latestLog = depthLogs.OrderByDescending(l => l.creationDate).First();
+        var dt = _session.GetDataService().GetTable($"SELECT COUNT(*) FROM [{latestLog.__dataTableName}]");
+        Assert.NotNull(dt);
+        long count = Convert.ToInt64(dt.Rows[0][0]);
+        Assert.True(count > 0, $"File {filePath}: Expected imported rows > 0, but was {count}. Error: {vm.ImportProgressStatus}");
+    }
+
+    [Fact]
+    public async Task ExistingProject_Etech1_CanReadDepthLogData()
+    {
+        string dintelPath = @"D:\DrillIntelProject-OTHER-FILES\CSV_FILES\DepthLog\Etech1.dintel";
+        if (!File.Exists(dintelPath)) return;
+
+        using var session = new ProjectSession();
+        session.Load(dintelPath);
+        var repo = new WellDataRepository(session);
+
+        var depthLogs = await repo.GetDepthLogsAsync();
+        Assert.NotEmpty(depthLogs);
+
+        var ds = session.GetDataService();
+        foreach (var dl in depthLogs)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(dl.nameWell), $"Expected WellName to be populated on DepthLog {dl.nameLog}");
+            Assert.False(string.IsNullOrWhiteSpace(dl.__dataTableName), $"Expected DataTableName on DepthLog {dl.nameLog}");
+
+            var dt = ds.GetTable($"SELECT * FROM [{dl.__dataTableName}] LIMIT 10;");
+            Assert.NotNull(dt);
+            Assert.True(dt.Rows.Count > 0, $"Expected GetTable to load rows for {dl.__dataTableName}");
+            Assert.True(dt.Columns.Count > 0, $"Expected columns in {dl.__dataTableName}");
+        }
+    }
 }
+
 

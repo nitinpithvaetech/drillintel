@@ -1,0 +1,674 @@
+<UserControl x:Class="DrillIntel.Views.EditDepthLogView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
+             xmlns:converters="clr-namespace:DrillIntel.Converters"
+             xmlns:models="clr-namespace:DrillIntel.Models"
+             mc:Ignorable="d" 
+             d:DataContext="{d:DesignInstance Type=viewmodels:EditDepthLogViewModel, IsDesignTimeCreatable=True}"
+             d:DesignHeight="650" d:DesignWidth="920"
+             Background="#F1F5F9"
+             FontFamily="Segoe UI, Segoe UI Variable, Microsoft Sans Serif, Arial">
+
+    <UserControl.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
+
+        <!-- Field Label -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#374151" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+
+        <!-- Card Section Header Title -->
+        <Style x:Key="CardHeaderTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#0284C7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="6,0,0,0" />
+        </Style>
+
+        <!-- Card Outer Border -->
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+
+        <!-- Boxed Input TextBox Style -->
+        <Style x:Key="BoxedTextBox" TargetType="TextBox">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="4" 
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="false" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="true">
+                                <Setter TargetName="border" Property="BorderBrush" Value="#0284C7" />
+                                <Setter TargetName="border" Property="Background" Value="#FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="false">
+                                <Setter TargetName="border" Property="Opacity" Value="0.6" />
+                                <Setter TargetName="border" Property="Background" Value="#F1F5F9" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Boxed ComboBox Style -->
+        <Style x:Key="BoxedComboBox" TargetType="ComboBox">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="#111827" />
+            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="16,12,16,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" /> <!-- Header -->
+            <RowDefinition Height="Auto" /> <!-- Status Bar -->
+            <RowDefinition Height="*" />    <!-- Content Tabs -->
+            <RowDefinition Height="Auto" /> <!-- Footer Actions -->
+        </Grid.RowDefinitions>
+
+        <!-- 1. Header (Banner Title & Subtitle) -->
+        <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="#E0F2FE" CornerRadius="6" Width="36" Height="36" Margin="0,0,12,0" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="ChartTimeline" Width="22" Height="22" Foreground="#0284C7" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="15" Foreground="#0F172A" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="#64748B" Margin="0,1,0,0" />
+                </StackPanel>
+
+                <!-- Loading Indicator -->
+                <ProgressBar Grid.Column="2" IsIndeterminate="True" Width="20" Height="20" Style="{StaticResource MaterialDesignCircularProgressBar}" 
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"
+                             Foreground="#0284C7" VerticalAlignment="Center" Margin="8,0" />
+            </Grid>
+        </Border>
+
+        <!-- 2. Status / Notification Banner -->
+        <Border Grid.Row="1" Margin="0,0,0,8" CornerRadius="4" Padding="10,6"
+                Visibility="{Binding IsStatusVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="#F0FDF4" />
+                    <Setter Property="BorderBrush" Value="#BBF7D0" />
+                    <Setter Property="BorderThickness" Value="1" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                            <Setter Property="Background" Value="#FEF2F2" />
+                            <Setter Property="BorderBrush" Value="#FECACA" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <materialDesign:PackIcon Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <materialDesign:PackIcon.Style>
+                        <Style TargetType="materialDesign:PackIcon">
+                            <Setter Property="Kind" Value="CheckCircleOutline" />
+                            <Setter Property="Foreground" Value="#16A34A" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                                    <Setter Property="Kind" Value="AlertCircleOutline" />
+                                    <Setter Property="Foreground" Value="#DC2626" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </materialDesign:PackIcon.Style>
+                </materialDesign:PackIcon>
+
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="#15803D" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsStatusError}" Value="True">
+                                    <Setter Property="Foreground" Value="#B91C1C" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+        </Border>
+
+        <!-- 3. Main Content TabControl -->
+        <TabControl Grid.Row="2" SelectedIndex="{Binding SelectedTabIndex}" Background="Transparent" BorderThickness="0">
+            <!-- (1) Log Information Tab -->
+            <TabItem Header="Log Information">
+                <TabItem.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="6,2">
+                            <materialDesign:PackIcon Kind="InformationOutline" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Log Information" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabItem.HeaderTemplate>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+                    <StackPanel>
+                        <!-- Log Information Card -->
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <materialDesign:PackIcon Kind="FormatListBulletedType" Width="18" Height="18" Foreground="#0284C7" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="LOG METADATA &amp; IDENTIFICATION" Style="{StaticResource CardHeaderTitle}" />
+                                </Grid>
+
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Log Name -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                                        <TextBlock Text="Log Name *" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Text="{Binding LogName, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Enter unique name for this depth log (pre-filled from vmx_depth_log.log_name)" />
+                                    </StackPanel>
+
+                                    <!-- Run No -->
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
+                                        <TextBlock Text="Run No." Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Text="{Binding RunNo, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Numeric run number (pre-filled from vmx_depth_log.run_no)" />
+                                    </StackPanel>
+
+                                    <!-- Service Company -->
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,8">
+                                        <TextBlock Text="Service Company" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox Style="{StaticResource BoxedComboBox}" IsEditable="True" 
+                                                  ItemsSource="{Binding AvailableServiceCompanies}"
+                                                  Text="{Binding ServiceCompany, UpdateSourceTrigger=PropertyChanged}"
+                                                  ToolTip="Select or type the logging service company (pre-filled from vmx_depth_log.service_company)" />
+                                    </StackPanel>
+
+                                    <!-- EDR Provider -->
+                                    <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,8">
+                                        <TextBlock Text="EDR Provider" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox Style="{StaticResource BoxedComboBox}" IsEditable="True"
+                                                  ItemsSource="{Binding AvailableEdrProviders}"
+                                                  Text="{Binding EdrProvider, UpdateSourceTrigger=PropertyChanged}"
+                                                  ToolTip="Select or type the Electronic Drilling Recorder provider (pre-filled from vmx_depth_log.edr_provider)" />
+                                    </StackPanel>
+
+                                    <!-- Description -->
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,8">
+                                        <TextBlock Text="Description" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Height="50" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                                                 VerticalContentAlignment="Top"
+                                                 ToolTip="Operational description or notes (pre-filled from vmx_depth_log.description)" />
+                                    </StackPanel>
+
+                                    <!-- Comments -->
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,8">
+                                        <TextBlock Text="Comments" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Height="40" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 Text="{Binding Comments, UpdateSourceTrigger=PropertyChanged}"
+                                                 VerticalContentAlignment="Top"
+                                                 ToolTip="Additional comments or remarks (pre-filled from vmx_depth_log.comments)" />
+                                    </StackPanel>
+
+                                    <!-- Checkbox: Primary Log -->
+                                    <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,4,0,0">
+                                        <CheckBox Content="Primary Log" IsChecked="{Binding PrimaryLog}" FontWeight="SemiBold" FontSize="12"
+                                                  ToolTip="Mark this depth log as the primary log for this wellbore (pre-filled from vmx_depth_log.primary_log)" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Depth Configuration Section Card -->
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <materialDesign:PackIcon Kind="Ruler" Width="18" Height="18" Foreground="#0284C7" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="DEPTH RANGE &amp; INDEX CONFIGURATION" Style="{StaticResource CardHeaderTitle}" />
+                                </Grid>
+
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Start Depth -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,8">
+                                        <TextBlock Text="Start Depth (Min Depth)" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Text="{Binding StartDepth, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Numeric minimum depth index (pre-filled from vmx_depth_log.min_depth)" />
+                                    </StackPanel>
+
+                                    <!-- End Depth -->
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,8">
+                                        <TextBlock Text="End Depth (Max Depth)" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Text="{Binding EndDepth, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Numeric maximum depth index (pre-filled from vmx_depth_log.max_depth)" />
+                                    </StackPanel>
+
+                                    <!-- Step Increment -->
+                                    <StackPanel Grid.Row="1" Grid.Column="0">
+                                        <TextBlock Text="Step Increment" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Style="{StaticResource BoxedTextBox}" Text="{Binding StepIncrement, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Sampling depth step interval (e.g. 0.1, 0.2)" />
+                                    </StackPanel>
+
+                                    <!-- Direction -->
+                                    <StackPanel Grid.Row="1" Grid.Column="2">
+                                        <TextBlock Text="Direction" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox Style="{StaticResource BoxedComboBox}"
+                                                  ItemsSource="{Binding AvailableDirections}"
+                                                  SelectedItem="{Binding Direction}"
+                                                  ToolTip="Logging direction (Top To Bottom or Bottom To Top)" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- (2) Channels Tab -->
+            <TabItem Header="Channels">
+                <TabItem.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="6,2">
+                            <materialDesign:PackIcon Kind="TableLarge" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Channels" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabItem.HeaderTemplate>
+
+                <Grid Margin="0,6,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /> <!-- Action Buttons Toolbar -->
+                        <RowDefinition Height="*" />    <!-- Channels DataGrid -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Channels Action Buttons Toolbar -->
+                    <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
+                        <DockPanel LastChildFill="False">
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                                <Button Command="{Binding AddChannelCommand}" Height="28" Padding="10,0" Margin="0,0,6,0"
+                                        Background="#0284C7" BorderBrush="#0284C7" Foreground="#FFFFFF" FontWeight="SemiBold" FontSize="11"
+                                        ToolTip="Add a new channel row to this depth log">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" Foreground="#FFFFFF" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <TextBlock Text="Add Channel" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Command="{Binding EditChannelCommand}" CommandParameter="{Binding SelectedChannel}" Height="28" Padding="10,0" Margin="0,0,6,0"
+                                        Background="#FFFFFF" BorderBrush="#CBD5E1" Foreground="#374151" FontWeight="SemiBold" FontSize="11"
+                                        ToolTip="Focus and edit the selected channel row">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="PencilOutline" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <TextBlock Text="Edit Channel" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Command="{Binding RemoveChannelCommand}" CommandParameter="{Binding SelectedChannel}" Height="28" Padding="10,0" Margin="0,0,6,0"
+                                        Background="#FFFFFF" BorderBrush="#CBD5E1" Foreground="#D32F2F" FontWeight="SemiBold" FontSize="11"
+                                        ToolTip="Remove the selected channel row">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="TrashCanOutline" Width="14" Height="14" Foreground="#D32F2F" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <TextBlock Text="Remove Channel" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                <Button Command="{Binding ApplyUnitConversionProfileCommand}" Height="28" Padding="10,0"
+                                        Background="#F8FAFC" BorderBrush="#CBD5E1" Foreground="#1565C0" FontWeight="SemiBold" FontSize="11"
+                                        ToolTip="Apply standard unit conversion profile (Metric / Imperial) to channels">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="SwapHorizontal" Width="14" Height="14" Foreground="#1565C0" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <TextBlock Text="Apply Unit Conversion Profile" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Channels Grid -->
+                    <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="1">
+                        <DataGrid ItemsSource="{Binding Channels}" 
+                                  SelectedItem="{Binding SelectedChannel}"
+                                  MouseDoubleClick="OnChannelsDataGridMouseDoubleClick"
+                                  AutoGenerateColumns="False" 
+                                  CanUserAddRows="False" 
+                                  CanUserDeleteRows="False"
+                                  CanUserResizeColumns="True"
+                                  CanUserSortColumns="True"
+                                  SelectionMode="Single"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalGridLinesBrush="#E2E8F0"
+                                  RowHeaderWidth="0"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  FontSize="12"
+                                  RowHeight="36"
+                                  MinRowHeight="36"
+                                  ColumnHeaderHeight="34"
+                                  materialDesign:DataGridAssist.CellPadding="10 6"
+                                  materialDesign:DataGridAssist.ColumnHeaderPadding="10 6"
+                                  AlternatingRowBackground="#F8FAFC"
+                                  RowBackground="#FFFFFF">
+                            <DataGrid.RowStyle>
+                                <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                                    <Setter Property="MinHeight" Value="36" />
+                                    <Setter Property="Height" Value="36" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                </Style>
+                            </DataGrid.RowStyle>
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                                    <Setter Property="FontWeight" Value="SemiBold" />
+                                    <Setter Property="Foreground" Value="#334155" />
+                                    <Setter Property="Background" Value="#F1F5F9" />
+                                    <Setter Property="Height" Value="34" />
+                                    <Setter Property="Padding" Value="10,0" />
+                                    <Setter Property="VerticalContentAlignment" Value="Center" />
+                                    <Setter Property="BorderThickness" Value="0,0,0,1" />
+                                    <Setter Property="BorderBrush" Value="#CBD5E1" />
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+                            <DataGrid.Columns>
+                                <!-- Upload Checkbox (Read Only) -->
+                                <DataGridCheckBoxColumn Header="Upload" Binding="{Binding Upload, UpdateSourceTrigger=PropertyChanged}" Width="65" IsReadOnly="True">
+                                    <DataGridCheckBoxColumn.ElementStyle>
+                                        <Style TargetType="CheckBox">
+                                             <Setter Property="HorizontalAlignment" Value="Center" />
+                                             <Setter Property="VerticalAlignment" Value="Center" />
+                                             <Setter Property="IsHitTestVisible" Value="False" />
+                                             <Setter Property="Focusable" Value="False" />
+                                        </Style>
+                                    </DataGridCheckBoxColumn.ElementStyle>
+                                </DataGridCheckBoxColumn>
+
+                                <!-- Mnemonic (Read Only) -->
+                                <DataGridTextColumn Header="Mnemonic" Binding="{Binding Mnemonic, UpdateSourceTrigger=PropertyChanged}" Width="110" FontWeight="SemiBold" IsReadOnly="True">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Unit (Editable) -->
+                                <DataGridTextColumn Header="Unit" Binding="{Binding Unit, UpdateSourceTrigger=PropertyChanged}" Width="75" IsReadOnly="False">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- VuMax Unit ID (Editable) -->
+                                <DataGridTextColumn Header="VuMax Unit ID" Binding="{Binding VuMaxUnitId, UpdateSourceTrigger=PropertyChanged}" Width="110" IsReadOnly="False">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Description (Editable) -->
+                                <DataGridTextColumn Header="Description" Binding="{Binding Description, UpdateSourceTrigger=PropertyChanged}" Width="*" IsReadOnly="False">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Upload Mnemonic (Editable) -->
+                                <DataGridTextColumn Header="Upload Mnemonic" Binding="{Binding UploadMnemonic, UpdateSourceTrigger=PropertyChanged}" Width="120" IsReadOnly="False">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Value Type (Read Only) -->
+                                <DataGridTextColumn Header="Value Type" Binding="{Binding ValueType, UpdateSourceTrigger=PropertyChanged}" Width="85" IsReadOnly="True">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Expression / Query (Editable) -->
+                                <DataGridTextColumn Header="Expression" Binding="{Binding Expression, UpdateSourceTrigger=PropertyChanged}" Width="140" IsReadOnly="False">
+                                    <DataGridTextColumn.ElementStyle>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Padding" Value="6,0" />
+                                        </Style>
+                                    </DataGridTextColumn.ElementStyle>
+                                </DataGridTextColumn>
+
+                                <!-- Do Not Interpol (Read Only) -->
+                                <DataGridCheckBoxColumn Header="No Interpol" Binding="{Binding DoNotInterpol, UpdateSourceTrigger=PropertyChanged}" Width="85" IsReadOnly="True">
+                                    <DataGridCheckBoxColumn.ElementStyle>
+                                        <Style TargetType="CheckBox">
+                                             <Setter Property="HorizontalAlignment" Value="Center" />
+                                             <Setter Property="VerticalAlignment" Value="Center" />
+                                             <Setter Property="IsHitTestVisible" Value="False" />
+                                             <Setter Property="Focusable" Value="False" />
+                                        </Style>
+                                    </DataGridCheckBoxColumn.ElementStyle>
+                                </DataGridCheckBoxColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- (3) Link Depth Log Tab -->
+            <TabItem Header="Link Depth Log">
+                <TabItem.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="6,2">
+                            <materialDesign:PackIcon Kind="LinkVariant" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Link Depth Log" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabItem.HeaderTemplate>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,6,0,0">
+                    <StackPanel>
+                        <!-- Link Options Card -->
+                        <Border Style="{StaticResource CardBorder}">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <materialDesign:PackIcon Kind="LinkBoxOutline" Width="18" Height="18" Foreground="#0284C7" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="PARENT DEPTHLOG LINKING" Style="{StaticResource CardHeaderTitle}" />
+                                </Grid>
+
+                                <!-- Master Checkbox: Link this depth log to other depth log -->
+                                <CheckBox Content="Link this depth log to other depth log" 
+                                          IsChecked="{Binding LinkToParent}"
+                                          FontWeight="Bold" FontSize="12.5" Foreground="#1E293B" Margin="0,0,0,14"
+                                          ToolTip="Enable linking this child depth log to a parent depth log for data synchronization" />
+
+                                <!-- Sub-fields: Enabled only when LinkToParent is checked -->
+                                <StackPanel IsEnabled="{Binding LinkToParent}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="16" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Well Dropdown -->
+                                        <StackPanel Grid.Column="0" Margin="0,0,0,10">
+                                            <TextBlock Text="Well" Style="{StaticResource FieldLabel}" />
+                                            <ComboBox Style="{StaticResource BoxedComboBox}"
+                                                      ItemsSource="{Binding AvailableWells}"
+                                                      SelectedItem="{Binding SelectedWellOption}"
+                                                      DisplayMemberPath="WellName"
+                                                      ToolTip="Select the parent well" />
+                                        </StackPanel>
+
+                                        <!-- Wellbore Dropdown -->
+                                        <StackPanel Grid.Column="2" Margin="0,0,0,10">
+                                            <TextBlock Text="Wellbore" Style="{StaticResource FieldLabel}" />
+                                            <ComboBox Style="{StaticResource BoxedComboBox}"
+                                                      ItemsSource="{Binding AvailableWellbores}"
+                                                      SelectedItem="{Binding SelectedWellboreOption}"
+                                                      DisplayMemberPath="WellboreName"
+                                                      ToolTip="Select the parent wellbore" />
+                                        </StackPanel>
+
+                                        <!-- Depth Log Dropdown -->
+                                        <StackPanel Grid.Column="4" Margin="0,0,0,10">
+                                            <TextBlock Text="Depth Log" Style="{StaticResource FieldLabel}" />
+                                            <ComboBox Style="{StaticResource BoxedComboBox}"
+                                                      ItemsSource="{Binding AvailableDepthLogs}"
+                                                      SelectedItem="{Binding SelectedDepthLogOption}"
+                                                      DisplayMemberPath="LogName"
+                                                      ToolTip="Select the available parent depth log" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Duplicate Action Dropdown -->
+                                    <StackPanel Margin="0,0,0,12" MaxWidth="300" HorizontalAlignment="Left">
+                                        <TextBlock Text="Duplicate Action" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox Style="{StaticResource BoxedComboBox}"
+                                                  ItemsSource="{Binding DuplicateActionOptions}"
+                                                  SelectedItem="{Binding SelectedDuplicateAction}"
+                                                  ToolTip="Resolution strategy when child log data overlaps parent log data (Merge Columns, Replace, Ignore)" />
+                                    </StackPanel>
+
+                                    <!-- Explanatory Note -->
+                                    <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,4,0,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <materialDesign:PackIcon Kind="InformationOutline" Width="16" Height="16" Foreground="#2563EB" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBlock Text="Select what to do when there is overlap in the data of parent and child depth log." 
+                                                       FontSize="11.5" Foreground="#1E40AF" FontWeight="Medium" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- 4. General Controls (OK and Cancel at bottom right) -->
+        <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="12,10" Margin="-16,8,-16,-12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Navigation hint -->
+                <TextBlock Grid.Column="0" Text="All fields include instant tooltips. Click OK to save modifications." 
+                           FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" />
+
+                <!-- Buttons: OK and Cancel -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button Command="{Binding CancelCommand}" 
+                            Height="30" Width="85" Margin="0,0,8,0"
+                            Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" 
+                            Foreground="#475569" FontWeight="SemiBold" FontSize="11.5"
+                            Content="Cancel" IsCancel="True" ToolTip="Cancel without saving changes" />
+
+                    <Button Command="{Binding SaveCommand}" 
+                            Height="30" Width="95" 
+                            Background="#0284C7" BorderBrush="#0284C7" BorderThickness="1" 
+                            Foreground="#FFFFFF" FontWeight="Bold" FontSize="11.5"
+                            Content="OK" IsDefault="True" ToolTip="Save changes to this depth log" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
+

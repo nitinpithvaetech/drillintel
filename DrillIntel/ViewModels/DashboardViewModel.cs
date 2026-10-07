@@ -455,6 +455,53 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
+    public EditDepthLogViewModel? LastEditDepthLogViewModel { get; private set; }
+    public Func<EditDepthLogViewModel, bool?>? OpenEditDepthLogDialogHandler { get; set; }
+
+    [RelayCommand]
+    public async Task EditDepthLogAsync(WellTreeNode? targetNode = null)
+    {
+        var node = targetNode ?? ContextSelectedNode ?? SelectedNode;
+        if (node == null || _session?.IsProjectOpen != true || _repository == null) return;
+
+        DepthLog? targetLog = node.Tag as DepthLog
+            ?? (node.Children.Count > 0 ? node.Children[0].Tag as DepthLog : null);
+
+        string logId = targetLog?.ObjectID ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(logId))
+        {
+            var depthLogs = await _repository.GetDepthLogsAsync();
+            targetLog = depthLogs.FirstOrDefault(t => t.ObjectID == node.Name || t.nameLog == node.Name)
+                     ?? depthLogs.FirstOrDefault();
+            logId = targetLog?.ObjectID ?? node.Name;
+        }
+
+        var vm = new EditDepthLogViewModel(_session, _repository, logId, targetLog);
+        await vm.InitializeAsync();
+        LastEditDepthLogViewModel = vm;
+
+        bool? result = false;
+        if (OpenEditDepthLogDialogHandler != null)
+        {
+            result = OpenEditDepthLogDialogHandler(vm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.EditDepthLogWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            _session?.NotifyDataChanged();
+            await RefreshAsync();
+        }
+    }
+
     [RelayCommand]
     public async Task ViewDataAsync(WellTreeNode? targetNode = null)
     {
@@ -586,6 +633,53 @@ public partial class DashboardViewModel : ObservableObject
             Owner = System.Windows.Application.Current?.MainWindow
         };
         window.ShowDialog();
+    }
+
+    public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
+
+    [RelayCommand]
+    public async Task SyncDataToParentTimelog(WellTreeNode? node)
+    {
+        var targetNode = node ?? SelectedNode;
+        if (targetNode == null) return;
+
+        TimeLog? timeLog = targetNode.Tag as TimeLog;
+        if (timeLog == null && _repository != null)
+        {
+            var timeLogs = await _repository.GetTimeLogsAsync();
+            timeLog = timeLogs.FirstOrDefault(t => t.ObjectID == targetNode.Name || t.nameLog == targetNode.Name);
+        }
+
+        if (timeLog != null && string.IsNullOrWhiteSpace(timeLog.nameLog) && !string.IsNullOrWhiteSpace(targetNode.Name))
+        {
+            timeLog.nameLog = targetNode.Name;
+        }
+
+        if (timeLog == null || _session == null || !_session.IsProjectOpen)
+        {
+            System.Windows.MessageBox.Show("Please select a valid Timelog from an open project to sync data.",
+                "Sync Data with Parent Timelog", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var vm = new SyncDataWithParentTimelogViewModel(_session, timeLog, _repository);
+        await vm.InitializeAsync();
+
+        if (OpenSyncDataDialogHandler != null)
+        {
+            OpenSyncDataDialogHandler(vm);
+            return;
+        }
+
+        if (System.Windows.Application.Current != null)
+        {
+            var window = new DrillIntel.Views.SyncDataWithParentTimelogWindow
+            {
+                DataContext = vm,
+                Owner = System.Windows.Application.Current?.MainWindow
+            };
+            window.ShowDialog();
+        }
     }
 }
 

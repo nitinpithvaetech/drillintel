@@ -81,6 +81,12 @@ public interface IWellDataRepository
     Task<List<LogChannel>> GetLogChannelsAsync(string logId, string? dataTableName);
     Task SaveTimeLogAsync(TimeLog log, List<LogChannel> channels);
 
+    // --- [NEW LOGIC (DepthLog & LogChannel methods from DrillIntel.Data.Objects)] ---
+    Task<DepthLog?> GetDepthLogAsync(string logId);
+    Task<List<LogChannel>> GetDepthLogChannelsAsync(string logId, string? dataTableName);
+    Task SaveDepthLogAsync(DepthLog log, List<LogChannel> channels);
+    Task<List<DepthLogOption>> GetDepthLogsForLinkingAsync(string? wellId = null, string? wellboreId = null, string? excludeLogId = null);
+
     // --- [OLD LOGIC (Legacy metadata methods maintained for backwards compatibility)] ---
     Task<TimeLogEditMetadata?> GetTimeLogEditMetadataAsync(string logId);
     Task<List<TimelogChannelItem>> GetTimeLogChannelsAsync(string logId, string? dataTableName);

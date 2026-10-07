@@ -15,6 +15,7 @@ using Xunit;
 
 namespace DrillIntel.Tests;
 
+[Collection("AppDatabaseCollection")]
 public class EditTimeLogTests : IDisposable
 {
     private readonly string _tempDbPath;
@@ -638,12 +639,12 @@ public class EditTimeLogTests : IDisposable
     }
 
     [Fact]
-    public async Task ChannelPropertiesViewModel_PopulatesUnitsFromProjectUnitMaster()
+    public async Task ChannelPropertiesViewModel_PopulatesUnitsFromBaseDatabaseUnitMaster()
     {
         await SeedTimelogAsync();
         var dataService = _session.GetDataService();
 
-        // Seed custom unit in VMX_UNIT_MASTER
+        // Seed custom unit in APP_UNIT_MASTER (centralized in Base database)
         DrillIntel.Models.Unit.Add(dataService, new DrillIntel.Models.Unit("custom_uom_test", "CustomCategory", "Custom UOM"), tableName: DrillIntel.Models.Unit.ProjectTableName);
 
         var vm = new ChannelPropertiesViewModel(dataService);

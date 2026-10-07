@@ -22,7 +22,7 @@ namespace DrillIntel.Projects
     // =====================================================================
     public static class SchemaInitializer
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public static void CreateDatabase(string dintelFilePath)
         {
@@ -638,39 +638,11 @@ CREATE TABLE IF NOT EXISTS VMX_CON_ANNOTATIONS (
 );
 
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS VMX_UNIT_MASTER (
-    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
-    UNIT_NAME     TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    CATEGORY      TEXT NOT NULL,
-    DESCRIPTION   TEXT,
-    IS_DEFAULT    INTEGER NOT NULL DEFAULT 0,
-    CREATED_BY    TEXT,
-    CREATED_DATE  TEXT,
-    MODIFIED_BY   TEXT,
-    MODIFIED_DATE TEXT
-);
-
--- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS VMX_UNIT_CONVERSIONS (
-    ID            INTEGER PRIMARY KEY AUTOINCREMENT,
-    FROM_UNIT     TEXT NOT NULL COLLATE NOCASE,
-    TO_UNIT       TEXT NOT NULL COLLATE NOCASE,
-    MULTIPLIER    REAL NOT NULL,
-    OFFSET        REAL NOT NULL DEFAULT 0.0,
-    CATEGORY      TEXT NOT NULL,
-    CREATED_BY    TEXT,
-    CREATED_DATE  TEXT,
-    MODIFIED_BY   TEXT,
-    MODIFIED_DATE TEXT,
-    UNIQUE(FROM_UNIT, TO_UNIT)
-);
-
--- ----------------------------------------------------------------------------
--- VMX_DOC_TEMPLATES — Project-wise document templates and layouts (VuMaxDR compatible)
+-- VMX_DOC_TEMPLATES — Document & Track Console Templates (VuMaxDR compatible)
 CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
     TEMPLATE_TYPE   TEXT NOT NULL,
     TEMPLATE_ID     TEXT NOT NULL,
-    DOCUMENT_NAME   TEXT NOT NULL,
+    DOCUMENT_NAME   TEXT NOT NULL DEFAULT '',
     WELL_ID         TEXT,
     WELLBORE_ID     TEXT,
     LOG_ID          TEXT,
@@ -736,6 +708,10 @@ CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUME
             // Check Schema Version & Migrate if necessary
             EnsureSchemaVersion(dataService);
 
+            // Centralized Base database: Remove any project-level unit tables/views and migrate legacy data if present
+            DrillIntel.Models.Unit.RemoveProjectLevelTables(dataService);
+            DrillIntel.Models.UnitConverter.RemoveProjectLevelTables(dataService);
+
             _dataService = dataService;
             ProjectFilePath = dintelFilePath;
             ProjectName = Path.GetFileNameWithoutExtension(dintelFilePath);
@@ -745,6 +721,15 @@ CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUME
 
         private void EnsureSchemaVersion(IDataServiceDIntel dataService)
         {
+            try
+            {
+                EnsureDocTemplatesTable(dataService);
+            }
+            catch
+            {
+                // Non-fatal if database is read-only
+            }
+
             int version = 0;
             try 
             {
@@ -761,8 +746,33 @@ CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUME
             {
                 try
                 {
-                    // Ensure VMX_DOC_TEMPLATES exists and has all required columns
                     dataService.ExecuteNonQuery(@"
+CREATE TABLE IF NOT EXISTS VMX_SCHEMA_INFO (
+    SCHEMA_VERSION INTEGER NOT NULL
+);");
+                    var count = Convert.ToInt32(dataService.GetValue("SELECT COUNT(1) FROM VMX_SCHEMA_INFO") ?? 0);
+                    if (count > 0)
+                    {
+                        dataService.ExecuteNonQuery("UPDATE VMX_SCHEMA_INFO SET SCHEMA_VERSION = @v;",
+                            new Dictionary<string, object?> { ["@v"] = SchemaInitializer.CurrentSchemaVersion });
+                    }
+                    else
+                    {
+                        dataService.ExecuteNonQuery("INSERT INTO VMX_SCHEMA_INFO (SCHEMA_VERSION) VALUES (@v);",
+                            new Dictionary<string, object?> { ["@v"] = SchemaInitializer.CurrentSchemaVersion });
+                    }
+                }
+                catch
+                {
+                    // Non-fatal if database is read-only or in locked state
+                }
+            }
+        }
+
+        public static void EnsureDocTemplatesTable(IDataServiceDIntel dataService)
+        {
+            // Ensure VMX_DOC_TEMPLATES exists and has all required columns
+            dataService.ExecuteNonQuery(@"
 CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
     TEMPLATE_TYPE   TEXT NOT NULL,
     TEMPLATE_ID     TEXT NOT NULL,
@@ -778,46 +788,36 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
     MODIFIED_BY     TEXT,
     MODIFIED_DATE   TEXT,
     PRIMARY KEY (TEMPLATE_TYPE, TEMPLATE_ID)
-);
-CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_TYPE ON VMX_DOC_TEMPLATES(TEMPLATE_TYPE);
-CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUMENT_NAME);
-");
+);");
+            dataService.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_TYPE ON VMX_DOC_TEMPLATES(TEMPLATE_TYPE);");
+            dataService.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUMENT_NAME);");
 
-                    // Check for missing columns if table pre-existed (e.g. from VuMaxDR)
-                    var tableInfo = dataService.GetTable("PRAGMA table_info(VMX_DOC_TEMPLATES);");
-                    var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    if (tableInfo != null)
-                    {
-                        foreach (System.Data.DataRow row in tableInfo.Rows)
-                        {
-                            existingCols.Add(row["name"]?.ToString() ?? "");
-                        }
-                    }
-
-                    if (!existingCols.Contains("DOCUMENT_NAME"))
-                    {
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DOCUMENT_NAME TEXT NOT NULL DEFAULT '';");
-                        dataService.ExecuteNonQuery("UPDATE VMX_DOC_TEMPLATES SET DOCUMENT_NAME = TEMPLATE_ID WHERE DOCUMENT_NAME IS NULL OR DOCUMENT_NAME = '';");
-                    }
-                    if (!existingCols.Contains("WELL_ID"))
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELL_ID TEXT;");
-                    if (!existingCols.Contains("WELLBORE_ID"))
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELLBORE_ID TEXT;");
-                    if (!existingCols.Contains("LOG_ID"))
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN LOG_ID TEXT;");
-                    if (!existingCols.Contains("DESCRIPTION"))
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DESCRIPTION TEXT;");
-                    if (!existingCols.Contains("IS_DEFAULT"))
-                        dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN IS_DEFAULT INTEGER NOT NULL DEFAULT 0;");
-
-                    dataService.ExecuteNonQuery("UPDATE VMX_SCHEMA_INFO SET SCHEMA_VERSION = @v;",
-                        new Dictionary<string, object?> { ["@v"] = SchemaInitializer.CurrentSchemaVersion });
-                }
-                catch
+            // Check for missing columns if table pre-existed (e.g. from VuMaxDR)
+            var tableInfo = dataService.GetTable("PRAGMA table_info(VMX_DOC_TEMPLATES);");
+            var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (tableInfo != null)
+            {
+                foreach (System.Data.DataRow row in tableInfo.Rows)
                 {
-                    // Non-fatal if database is read-only or in locked state
+                    existingCols.Add(row["name"]?.ToString() ?? "");
                 }
             }
+
+            if (!existingCols.Contains("DOCUMENT_NAME"))
+            {
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DOCUMENT_NAME TEXT NOT NULL DEFAULT '';");
+                dataService.ExecuteNonQuery("UPDATE VMX_DOC_TEMPLATES SET DOCUMENT_NAME = TEMPLATE_ID WHERE DOCUMENT_NAME IS NULL OR DOCUMENT_NAME = '';");
+            }
+            if (!existingCols.Contains("WELL_ID"))
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELL_ID TEXT;");
+            if (!existingCols.Contains("WELLBORE_ID"))
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN WELLBORE_ID TEXT;");
+            if (!existingCols.Contains("LOG_ID"))
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN LOG_ID TEXT;");
+            if (!existingCols.Contains("DESCRIPTION"))
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DESCRIPTION TEXT;");
+            if (!existingCols.Contains("IS_DEFAULT"))
+                dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN IS_DEFAULT INTEGER NOT NULL DEFAULT 0;");
         }
 
         public IDataServiceDIntel GetDataService()
@@ -1048,35 +1048,6 @@ CREATE INDEX IF NOT EXISTS IX_VMX_DOC_TEMPLATES_NAME ON VMX_DOC_TEMPLATES(DOCUME
                             RigStateService.SaveCommonRigStateSetup(projectDataService, masterSetup);
                         }
 
-                        // Copy master measurement units to project VMX_UNIT_MASTER
-                        Unit.EnsureTableExists(projectDataService, Unit.ProjectTableName);
-                        var masterUnits = Unit.GetList(appDataService, tableName: Unit.TableName);
-                        if (masterUnits.Count > 0)
-                        {
-                            foreach (var u in masterUnits)
-                            {
-                                Unit.Add(projectDataService, u, Unit.ProjectTableName);
-                            }
-                        }
-                        else
-                        {
-                            Unit.CreateDefaultUnits(projectDataService, Unit.ProjectTableName);
-                        }
-
-                        // Copy master unit conversions to project VMX_UNIT_CONVERSIONS
-                        DrillIntel.Models.UnitConverter.EnsureTableExists(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
-                        var masterConversions = DrillIntel.Models.UnitConverter.GetList(appDataService, tableName: DrillIntel.Models.UnitConverter.TableName);
-                        if (masterConversions.Count > 0)
-                        {
-                            foreach (var c in masterConversions)
-                            {
-                                DrillIntel.Models.UnitConverter.Add(projectDataService, c, DrillIntel.Models.UnitConverter.ProjectTableName);
-                            }
-                        }
-                        else
-                        {
-                            DrillIntel.Models.UnitConverter.CreateDefaultConversion(projectDataService, DrillIntel.Models.UnitConverter.ProjectTableName);
-                        }
                     }
                 }
             }

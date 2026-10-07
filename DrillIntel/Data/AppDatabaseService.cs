@@ -89,7 +89,8 @@ public class AppDatabaseService : IAppDatabaseService
             _dataService = ds;
             _isInitialized = true;
 
-            // Configure Unit and UnitConverter global default service and ensure master units/conversions exist
+            // Configure BaseDatabaseProvider, Unit and UnitConverter global default service and ensure master units/conversions exist
+            BaseDatabaseProvider.BaseDataService = ds;
             DrillIntel.Models.Unit.DefaultDataService = ds;
             DrillIntel.Models.UnitConverter.DefaultDataService = ds;
             DrillIntel.Models.Unit.EnsureTableExists(ds);

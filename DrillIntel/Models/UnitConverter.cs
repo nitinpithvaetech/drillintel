@@ -15,7 +15,20 @@ namespace DrillIntel.Models
     public class UnitConverter
     {
         public const string TableName = "APP_UNIT_CONVERSIONS";
-        public const string ProjectTableName = "VMX_UNIT_CONVERSIONS";
+        public const string ProjectTableName = "APP_UNIT_CONVERSIONS";
+        public const string LegacyProjectTableName = "VMX_UNIT_CONVERSIONS";
+
+        /// <summary>
+        /// Normalizes table name, ensuring any reference to legacy VMX_UNIT_CONVERSIONS redirects to APP_UNIT_CONVERSIONS.
+        /// </summary>
+        public static string NormalizeTableName(string? tableName)
+        {
+            if (string.IsNullOrWhiteSpace(tableName) || string.Equals(tableName, "VMX_UNIT_CONVERSIONS", StringComparison.OrdinalIgnoreCase))
+            {
+                return TableName;
+            }
+            return tableName;
+        }
 
         /// <summary>
         /// Optional application-wide default data service for UnitConverter operations when not explicitly passed.
@@ -81,9 +94,123 @@ namespace DrillIntel.Models
 
         #region Database Operations
 
-        private static IDataServiceDIntel ResolveDataService(IDataServiceDIntel? db)
+        /// <summary>
+        /// Determines whether the given data service points to a project-level database (.dintel / .drint).
+        /// Project databases contain schema metadata tables such as VMX_SCHEMA_INFO or VMX_WELL_LIST.
+        /// </summary>
+        public static bool IsProjectDatabase(IDataServiceDIntel? db)
         {
-            var service = db ?? DefaultDataService;
+            if (db == null) return false;
+            try
+            {
+                var result = db.GetValue("SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('VMX_SCHEMA_INFO', 'VMX_WELL_LIST') LIMIT 1;");
+                return result != null && result != DBNull.Value;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Removes all project-level Unit Conversion tables and views (APP_UNIT_CONVERSIONS, VMX_UNIT_CONVERSIONS)
+        /// and migrates any unique conversions to the Base Database.
+        /// </summary>
+        public static void RemoveProjectLevelTables(IDataServiceDIntel? projectDb)
+        {
+            if (projectDb == null) return;
+
+            try
+            {
+                var exists = projectDb.GetValue("SELECT 1 FROM sqlite_master WHERE name IN ('APP_UNIT_CONVERSIONS', 'VMX_UNIT_CONVERSIONS') LIMIT 1;");
+                if (exists == null || exists == DBNull.Value) return;
+
+                // Migrate any existing conversions to Base Database before dropping
+                var baseDb = DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
+                if (baseDb != null && baseDb != projectDb)
+                {
+                    string[] sourceTables = { "APP_UNIT_CONVERSIONS", "VMX_UNIT_CONVERSIONS" };
+                    foreach (var srcTable in sourceTables)
+                    {
+                        try
+                        {
+                            var hasTable = projectDb.GetValue($"SELECT 1 FROM sqlite_master WHERE name='{srcTable}' LIMIT 1;");
+                            if (hasTable == null || hasTable == DBNull.Value) continue;
+
+                            var dt = projectDb.GetTable($"SELECT FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY FROM {srcTable};");
+                            if (dt != null)
+                            {
+                                EnsureTableExists(baseDb, TableName);
+                                foreach (DataRow row in dt.Rows)
+                                {
+                                    string fromUnit = row["FROM_UNIT"]?.ToString() ?? "";
+                                    string toUnit = row["TO_UNIT"]?.ToString() ?? "";
+                                    if (!string.IsNullOrWhiteSpace(fromUnit) && !string.IsNullOrWhiteSpace(toUnit))
+                                    {
+                                        var existing = GetUnitConversion(baseDb, fromUnit, toUnit, TableName);
+                                        if (existing == null)
+                                        {
+                                            Add(baseDb, new UnitConverter(
+                                                fromUnit: fromUnit,
+                                                toUnit: toUnit,
+                                                multiplier: row["MULTIPLIER"] != DBNull.Value ? System.Convert.ToDouble(row["MULTIPLIER"]) : 1.0,
+                                                offset: row["OFFSET"] != DBNull.Value ? System.Convert.ToDouble(row["OFFSET"]) : 0.0,
+                                                category: row["CATEGORY"]?.ToString() ?? ""
+                                            ), TableName);
+                                        }
+                                    }
+                                }
+                                dt.Dispose();
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Drop triggers, view, and table from project database
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_conversions_insert;"); } catch { }
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_conversions_update;"); } catch { }
+                try { projectDb.ExecuteNonQuery("DROP TRIGGER IF EXISTS trg_vmx_unit_conversions_delete;"); } catch { }
+
+                try
+                {
+                    var appType = projectDb.GetValue("SELECT type FROM sqlite_master WHERE name='APP_UNIT_CONVERSIONS' LIMIT 1;")?.ToString();
+                    if (string.Equals(appType, "view", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP VIEW IF EXISTS APP_UNIT_CONVERSIONS;");
+                    else if (string.Equals(appType, "table", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP TABLE IF EXISTS APP_UNIT_CONVERSIONS;");
+                }
+                catch { }
+
+                try
+                {
+                    var vmxType = projectDb.GetValue("SELECT type FROM sqlite_master WHERE name='VMX_UNIT_CONVERSIONS' LIMIT 1;")?.ToString();
+                    if (string.Equals(vmxType, "view", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP VIEW IF EXISTS VMX_UNIT_CONVERSIONS;");
+                    else if (string.Equals(vmxType, "table", StringComparison.OrdinalIgnoreCase))
+                        projectDb.ExecuteNonQuery("DROP TABLE IF EXISTS VMX_UNIT_CONVERSIONS;");
+                }
+                catch { }
+            }
+            catch
+            {
+                // Best-effort
+            }
+        }
+
+        public static IDataServiceDIntel ResolveDataService(IDataServiceDIntel? db)
+        {
+            // If db is a project-level database, redirect to Base Database (single source of truth)
+            if (db == null || IsProjectDatabase(db))
+            {
+                var baseDb = DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
+                if (baseDb != null)
+                {
+                    return baseDb;
+                }
+            }
+
+            var service = db ?? DefaultDataService ?? BaseDatabaseProvider.GetBaseDataService();
             if (service == null)
             {
                 throw new InvalidOperationException("No database service provided or configured for UnitConverter operations.");
@@ -93,10 +220,21 @@ namespace DrillIntel.Models
 
         /// <summary>
         /// Ensures the unit conversion table exists in the target database and contains audit columns.
+        /// Also redirects any legacy references to VMX_UNIT_CONVERSIONS to APP_UNIT_CONVERSIONS and removes the legacy table.
+        /// Project-level databases will have any legacy unit tables/views removed.
         /// </summary>
         public static void EnsureTableExists(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            if (db != null && IsProjectDatabase(db))
+            {
+                // Project-level database should not contain unit conversion tables
+                RemoveProjectLevelTables(db);
+                return;
+            }
+
             var dataService = ResolveDataService(db);
+            tableName = NormalizeTableName(tableName);
+
             string sql = $@"
                 CREATE TABLE IF NOT EXISTS {tableName} (
                     ID               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,6 +280,58 @@ namespace DrillIntel.Models
             {
                 // Best-effort
             }
+
+            // Ensure backward compatibility: redirect VMX_UNIT_CONVERSIONS to APP_UNIT_CONVERSIONS and remove the legacy table
+            try
+            {
+                var vmxCheck = dataService.GetValue("SELECT type FROM sqlite_master WHERE name = 'VMX_UNIT_CONVERSIONS';");
+                if (vmxCheck != null && string.Equals(vmxCheck.ToString(), "table", StringComparison.OrdinalIgnoreCase))
+                {
+                    dataService.ExecuteNonQuery($@"
+                        INSERT OR IGNORE INTO {tableName} (FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE)
+                        SELECT FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE
+                        FROM VMX_UNIT_CONVERSIONS;
+                    ");
+                    dataService.ExecuteNonQuery("DROP TABLE IF EXISTS VMX_UNIT_CONVERSIONS;");
+                }
+
+                dataService.ExecuteNonQuery($@"
+                    CREATE VIEW IF NOT EXISTS VMX_UNIT_CONVERSIONS AS 
+                    SELECT ID, FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE 
+                    FROM {tableName};
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_conversions_insert
+                    INSTEAD OF INSERT ON VMX_UNIT_CONVERSIONS
+                    BEGIN
+                        INSERT INTO {tableName} (FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE)
+                        VALUES (NEW.FROM_UNIT, NEW.TO_UNIT, NEW.MULTIPLIER, NEW.OFFSET, NEW.CATEGORY, NEW.CREATED_BY, NEW.CREATED_DATE, NEW.MODIFIED_BY, NEW.MODIFIED_DATE);
+                    END;
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_conversions_update
+                    INSTEAD OF UPDATE ON VMX_UNIT_CONVERSIONS
+                    BEGIN
+                        UPDATE {tableName} SET
+                            FROM_UNIT = NEW.FROM_UNIT,
+                            TO_UNIT = NEW.TO_UNIT,
+                            MULTIPLIER = NEW.MULTIPLIER,
+                            OFFSET = NEW.OFFSET,
+                            CATEGORY = NEW.CATEGORY,
+                            MODIFIED_BY = NEW.MODIFIED_BY,
+                            MODIFIED_DATE = NEW.MODIFIED_DATE
+                        WHERE ID = OLD.ID OR (OLD.ID IS NULL AND FROM_UNIT = OLD.FROM_UNIT AND TO_UNIT = OLD.TO_UNIT);
+                    END;
+
+                    CREATE TRIGGER IF NOT EXISTS trg_vmx_unit_conversions_delete
+                    INSTEAD OF DELETE ON VMX_UNIT_CONVERSIONS
+                    BEGIN
+                        DELETE FROM {tableName} WHERE ID = OLD.ID OR (FROM_UNIT = OLD.FROM_UNIT AND TO_UNIT = OLD.TO_UNIT);
+                    END;
+                ");
+            }
+            catch
+            {
+                // Best-effort
+            }
         }
 
         /// <summary>
@@ -152,6 +342,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql;
@@ -199,6 +390,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"SELECT ID, FROM_UNIT, TO_UNIT, MULTIPLIER, OFFSET, CATEGORY, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE FROM {tableName} WHERE ID = @ID LIMIT 1;";
@@ -249,6 +441,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 // 2. Direct lookup: FROM_UNIT -> TO_UNIT
@@ -343,6 +536,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -396,6 +590,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string now = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -464,6 +659,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"DELETE FROM {tableName} WHERE ID = @ID;";
@@ -493,6 +689,7 @@ namespace DrillIntel.Models
             try
             {
                 var dataService = ResolveDataService(db);
+                tableName = NormalizeTableName(tableName);
                 EnsureTableExists(dataService, tableName);
 
                 string sql = $"DELETE FROM {tableName} WHERE FROM_UNIT = @FromUnit AND TO_UNIT = @ToUnit;";
@@ -529,6 +726,7 @@ namespace DrillIntel.Models
                 return value;
             }
 
+            tableName = NormalizeTableName(tableName);
             var conv = GetUnitConversion(db, fromUnit, toUnit, tableName);
             if (conv != null)
             {
@@ -551,6 +749,7 @@ namespace DrillIntel.Models
                 return true;
             }
 
+            tableName = NormalizeTableName(tableName);
             var conv = GetUnitConversion(db, fromUnit, toUnit, tableName);
             if (conv != null)
             {
@@ -573,6 +772,7 @@ namespace DrillIntel.Models
         public static void CreateDefaultConversion(IDataServiceDIntel? db = null, string tableName = TableName)
         {
             var dataService = ResolveDataService(db);
+            tableName = NormalizeTableName(tableName);
             EnsureTableExists(dataService, tableName);
 
             var defaultConversions = new (string From, string To, double Multiplier, double Offset, string Category)[]
@@ -658,6 +858,7 @@ namespace DrillIntel.Models
         /// </summary>
         public bool Save(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            tableName = NormalizeTableName(tableName);
             return ID <= 0 ? Add(db, this, tableName) : Edit(db, this, tableName);
         }
 
@@ -666,6 +867,7 @@ namespace DrillIntel.Models
         /// </summary>
         public bool RemoveSelf(IDataServiceDIntel? db = null, string tableName = TableName)
         {
+            tableName = NormalizeTableName(tableName);
             if (ID > 0) return Remove(db, ID, tableName);
             if (!string.IsNullOrWhiteSpace(FromUnit) && !string.IsNullOrWhiteSpace(ToUnit))
                 return Remove(db, FromUnit, ToUnit, tableName);

@@ -77,6 +77,7 @@ public partial class UnitMasterViewModel : ObservableObject
     private readonly IDataServiceDIntel _dataService;
     private readonly string _tableName;
     private readonly IAppDatabaseService? _appDatabaseService;
+    private readonly IDataServiceDIntel? _projectDataService;
     private readonly bool _isProjectOpen;
 
     public event Action<bool?>? RequestClose;
@@ -135,23 +136,23 @@ public partial class UnitMasterViewModel : ObservableObject
         string? contextName = null,
         bool isProjectOpen = false,
         IAppDatabaseService? appDatabaseService = null,
-        string? databasePath = null)
+        string? databasePath = null,
+        IDataServiceDIntel? projectDataService = null)
     {
-        _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
         _isProjectOpen = isProjectOpen;
         IsProjectActive = isProjectOpen;
         _appDatabaseService = appDatabaseService;
+        _projectDataService = projectDataService;
 
-        // When project is Open -> table VMX_UNIT_MASTER; when Closed -> table APP_UNIT_MASTER
-        _tableName = !string.IsNullOrWhiteSpace(tableName)
-            ? tableName
-            : (_isProjectOpen ? Unit.ProjectTableName : Unit.TableName);
+        // Base database is always the single source of truth for Unit Master (APP_UNIT_MASTER)
+        _dataService = (_appDatabaseService != null ? _appDatabaseService.GetDataService() : null)
+            ?? Unit.ResolveDataService(dataService);
 
+        _tableName = Unit.NormalizeTableName(tableName);
         TableNameText = _tableName;
 
-        DatabasePath = databasePath ?? (_isProjectOpen
-            ? (App.Session?.ProjectFilePath ?? "Active Project Database")
-            : (_appDatabaseService?.DatabasePath ?? "DrillIntelApp.sqlite"));
+        DatabasePath = databasePath ?? (_appDatabaseService?.DatabasePath 
+            ?? (App.AppDatabaseService != null ? App.AppDatabaseService.DatabasePath : "DrillIntelApp.sqlite"));
 
         if (!string.IsNullOrWhiteSpace(contextName))
         {
@@ -159,11 +160,11 @@ public partial class UnitMasterViewModel : ObservableObject
         }
         else if (_isProjectOpen)
         {
-            Subtitle = $"Project Database: {App.Session?.ProjectName ?? "Active Project"}";
+            Subtitle = $"Base Database (APP_UNIT_MASTER) — Active Project: {App.Session?.ProjectName ?? "Active Project"}";
         }
         else
         {
-            Subtitle = "Application Master Database (Standard Units)";
+            Subtitle = "Application Base Database (APP_UNIT_MASTER)";
         }
 
         LoadUnits();
@@ -188,22 +189,25 @@ public partial class UnitMasterViewModel : ObservableObject
 
             var list = Unit.GetList(_dataService, tableName: _tableName);
 
-            // If empty in an active project (VMX_UNIT_MASTER), copy from master template or create defaults
-            if (list.Count == 0 && _isProjectOpen)
+            // If empty, copy from master template or create defaults
+            if (list.Count == 0)
             {
                 if (_appDatabaseService != null)
                 {
                     try
                     {
                         var appDataService = _appDatabaseService.GetDataService();
-                        var masterUnits = Unit.GetList(appDataService, tableName: Unit.TableName);
-                        if (masterUnits.Count > 0)
+                        if (appDataService != _dataService)
                         {
-                            foreach (var mu in masterUnits)
+                            var masterUnits = Unit.GetList(appDataService, tableName: Unit.TableName);
+                            if (masterUnits.Count > 0)
                             {
-                                Unit.Add(_dataService, mu, _tableName);
+                                foreach (var mu in masterUnits)
+                                {
+                                    Unit.Add(_dataService, mu, _tableName);
+                                }
+                                list = Unit.GetList(_dataService, tableName: _tableName);
                             }
-                            list = Unit.GetList(_dataService, tableName: _tableName);
                         }
                     }
                     catch
@@ -299,6 +303,32 @@ public partial class UnitMasterViewModel : ObservableObject
         }
     }
 
+    private void SyncSaveUnit(Unit unit, bool isNew)
+    {
+        // Centralized Access in Base Database:
+        // All operations (Access, Insert, Update, Delete) are performed ONLY on the Base database (APP_UNIT_MASTER)
+        if (isNew)
+        {
+            Unit.Add(_dataService, unit, _tableName);
+        }
+        else
+        {
+            Unit.Edit(_dataService, unit, _tableName);
+        }
+    }
+
+    private bool SyncDeleteUnit(UnitItemModel item)
+    {
+        // Centralized Access in Base Database:
+        // All operations (Access, Insert, Update, Delete) are performed ONLY on the Base database (APP_UNIT_MASTER)
+        bool deleted = Unit.Delete(_dataService, item.Id, _tableName);
+        if (!deleted && !string.IsNullOrWhiteSpace(item.UnitName))
+        {
+            deleted = Unit.Delete(_dataService, item.UnitName, _tableName);
+        }
+        return deleted;
+    }
+
     [RelayCommand]
     public void EditUnit(UnitItemModel? item)
     {
@@ -310,7 +340,7 @@ public partial class UnitMasterViewModel : ObservableObject
         {
             if (OpenEditDialogHandler(unitToEdit))
             {
-                Unit.Edit(_dataService, unitToEdit, _tableName);
+                SyncSaveUnit(unitToEdit, isNew: false);
                 LoadUnits();
                 ShowStatus($"Unit '{unitToEdit.UnitName}' updated successfully.", isError: false);
             }
@@ -326,6 +356,7 @@ public partial class UnitMasterViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true && dialogVm.ResultUnit != null)
         {
+            SyncSaveUnit(dialogVm.ResultUnit, isNew: false);
             LoadUnits();
             ShowStatus($"Unit '{dialogVm.ResultUnit.UnitName}' updated successfully.", isError: false);
         }
@@ -357,7 +388,7 @@ public partial class UnitMasterViewModel : ObservableObject
 
         try
         {
-            bool deleted = Unit.Delete(_dataService, item.Id, _tableName);
+            bool deleted = SyncDeleteUnit(item);
             if (deleted)
             {
                 LoadUnits();
@@ -382,7 +413,7 @@ public partial class UnitMasterViewModel : ObservableObject
             var newUnit = new Unit();
             if (OpenAddDialogHandler(newUnit))
             {
-                Unit.Add(_dataService, newUnit, _tableName);
+                SyncSaveUnit(newUnit, isNew: true);
                 LoadUnits();
                 ShowStatus($"Unit '{newUnit.UnitName}' added successfully.", isError: false);
             }
@@ -398,6 +429,7 @@ public partial class UnitMasterViewModel : ObservableObject
 
         if (dialog.ShowDialog() == true && dialogVm.ResultUnit != null)
         {
+            SyncSaveUnit(dialogVm.ResultUnit, isNew: true);
             LoadUnits();
             ShowStatus($"Unit '{dialogVm.ResultUnit.UnitName}' added successfully.", isError: false);
         }

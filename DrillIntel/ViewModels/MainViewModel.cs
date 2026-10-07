@@ -54,6 +54,33 @@ public partial class MainViewModel : ObservableObject
         _currentViewModel = _session.IsProjectOpen 
             ? new DashboardViewModel(_session) 
             : new NoProjectViewModel(_session, _projectService, _recentProjectsService);
+        if (_currentViewModel is DashboardViewModel initDb)
+        {
+            initDb.PropertyChanged += OnDashboardPropertyChanged;
+        }
+    }
+
+    partial void OnCurrentViewModelChanged(ObservableObject? oldValue, ObservableObject newValue)
+    {
+        if (oldValue is DashboardViewModel oldDb)
+        {
+            oldDb.PropertyChanged -= OnDashboardPropertyChanged;
+        }
+        if (newValue is DashboardViewModel newDb)
+        {
+            newDb.PropertyChanged += OnDashboardPropertyChanged;
+        }
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
+    }
+
+    private void OnDashboardPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DashboardViewModel.SelectedNode))
+        {
+            SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
+        }
     }
 
     private void OnRecentProjectsChanged(object? sender, EventArgs e)
@@ -206,6 +233,40 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenDepthlogEditor()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (CurrentViewModel is DashboardViewModel dashboardVm)
+        {
+            await dashboardVm.EditDepthLogAsync();
+        }
+        else
+        {
+            var repo = new WellDataRepository(_session);
+            var depthLogs = await repo.GetDepthLogsAsync();
+            var targetLog = depthLogs.FirstOrDefault();
+            if (targetLog != null)
+            {
+                var vm = new EditDepthLogViewModel(_session, repo, targetLog.ObjectID, targetLog);
+                await vm.InitializeAsync();
+                var window = new DrillIntel.Views.EditDepthLogWindow
+                {
+                    DataContext = vm,
+                    Owner = Application.Current?.MainWindow
+                };
+                if (window.ShowDialog() == true)
+                {
+                    _session.NotifyDataChanged();
+                }
+            }
+            else
+            {
+                MessageBox.Show("No Depthlog available to edit. Please import a depth log first.", "Edit Depthlog", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+    }
+
     private void OnProjectStateChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsProjectOpen));
@@ -216,13 +277,18 @@ public partial class MainViewModel : ObservableObject
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenProjectRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenUnitMasterCommand.NotifyCanExecuteChanged();
         OpenWellEditorCommand.NotifyCanExecuteChanged();
         EditWellCommand.NotifyCanExecuteChanged();
         OpenTimelogEditorCommand.NotifyCanExecuteChanged();
+        OpenDepthlogEditorCommand.NotifyCanExecuteChanged();
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
 
         if (Application.Current?.Dispatcher != null)
         {
@@ -404,22 +470,27 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenRigStateMaster()
+    private void OpenGlobalRigStateMaster()
     {
-        DrillIntel.Data.IDataServiceDIntel dataService;
-        string contextName;
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var contextName = "Application Master Template (Default for New Projects)";
 
-        if (_session.IsProjectOpen)
+        var vm = new RigStateViewModel(dataService, contextName);
+        var window = new DrillIntel.Views.RigStateWindow
         {
-            dataService = _session.GetDataService();
-            contextName = $"Project: {_session.ProjectName}";
-        }
-        else
-        {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            contextName = "Application Master Template (Default for New Projects)";
-        }
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void OpenProjectRigStateMaster()
+    {
+        if (!_session.IsProjectOpen) return;
+        var dataService = _session.GetDataService();
+        var contextName = $"Project: {_session.ProjectName}";
 
         var vm = new RigStateViewModel(dataService, contextName);
         var window = new DrillIntel.Views.RigStateWindow
@@ -431,36 +502,37 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void OpenUnitMaster()
+    private void OpenRigStateMaster()
     {
-        DrillIntel.Data.IDataServiceDIntel dataService;
-        string contextName;
-        string tableName;
-        string dbPath;
-
         if (_session.IsProjectOpen)
         {
-            dataService = _session.GetDataService();
-            tableName = DrillIntel.Models.Unit.ProjectTableName;
-            contextName = $"Project: {_session.ProjectName}";
-            dbPath = _session.ProjectFilePath ?? "Active Project Database";
+            OpenProjectRigStateMaster();
         }
         else
         {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            tableName = DrillIntel.Models.Unit.TableName;
-            contextName = "Application Master Template (DrillIntelApp.sqlite)";
-            dbPath = appDb.DatabasePath;
+            OpenGlobalRigStateMaster();
         }
+    }
+
+    [RelayCommand]
+    private void OpenUnitMaster()
+    {
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var tableName = DrillIntel.Models.Unit.TableName;
+        var contextName = _session.IsProjectOpen
+            ? $"Global Unit Master (APP_UNIT_MASTER) — Active Project: {_session.ProjectName}"
+            : "Global Unit Master (APP_UNIT_MASTER)";
+        var dbPath = appDb.DatabasePath;
 
         var vm = new UnitMasterViewModel(
             dataService,
             tableName: tableName,
             contextName: contextName,
             isProjectOpen: _session.IsProjectOpen,
-            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
-            databasePath: dbPath);
+            appDatabaseService: appDb,
+            databasePath: dbPath,
+            projectDataService: null);
 
         var window = new DrillIntel.Views.UnitMasterWindow
         {
@@ -473,34 +545,22 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void OpenUnitConversion()
     {
-        IDataServiceDIntel dataService;
-        string tableName;
-        string contextName;
-        string dbPath;
-
-        if (_session.IsProjectOpen)
-        {
-            dataService = _session.GetDataService();
-            tableName = DrillIntel.Models.UnitConverter.ProjectTableName;
-            contextName = $"Project: {_session.ProjectName}";
-            dbPath = _session.ProjectFilePath ?? "Active Project Database";
-        }
-        else
-        {
-            var appDb = _appDatabaseService ?? App.AppDatabaseService;
-            dataService = appDb.GetDataService();
-            tableName = DrillIntel.Models.UnitConverter.TableName;
-            contextName = "Application Master Template (DrillIntelApp.sqlite)";
-            dbPath = appDb.DatabasePath;
-        }
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var tableName = DrillIntel.Models.UnitConverter.TableName;
+        var contextName = _session.IsProjectOpen
+            ? $"Global Unit Conversions (APP_UNIT_CONVERSIONS) — Active Project: {_session.ProjectName}"
+            : "Global Unit Conversions (APP_UNIT_CONVERSIONS)";
+        var dbPath = appDb.DatabasePath;
 
         var vm = new UnitConversionMasterViewModel(
             dataService,
             tableName: tableName,
             contextName: contextName,
             isProjectOpen: _session.IsProjectOpen,
-            appDatabaseService: _appDatabaseService ?? App.AppDatabaseService,
-            databasePath: dbPath);
+            appDatabaseService: appDb,
+            databasePath: dbPath,
+            projectDataService: null);
 
         var window = new DrillIntel.Views.UnitConversionMasterWindow
         {
@@ -592,6 +652,66 @@ public partial class MainViewModel : ObservableObject
         {
             await workspaceVm.NewDocumentAsync();
         }
+    }
+
+    public bool CanSyncDataToParentTimelog =>
+        _session.IsProjectOpen &&
+        CurrentViewModel is DashboardViewModel db &&
+        db.SelectedNode?.IsTimeLogNode == true;
+
+    public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
+    public Action? SyncDataToParentTimelogHandler { get; set; }
+
+    [RelayCommand(CanExecute = nameof(CanSyncDataToParentTimelog))]
+    private async Task SyncDataToParentTimelog()
+    {
+        if (!CanSyncDataToParentTimelog) return;
+
+        TimeLog? timeLog = null;
+        if (CurrentViewModel is DashboardViewModel db)
+        {
+            if (db.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (db.SelectedNode != null)
+            {
+                var repo = new WellDataRepository(_session);
+                var timeLogs = await repo.GetTimeLogsAsync();
+                timeLog = timeLogs.FirstOrDefault(t => t.ObjectID == db.SelectedNode.Name || t.nameLog == db.SelectedNode.Name);
+            }
+        }
+
+        if (timeLog != null)
+        {
+            await OpenSyncDataDialogAsync(timeLog);
+        }
+
+        SyncDataToParentTimelogHandler?.Invoke();
+    }
+
+    public async Task<bool?> OpenSyncDataDialogAsync(TimeLog timeLog)
+    {
+        var repo = new WellDataRepository(_session);
+        var vm = new SyncDataWithParentTimelogViewModel(_session, timeLog, repo);
+        await vm.InitializeAsync();
+
+        if (OpenSyncDataDialogHandler != null)
+        {
+            return OpenSyncDataDialogHandler(vm);
+        }
+
+        if (Application.Current != null)
+        {
+            var window = new DrillIntel.Views.SyncDataWithParentTimelogWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            return window.ShowDialog();
+        }
+
+        return false;
     }
 }
 

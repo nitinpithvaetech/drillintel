@@ -157,9 +157,17 @@ namespace DrillIntel.Data
                 catch { }
             }
 
-            _connection?.Dispose();
+            try
+            {
+                _connection?.Dispose();
+            }
+            catch { }
             _connection = null;
-            SqliteConnection.ClearAllPools();
+            try
+            {
+                SqliteConnection.ClearAllPools();
+            }
+            catch { }
         }
 
         // ---------------------------------------------------------------
@@ -403,15 +411,24 @@ namespace DrillIntel.Data
                 AddParameters(cmd, parameters);
                 using var reader = cmd.ExecuteReader();
                 var table = new DataTable();
+                for (int i = 0; i < reader.FieldCount; i++)
+                {
+                    var colName = reader.GetName(i);
+                    string uniqueCol = string.IsNullOrEmpty(colName) ? $"Column{i + 1}" : colName;
+                    int suffix = 1;
+                    while (table.Columns.Contains(uniqueCol))
+                        uniqueCol = $"{colName}_{suffix++}";
+                    table.Columns.Add(uniqueCol, typeof(object));
+                }
+
                 table.BeginLoadData();
-                try
+                var rowVals = new object[reader.FieldCount];
+                while (reader.Read())
                 {
-                    table.Load(reader);
+                    reader.GetValues(rowVals);
+                    table.Rows.Add(rowVals);
                 }
-                finally
-                {
-                    table.EndLoadData();
-                }
+                table.EndLoadData();
                 return table;
             }, new DataTable());
 
@@ -462,15 +479,24 @@ namespace DrillIntel.Data
             AddParameters(cmd, parameters);
             using var reader = await cmd.ExecuteReaderAsync(ct);
             var table = new DataTable();
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                var colName = reader.GetName(i);
+                string uniqueCol = string.IsNullOrEmpty(colName) ? $"Column{i + 1}" : colName;
+                int suffix = 1;
+                while (table.Columns.Contains(uniqueCol))
+                    uniqueCol = $"{colName}_{suffix++}";
+                table.Columns.Add(uniqueCol, typeof(object));
+            }
+
             table.BeginLoadData();
-            try
+            var rowVals = new object[reader.FieldCount];
+            while (await reader.ReadAsync(ct))
             {
-                table.Load(reader);
+                reader.GetValues(rowVals);
+                table.Rows.Add(rowVals);
             }
-            finally
-            {
-                table.EndLoadData();
-            }
+            table.EndLoadData();
             return table;
         }
 
