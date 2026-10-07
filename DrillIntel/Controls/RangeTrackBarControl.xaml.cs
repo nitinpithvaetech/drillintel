@@ -366,15 +366,7 @@ public partial class RangeTrackBarControl : UserControl
 
     private void SyncPeriodComboBox()
     {
-        if (CmbPeriod == null || string.IsNullOrWhiteSpace(SelectedPeriod)) return;
-        foreach (ComboBoxItem item in CmbPeriod.Items)
-        {
-            if (string.Equals(item.Content?.ToString(), SelectedPeriod, StringComparison.OrdinalIgnoreCase))
-            {
-                CmbPeriod.SelectedItem = item;
-                break;
-            }
-        }
+        // Period dropdown removed from TrackBar in favor of unified Preset Range
     }
 
     public void UpdateVisualLayout()
@@ -649,12 +641,6 @@ public partial class RangeTrackBarControl : UserControl
 
     private void OnPeriodSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (CmbPeriod.SelectedItem is ComboBoxItem item)
-        {
-            string periodStr = item.Content?.ToString() ?? "2 Hours";
-            SelectedPeriod = periodStr;
-            ApplyPeriodPreset(periodStr);
-        }
     }
 
     public void ApplyPeriodPreset(string preset)

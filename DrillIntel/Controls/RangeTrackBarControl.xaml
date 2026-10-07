@@ -63,10 +63,6 @@
                     <ColumnDefinition Width="*" />
                     <!-- 2: Stepper Right [ ► ] -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- 3: Separator -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- 4: Period Dropdown -->
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- 0: Stepper Left [ ◄ ] -->
@@ -133,26 +129,7 @@
                     <materialDesign:PackIcon Kind="ChevronRight" Width="18" Height="18" VerticalAlignment="Center" />
                 </Button>
 
-                <!-- 3: Separator -->
-                <Rectangle Grid.Column="3" Width="1" Fill="#CBD5E1" Margin="8,4" />
 
-                <!-- 4: Period Dropdown -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Period:" FontSize="11" FontWeight="Bold" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <ComboBox x:Name="CmbPeriod" Width="110" Height="30" FontSize="11.5" FontWeight="SemiBold"
-                              VerticalContentAlignment="Center"
-                              SelectionChanged="OnPeriodSelectionChanged">
-                        <ComboBoxItem Content="15 Mins" />
-                        <ComboBoxItem Content="30 Mins" />
-                        <ComboBoxItem Content="1 Hour" />
-                        <ComboBoxItem Content="2 Hours" IsSelected="True" />
-                        <ComboBoxItem Content="4 Hours" />
-                        <ComboBoxItem Content="8 Hours" />
-                        <ComboBoxItem Content="12 Hours" />
-                        <ComboBoxItem Content="24 Hours" />
-                        <ComboBoxItem Content="Entire Log" />
-                    </ComboBox>
-                </StackPanel>
             </Grid>
         </Border>
 

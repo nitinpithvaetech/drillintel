@@ -11,6 +11,7 @@ using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Models.TChart;
 using DrillIntel.Projects;
+using System.Globalization;
 using DrillIntel.Views;
 
 namespace DrillIntel.ViewModels;
@@ -128,6 +129,80 @@ public partial class RigStateDocumentViewModel : ObservableObject
 
     [ObservableProperty]
     private DateTime? _toTime;
+
+    [ObservableProperty]
+    private string _fromDateTimeText = string.Empty;
+
+    [ObservableProperty]
+    private string _toDateTimeText = string.Empty;
+
+    partial void OnFromDateChanged(DateTime? value) => SyncDateTimeTexts();
+    partial void OnFromTimeChanged(DateTime? value) => SyncDateTimeTexts();
+    partial void OnToDateChanged(DateTime? value) => SyncDateTimeTexts();
+    partial void OnToTimeChanged(DateTime? value) => SyncDateTimeTexts();
+
+    public void SyncDateTimeTexts()
+    {
+        if (FromDate.HasValue)
+        {
+            var t = FromTime.HasValue ? FromTime.Value.TimeOfDay : TimeSpan.Zero;
+            var dt = FromDate.Value.Date.Add(t);
+            FromDateTimeText = dt.ToString("dd-MM-yyyy HH:mm");
+        }
+        else
+        {
+            FromDateTimeText = string.Empty;
+        }
+
+        if (ToDate.HasValue)
+        {
+            var t = ToTime.HasValue ? ToTime.Value.TimeOfDay : new TimeSpan(23, 59, 59);
+            var dt = ToDate.Value.Date.Add(t);
+            ToDateTimeText = dt.ToString("dd-MM-yyyy HH:mm");
+        }
+        else
+        {
+            ToDateTimeText = string.Empty;
+        }
+    }
+
+    public void TryParseDateTimeTexts()
+    {
+        string[] formats = new[]
+        {
+            "dd-MM-yyyy HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd/MM/yyyy HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "dd-MMM-yyyy HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "yyyy/MM/dd HH:mm",
+            "M/d/yyyy h:mm tt",
+            "M/d/yyyy h:mm:ss tt"
+        };
+
+        if (!string.IsNullOrWhiteSpace(FromDateTimeText))
+        {
+            if (DateTime.TryParseExact(FromDateTimeText.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtFrom) ||
+                DateTime.TryParse(FromDateTimeText.Trim(), CultureInfo.CurrentCulture, DateTimeStyles.None, out dtFrom))
+            {
+                FromDate = dtFrom.Date;
+                FromTime = dtFrom;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(ToDateTimeText))
+        {
+            if (DateTime.TryParseExact(ToDateTimeText.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtTo) ||
+                DateTime.TryParse(ToDateTimeText.Trim(), CultureInfo.CurrentCulture, DateTimeStyles.None, out dtTo))
+            {
+                ToDate = dtTo.Date;
+                ToTime = dtTo;
+            }
+        }
+    }
 
     [ObservableProperty]
     private double _fromDepth = 0;
@@ -545,6 +620,8 @@ public partial class RigStateDocumentViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(LogId)) return;
 
+        TryParseDateTimeTexts();
+
         IsLoading = true;
         StatusMessage = "Querying data points from database...";
         try
@@ -917,11 +994,13 @@ public partial class RigStateDocumentViewModel : ObservableObject
             FromTime = startDt;
             ToDate = endDt.Date;
             ToTime = endDt;
+            SelectedPreset = "Custom Range";
         }
         else if (!IsTimeLog)
         {
             FromDepth = TrackBarSelectionStart;
             ToDepth = TrackBarSelectionEnd;
+            SelectedPreset = "Custom Range";
         }
 
         await RefreshDataAsync();

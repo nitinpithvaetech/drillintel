@@ -35,10 +35,10 @@
         <Grid.RowDefinitions>
             <!-- 0: Header Banner -->
             <RowDefinition Height="Auto" />
-            <!-- 1: Navigation & Range Filter Command Bar -->
-            <RowDefinition Height="Auto" />
-            <!-- 2: TeeChart Canvas -->
+            <!-- 1: TeeChart Canvas -->
             <RowDefinition Height="*" />
+            <!-- 2: Navigation & Range Filter Command Bar (Above dataSelector TrackBar) -->
+            <RowDefinition Height="Auto" />
             <!-- 3: Data Selector Range TrackBar Scroller -->
             <RowDefinition Height="Auto" />
             <!-- 4: Status & Telemetry Bar -->
@@ -155,59 +155,8 @@
             </Grid>
         </Border>
 
-        <!-- Navigation & Date Range Control Bar -->
-        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,8">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <!-- Left: Preset Dropdown -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Preset Range:" Style="{StaticResource BarLabel}" />
-                    <ComboBox ItemsSource="{Binding RangePresets}" 
-                              SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              Width="130" Height="28" VerticalContentAlignment="Center" FontSize="11" />
-                </StackPanel>
-
-                <!-- Center: From - To Pickers -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <!-- TimeLog Controls -->
-                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsTimeLog, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="From:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
-                        <DatePicker SelectedDate="{Binding FromDate, Mode=TwoWay}" Width="105" Height="28" FontSize="11" />
-                        <materialDesign:TimePicker SelectedTime="{Binding FromTime, Mode=TwoWay}" Is24Hours="True" Width="70" Height="28" FontSize="11" Margin="4,0,0,0" />
-
-                        <TextBlock Text="To:" Style="{StaticResource BarLabel}" Margin="14,0,4,0" />
-                        <DatePicker SelectedDate="{Binding ToDate, Mode=TwoWay}" Width="105" Height="28" FontSize="11" />
-                        <materialDesign:TimePicker SelectedTime="{Binding ToTime, Mode=TwoWay}" Is24Hours="True" Width="70" Height="28" FontSize="11" Margin="4,0,0,0" />
-                    </StackPanel>
-
-                    <Button Command="{Binding RefreshDataCommand}" 
-                            Style="{StaticResource MaterialDesignRaisedButton}" 
-                            Background="#1976D2" Foreground="White"
-                            Height="28" Padding="12,0" Margin="14,0,0,0"
-                            ToolTip="Query and refresh chart for this window">
-                        <TextBlock Text="Apply" FontSize="11" VerticalAlignment="Center" />
-                    </Button>
-                </StackPanel>
-
-                <!-- Right: Real-time Toggle -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ToggleButton IsChecked="{Binding IsRealTime, Mode=TwoWay}" 
-                                  Command="{Binding ToggleRealTimeCommand}"
-                                  Style="{StaticResource MaterialDesignSwitchToggleButton}" 
-                                  Margin="0,0,6,0" />
-                    <TextBlock Text="Real-Time" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" 
-                               Foreground="{Binding IsRealTime, Converter={x:Null}}" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- 2: TeeChart WPF Canvas with Interactive Hover Tooltip Overlay -->
-        <Border Grid.Row="2" Background="White" BorderBrush="#CBD5E1" BorderThickness="1,1,1,0" CornerRadius="4,4,0,0" ClipToBounds="True">
+        <!-- 1: TeeChart WPF Canvas with Interactive Hover Tooltip Overlay -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#CBD5E1" BorderThickness="1,1,1,0" CornerRadius="4,4,0,0" ClipToBounds="True">
             <Grid x:Name="ChartContainer">
                 <teechart:TChart x:Name="ChartControl" />
 
@@ -262,13 +211,75 @@
             </Grid>
         </Border>
 
+        <!-- 2: Navigation & Date Range Control Bar (Above dataSelector TrackBar) -->
+        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1,0,1,1" Padding="10,6" Margin="0,0,0,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Preset Dropdown -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Preset Range:" Style="{StaticResource BarLabel}" />
+                    <ComboBox ItemsSource="{Binding RangePresets}" 
+                              SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
+                              Width="130" Height="28" VerticalContentAlignment="Center" FontSize="11" />
+                </StackPanel>
+
+                <!-- Center/Right: From - To Single Text DateTime Boxes & Apply Button -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- TimeLog Controls: Single Text DateTime Boxes -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsTimeLog, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <TextBlock Text="From:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                            <TextBox Text="{Binding FromDateTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
+                                     BorderThickness="0" Background="Transparent"
+                                     Width="135" Height="24" FontSize="11" FontWeight="SemiBold"
+                                     VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                     ToolTip="Enter Start Date &amp; Time (dd-MM-yyyy HH:mm)" />
+                        </Border>
+
+                        <TextBlock Text="To:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                            <TextBox Text="{Binding ToDateTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
+                                     BorderThickness="0" Background="Transparent"
+                                     Width="135" Height="24" FontSize="11" FontWeight="SemiBold"
+                                     VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                     ToolTip="Enter End Date &amp; Time (dd-MM-yyyy HH:mm)" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- DepthLog Controls -->
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding IsTimeLog, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                        <TextBlock Text="From Depth:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <TextBox Text="{Binding FromDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="75" Height="28" FontSize="11" VerticalContentAlignment="Center" />
+                        <TextBlock Text="To Depth:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <TextBox Text="{Binding ToDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="75" Height="28" FontSize="11" VerticalContentAlignment="Center" />
+                    </StackPanel>
+
+                    <Button Command="{Binding RefreshDataCommand}" 
+                            Style="{StaticResource MaterialDesignRaisedButton}" 
+                            Background="#1976D2" Foreground="White"
+                            Height="28" Padding="14,0" Margin="10,0,0,0"
+                            ToolTip="Query and refresh chart for this window">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Check" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="Apply" FontSize="11" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- 3: Data Selector Range TrackBar Scroller (Plug & Play UserControl) -->
         <controls:RangeTrackBarControl Grid.Row="3" Margin="0,4,0,4"
                                       Minimum="{Binding TrackBarMin}"
                                       Maximum="{Binding TrackBarMax}"
                                       SelectionStart="{Binding TrackBarSelectionStart, Mode=TwoWay}"
                                       SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
-                                      SelectedPeriod="{Binding SelectedTrackBarPeriod, Mode=TwoWay}"
                                       IsTimeLog="{Binding IsTimeLog}"
                                       OverviewPoints="{Binding TrackBarOverviewPoints}"
                                       OverviewChannelName="{Binding TrackBarOverviewChannelName}"
