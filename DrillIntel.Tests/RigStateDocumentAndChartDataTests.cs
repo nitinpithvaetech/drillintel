@@ -411,54 +411,140 @@ public class RigStateDocumentAndChartDataTests
                 var testCh = new VHTrackChannel
                 {
                     ID = "c1",
-                    Mnemonic = "RPM",
+                    Mnemonic = "BIT_DEPTH",
+                    Title = "Bit Depth",
+                    Unit = "m",
                     SeriesType = enumRTSeriesStyle.Line,
                     LineWidth = 2,
-                    LineColor = "#FF0000"
+                    LineColor = "#1976D2",
+                    objXAxis = new RTAxis { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "m", Min = 0, Max = 4500, AutoScale = false }
                 };
                 testTrack.Channels.Add(testCh);
                 testConsole.Tracks.Add(testTrack);
 
-                var indexVals = new List<double>();
-                var channelVals = new List<double>();
-                for (int i = 0; i < 500; i++)
+                var testCh2 = new VHTrackChannel
                 {
-                    indexVals.Add(46297.0 + (i * 0.002));
-                    channelVals.Add(50.0 + 30.0 * Math.Sin(i * 0.1));
-                }
+                    ID = "c2",
+                    Mnemonic = "HOLE_DEPTH",
+                    Title = "Hole Depth",
+                    Unit = "m",
+                    SeriesType = enumRTSeriesStyle.Line,
+                    LineWidth = 2,
+                    LineColor = "#FF5722",
+                    objXAxis = new RTAxis { Mnemonic = "HOLE_DEPTH", Title = "Hole Depth", Unit = "m", Min = 0, Max = 4500, AutoScale = false }
+                };
+                testTrack.Channels.Add(testCh2);
+
+                var indexVals = new List<double> { 46297.0, 46297.1, 46297.2, 46297.3 };
+                var channelVals = new List<double> { 500.0, 1500.0, 3000.0, 4400.0 };
+                var channelVals2 = new List<double> { 600.0, 1600.0, 3100.0, 4500.0 };
 
                 var testData = new ChartDataSeriesResult
                 {
                     SourceType = enumRTDataSourceType.TimeLog,
                     IndexValues = indexVals,
-                    ChannelValues = new Dictionary<string, List<double>> { ["RPM"] = channelVals }
+                    ChannelValues = new Dictionary<string, List<double>>
+                    {
+                        ["BIT_DEPTH"] = channelVals,
+                        ["HOLE_DEPTH"] = channelVals2
+                    }
                 };
 
                 renderer.RenderConsole(testConsole, testData);
 
-                // Export to bitmap to test actual drawing pipeline
-                var bmpStream = new System.IO.MemoryStream();
-                chart.Export.Image.Bitmap.Width = 600;
-                chart.Export.Image.Bitmap.Height = 400;
-                chart.Export.Image.Bitmap.Save(bmpStream);
-                Assert.True(bmpStream.Length > 0);
+                // Verify vertical chart custom axes spacing and top alignment
+                Assert.Equal(2, chart.Axes.Custom.Count);
+                var vAx0 = chart.Axes.Custom[0];
+                var vAx1 = chart.Axes.Custom[1];
+                Assert.True(vAx0.OtherSide); // Top
+                Assert.True(vAx1.OtherSide); // Top
+                Assert.Equal(0, vAx0.RelativePosition);
+                Assert.Equal(-48, vAx1.RelativePosition);
+                Assert.True(vAx0.Labels.CustomSize >= 18);
+                Assert.True(vAx0.Title.Distance >= 14);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, vAx0.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, vAx0.Title.TextAlign);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, vAx0.Labels.TextAlign);
+                Assert.True(chart.Panel.MarginTop >= 120);
+                Assert.Equal(22, chart.Panel.MarginBottom);
 
-                var bmp = new System.Drawing.Bitmap(bmpStream);
-                int nonWhiteCount = 0;
-                for (int x = 0; x < bmp.Width; x++)
+                // Test D: Horizontal orientation with Depth on Left and Hook Load / RPM on Right
+                var horizConsole = new VHTrackConsole { IndexType = enumIndexType.TimeLog, TrackOrientation = enumTrackOrientation.Horizontal };
+                var trackDepth = new VHTrack { ID = "td", Title = "Depth Track", Width = 1.5 };
+                trackDepth.Channels.Add(new VHTrackChannel
                 {
-                    for (int y = 0; y < bmp.Height; y++)
-                    {
-                        var px = bmp.GetPixel(x, y);
-                        // Check for red pixels from RPM series LineColor "#FF0000"
-                        if (px.R > 200 && px.G < 50 && px.B < 50)
-                        {
-                            nonWhiteCount++;
-                        }
-                    }
-                }
+                    ID = "chD",
+                    Mnemonic = "BIT_DEPTH",
+                    Title = "Bit Depth",
+                    Unit = "m",
+                    SeriesType = enumRTSeriesStyle.Line,
+                    LineColor = "#1976D2",
+                    objXAxis = new RTAxis { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "m", Min = 0, Max = 4500, AutoScale = false }
+                });
+                horizConsole.Tracks.Add(trackDepth);
 
-                Assert.True(nonWhiteCount > 0, $"Expected red pixels, but nonWhiteCount was {nonWhiteCount}!");
+                var trackMain = new VHTrack { ID = "tm", Title = "Main Track", Width = 2.0 };
+                trackMain.Channels.Add(new VHTrackChannel
+                {
+                    ID = "chHk",
+                    Mnemonic = "HOOK_LOAD",
+                    Title = "Hook Load",
+                    Unit = "klbf",
+                    SeriesType = enumRTSeriesStyle.Line,
+                    LineColor = "#388E3C",
+                    objXAxis = new RTAxis { Mnemonic = "HOOK_LOAD", Title = "Hook Load", Unit = "klbf", Min = 0, Max = 500, AutoScale = false }
+                });
+                trackMain.Channels.Add(new VHTrackChannel
+                {
+                    ID = "chRpm",
+                    Mnemonic = "RPM",
+                    Title = "RPM",
+                    Unit = "rpm",
+                    SeriesType = enumRTSeriesStyle.Line,
+                    LineColor = "#D32F2F",
+                    objXAxis = new RTAxis { Mnemonic = "RPM", Title = "RPM", Unit = "rpm", Min = 0, Max = 200, AutoScale = false }
+                });
+                horizConsole.Tracks.Add(trackMain);
+
+                var horizData = new ChartDataSeriesResult
+                {
+                    SourceType = enumRTDataSourceType.TimeLog,
+                    IndexValues = indexVals,
+                    ChannelValues = new Dictionary<string, List<double>>
+                    {
+                        ["BIT_DEPTH"] = channelVals,
+                        ["HOOK_LOAD"] = new List<double> { 120.0, 180.0, 240.0, 310.0 },
+                        ["RPM"] = new List<double> { 50.0, 80.0, 110.0, 90.0 }
+                    }
+                };
+
+                var chartH = new Steema.TeeChart.WPF.TChart();
+                var rendererH = new TChartTrackConsoleRenderer(chartH);
+                rendererH.RenderConsole(horizConsole, horizData);
+
+                // Verify horizontal chart: Depth on Left, Hook Load and RPM on Right
+                Assert.Equal(3, chartH.Axes.Custom.Count);
+                var hAxDepth = chartH.Axes.Custom[0];
+                var hAxHook = chartH.Axes.Custom[1];
+                var hAxRpm = chartH.Axes.Custom[2];
+
+                Assert.False(hAxDepth.OtherSide); // Left
+                Assert.True(hAxHook.OtherSide);   // Right
+                Assert.True(hAxRpm.OtherSide);    // Right
+
+                Assert.Equal(0, hAxHook.RelativePosition);
+                Assert.Equal(-56, hAxRpm.RelativePosition); // Outward into right margin
+
+                Assert.True(hAxDepth.Labels.CustomSize >= 28);
+                Assert.True(hAxDepth.Title.Distance >= 10);
+                Assert.True(hAxHook.Labels.CustomSize >= 28);
+                Assert.True(hAxHook.Title.Distance >= 10);
+                Assert.True(hAxRpm.Labels.CustomSize >= 28);
+                Assert.True(hAxRpm.Title.Distance >= 10);
+
+                Assert.True(chartH.Panel.MarginLeft >= 30);
+                Assert.True(chartH.Panel.MarginRight >= 26);
+                Assert.Equal(54, chartH.Panel.MarginBottom);
             }
             catch (Exception ex)
             {
@@ -565,6 +651,94 @@ public class RigStateDocumentAndChartDataTests
                 Assert.True(chart.Axes.Bottom.Visible);
                 Assert.False(chart.Axes.Left.Visible);
                 Assert.True(ch.__scale is Steema.TeeChart.Axis axisH && !axisH.Horizontal);
+            }
+            catch (Exception ex)
+            {
+                threadEx = ex;
+            }
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (threadEx != null) throw threadEx;
+    }
+
+    [Fact]
+    public void TChartTrackConsoleRenderer_GetAllChannelsHoverInfo_ReturnsAllVisibleChannels()
+    {
+        Exception? threadEx = null;
+        var thread = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                var chart = new Steema.TeeChart.WPF.TChart();
+                var renderer = new TChartTrackConsoleRenderer(chart);
+
+                var console = new VHTrackConsole { IndexType = enumIndexType.TimeLog, TrackOrientation = enumTrackOrientation.Horizontal };
+                var track = new VHTrack { ID = "track1", Title = "Main Track", Width = 2.0 };
+                var ch1 = new VHTrackChannel { ID = "c1", Mnemonic = "FLOWIN", Title = "Circulation", Unit = "galUS/min", LineColor = "#3B82F6", SeriesType = enumRTSeriesStyle.Line, Visible = true };
+                var ch2 = new VHTrackChannel { ID = "c2", Mnemonic = "HKLD", Title = "Hookload", Unit = "klb", LineColor = "#4338CA", SeriesType = enumRTSeriesStyle.Line, Visible = true };
+                var ch3 = new VHTrackChannel { ID = "c3", Mnemonic = "DEPTH", Title = "Depth", Unit = "m", LineColor = "#10B981", SeriesType = enumRTSeriesStyle.Line, Visible = true };
+                track.Channels.Add(ch1);
+                track.Channels.Add(ch2);
+                track.Channels.Add(ch3);
+                console.Tracks.Add(track);
+
+                // Date Time: 2013-03-22 02:02:05 in OADate
+                var testDt = new DateTime(2013, 3, 22, 2, 2, 5);
+                double oaDate = testDt.ToOADate();
+
+                var data = new ChartDataSeriesResult
+                {
+                    SourceType = enumRTDataSourceType.TimeLog,
+                    IndexValues = new List<double> { oaDate - 0.01, oaDate, oaDate + 0.01 },
+                    RigStateNumbers = new List<int> { 1, 2, 1 },
+                    RigStateColors = new List<int> { unchecked((int)0xFF2E7D32), unchecked((int)0xFFE65100), unchecked((int)0xFF2E7D32) },
+                    ChannelValues = new Dictionary<string, List<double>>
+                    {
+                        ["FLOWIN"] = new List<double> { 400.0, 457.54, 460.0 },
+                        ["HKLD"] = new List<double> { 90.0, 103.38, 100.0 },
+                        ["DEPTH"] = new List<double> { 525.0, 531.71, 540.0 }
+                    }
+                };
+
+                renderer.RenderConsole(console, data);
+
+                chart.Width = 800;
+                chart.Height = 600;
+                chart.Measure(new System.Windows.Size(800, 600));
+                chart.Arrange(new System.Windows.Rect(0, 0, 800, 600));
+                chart.UpdateLayout();
+
+                // Simulate mouse hover point along bottom axis corresponding to oaDate
+                int xPos = chart.Axes.Bottom.CalcXPosValue(oaDate);
+                var hoverInfo = renderer.GetAllChannelsHoverInfo(new System.Windows.Point(xPos, 150), "Etech 420");
+
+                Assert.NotNull(hoverInfo);
+                Assert.Equal("Etech 420", hoverInfo.WellName);
+                Assert.Contains("Mar-22-2013 02:02:05", hoverInfo.FormattedIndex);
+                Assert.Equal(3, hoverInfo.Channels.Count);
+
+                var circ = hoverInfo.Channels.FirstOrDefault(c => c.ChannelMnemonic == "FLOWIN");
+                Assert.NotNull(circ);
+                Assert.Equal("Circulation", circ.ChannelTitle);
+                Assert.Equal(457.54, circ.Value);
+                Assert.Equal("galUS/min", circ.Unit);
+                Assert.Equal("Circulation: 457.54 galUS/min", circ.DisplayText);
+
+                var hkld = hoverInfo.Channels.FirstOrDefault(c => c.ChannelMnemonic == "HKLD");
+                Assert.NotNull(hkld);
+                Assert.Equal("Hookload", hkld.ChannelTitle);
+                Assert.Equal(103.38, hkld.Value);
+                Assert.Equal("klb", hkld.Unit);
+                Assert.Equal("Hookload: 103.38 klb", hkld.DisplayText);
+
+                var depth = hoverInfo.Channels.FirstOrDefault(c => c.ChannelMnemonic == "DEPTH");
+                Assert.NotNull(depth);
+                Assert.Equal("Depth", depth.ChannelTitle);
+                Assert.Equal(531.71, depth.Value);
+                Assert.Equal("m", depth.Unit);
+                Assert.Equal("Depth: 531.71 m", depth.DisplayText);
             }
             catch (Exception ex)
             {
@@ -787,15 +961,15 @@ public class RigStateDocumentAndChartDataTests
                 Assert.Equal(40, chart.Axes.Left.Labels.Separation);
                 Assert.Equal("dd-MMM HH:mm", chart.Axes.Left.Labels.DateTimeFormat);
 
-                // 2. Verify channel 0 (Hookload) is on bottom (OtherSide == false) with separation 40
+                // 2. Verify channel 0 (Hookload) is on top (OtherSide == true) per vertical chart requirements
                 var axis1 = Assert.IsType<Steema.TeeChart.Axis>(ch1.__scale);
-                Assert.False(axis1.OtherSide, "Channel 0 should be at Bottom");
+                Assert.True(axis1.OtherSide, "Channel 0 should be at Top in vertical chart");
                 Assert.Equal(40, axis1.Labels.Separation);
                 Assert.Equal("#,##0.##", axis1.Labels.ValueFormat);
 
-                // 3. Verify channel 1 (Torque) is on top (OtherSide == true) to prevent overlapping with channel 0
+                // 3. Verify channel 1 (Torque) is on top (OtherSide == true)
                 var axis2 = Assert.IsType<Steema.TeeChart.Axis>(ch2.__scale);
-                Assert.True(axis2.OtherSide, "Channel 1 should be at Top to prevent overlapping with Channel 0");
+                Assert.True(axis2.OtherSide, "Channel 1 should be at Top in vertical chart");
                 Assert.Equal(40, axis2.Labels.Separation);
                 Assert.Equal("#,##0.##", axis2.Labels.ValueFormat);
 
@@ -907,6 +1081,17 @@ public class RigStateDocumentAndChartDataTests
                     Visible = true,
                     objXAxis = new RTAxis { Mnemonic = "RPM", Title = "RPM", Unit = "rpm", Location = enumRTAxisLocation.Left }
                 };
+                var chDepth = new VHTrackChannel
+                {
+                    ID = "c0",
+                    Mnemonic = "BIT_DEPTH",
+                    Title = "Bit Depth",
+                    Unit = "m",
+                    LineColor = "#1976D2",
+                    Visible = true,
+                    objXAxis = new RTAxis { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "m" }
+                };
+                track1.Channels.Add(chDepth);
                 track1.Channels.Add(chTorque);
                 track1.Channels.Add(chRpm);
                 console.Tracks.Add(track1);
@@ -917,6 +1102,7 @@ public class RigStateDocumentAndChartDataTests
                     IndexValues = new List<double> { 46000.0, 46001.0 },
                     ChannelValues = new Dictionary<string, List<double>>
                     {
+                        ["BIT_DEPTH"] = new List<double> { 1200.0, 1205.0 },
                         ["TORQUE"] = new List<double> { 500.0, 600.0 },
                         ["RPM"] = new List<double> { 60.0, 80.0 }
                     }
@@ -937,33 +1123,60 @@ public class RigStateDocumentAndChartDataTests
                 Assert.Equal("DateTime (DateTime)", chart.Axes.Bottom.Title.Text);
                 Assert.Equal(0, chart.Axes.Bottom.Title.Angle);
 
-                // 3. Verify Channel 1 (Torque) Axis Title and Color
+                // 3. Horizontal orientation rule: Depth on Left (OtherSide=false, Angle=90)
+                var axisDepth = Assert.IsType<Steema.TeeChart.Axis>(chDepth.__scale);
+                Assert.True(axisDepth.Title.Visible);
+                Assert.Equal("Bit Depth (m)", axisDepth.Title.Text);
+                Assert.False(axisDepth.OtherSide, "Depth channel must be on the Left (OtherSide=false) in horizontal mode");
+                Assert.Equal(90, axisDepth.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisDepth.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisDepth.Labels.TextAlign);
+
+                // 4. Horizontal orientation rule: Non-depth channels on Right (OtherSide=true, Angle=270)
                 var axisTorque = Assert.IsType<Steema.TeeChart.Axis>(chTorque.__scale);
                 Assert.True(axisTorque.Title.Visible);
                 Assert.Equal("Torque (ft lbf)", axisTorque.Title.Text);
-                Assert.False(axisTorque.OtherSide);
-                Assert.Equal(90, axisTorque.Title.Angle);
+                Assert.True(axisTorque.OtherSide, "Torque (non-depth) must be on the Right (OtherSide=true) in horizontal mode");
+                Assert.Equal(270, axisTorque.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisTorque.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisTorque.Labels.TextAlign);
                 Assert.Equal(ColorTranslator.FromHtml("#E53935"), axisTorque.Title.Font.Color);
                 Assert.Equal(ColorTranslator.FromHtml("#E53935"), axisTorque.AxisPen.Color);
 
-                // 4. Verify Channel 2 (RPM) Axis Title and Color
                 var axisRpm = Assert.IsType<Steema.TeeChart.Axis>(chRpm.__scale);
                 Assert.True(axisRpm.Title.Visible);
                 Assert.Equal("RPM (rpm)", axisRpm.Title.Text);
-                Assert.True(axisRpm.OtherSide, "Channel 1 should be on the right (OtherSide=true) to prevent overlapping with Channel 0 on the left");
+                Assert.True(axisRpm.OtherSide, "RPM (non-depth) must be on the Right (OtherSide=true) in horizontal mode");
                 Assert.Equal(270, axisRpm.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisRpm.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisRpm.Labels.TextAlign);
                 Assert.Equal(ColorTranslator.FromHtml("#1E88E5"), axisRpm.Title.Font.Color);
                 Assert.Equal(Steema.TeeChart.PositionUnits.Pixels, axisRpm.PositionUnits);
 
-                // 5. Test Vertical orientation
+                // 5. Vertical orientation rule: ALL channel axes on TOP (OtherSide=true, Angle=0)
                 console.TrackOrientation = enumTrackOrientation.Vertical;
                 renderer.RenderConsole(console, data);
 
                 Assert.True(chart.Axes.Left.Title.Visible);
                 Assert.Equal("Time", chart.Axes.Left.Title.Text);
 
+                var axisDepthVert = Assert.IsType<Steema.TeeChart.Axis>(chDepth.__scale);
+                Assert.True(axisDepthVert.OtherSide, "All channel axes must be on Top (OtherSide=true) in vertical mode");
+                Assert.Equal(0, axisDepthVert.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisDepthVert.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisDepthVert.Labels.TextAlign);
+
                 var axisTorqueVert = Assert.IsType<Steema.TeeChart.Axis>(chTorque.__scale);
+                Assert.True(axisTorqueVert.OtherSide, "All channel axes must be on Top (OtherSide=true) in vertical mode");
                 Assert.Equal(0, axisTorqueVert.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisTorqueVert.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisTorqueVert.Labels.TextAlign);
+
+                var axisRpmVert = Assert.IsType<Steema.TeeChart.Axis>(chRpm.__scale);
+                Assert.True(axisRpmVert.OtherSide, "All channel axes must be on Top (OtherSide=true) in vertical mode");
+                Assert.Equal(0, axisRpmVert.Title.Angle);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisRpmVert.Title.Alignment);
+                Assert.Equal(Steema.TeeChart.Drawing.StringAlignment.Center, axisRpmVert.Labels.TextAlign);
             }
             catch (Exception ex)
             {
@@ -974,6 +1187,28 @@ public class RigStateDocumentAndChartDataTests
         thread.Start();
         thread.Join();
         if (threadEx != null) throw threadEx;
+    }
+
+    [Fact]
+    public void TChartTrackConsoleRenderer_DepthChannelDetection_WorksAccurately()
+    {
+        // 1. Should identify Bit Depth and Hole Depth variations as Depth channels
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "BIT_DEPTH" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "HOLE_DEPTH" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "DBIT" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "DMEA" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "MD" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "DEPTH" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Title = "Bit Depth" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Title = "Hole Depth" }));
+        Assert.True(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Title = "Measured Depth" }));
+
+        // 2. Should NOT identify other channels as Depth channels
+        Assert.False(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "RIG_STATE", Title = "Rig State" }));
+        Assert.False(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "HOOK_LOAD", Title = "Hook Load" }));
+        Assert.False(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "TORQUE", Title = "Torque" }));
+        Assert.False(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "RPM", Title = "Rotary RPM" }));
+        Assert.False(TChartTrackConsoleRenderer.IsDepthOrHoleDepthChannel(new VHTrackChannel { Mnemonic = "SPP", Title = "Standpipe Pressure" }));
     }
 
     [Fact]

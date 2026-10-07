@@ -84,83 +84,72 @@ public partial class RigStateDocumentView : UserControl
         if (_renderer == null) return;
 
         var mousePos = e.GetPosition(ChartControl);
-        var hit = _renderer.HitTestSeries(mousePos, tolerancePixels: 18.0);
-        var telemetry = _renderer.GetCursorTelemetry(mousePos);
+        var vm = DataContext as RigStateDocumentViewModel;
+        string? wellName = vm?.WellName;
+        if (string.IsNullOrWhiteSpace(wellName)) wellName = vm?.LogName;
 
-        if (DataContext is RigStateDocumentViewModel vm)
+        var allChannelsInfo = _renderer.GetAllChannelsHoverInfo(mousePos, wellName);
+
+        if (allChannelsInfo != null && allChannelsInfo.Channels.Count > 0)
         {
-            if (telemetry.HasValue)
+            if (vm != null)
             {
-                vm.UpdateCursorTelemetry(telemetry.Value.FormattedIndex, telemetry.Value.RigStateName, telemetry.Value.RigStateColorHex);
-            }
-            else if (hit != null)
-            {
-                vm.UpdateCursorTelemetry(hit.FormattedIndex, hit.RigStateName ?? "None", hit.RigStateColorHex ?? "#9E9E9E");
-            }
-        }
-
-        if (hit != null)
-        {
-            // Populate Tooltip Content
-            TooltipSeriesTitle.Text = hit.ChannelTitle;
-            TooltipTrackTitle.Text = hit.TrackTitle;
-            TooltipValueText.Text = hit.FormattedValue;
-            TooltipUnitText.Text = string.IsNullOrWhiteSpace(hit.Unit) ? string.Empty : $" {hit.Unit}";
-            TooltipIndexText.Text = hit.FormattedIndex;
-            TooltipIndexIcon.Kind = hit.IndexDateTime.HasValue
-                ? MaterialDesignThemes.Wpf.PackIconKind.ClockOutline
-                : MaterialDesignThemes.Wpf.PackIconKind.Ruler;
-
-            try
-            {
-                var brush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(hit.LineColorHex)!;
-                TooltipSeriesBullet.Fill = brush;
-            }
-            catch
-            {
-                TooltipSeriesBullet.Fill = System.Windows.Media.Brushes.DodgerBlue;
+                vm.UpdateCursorTelemetry(allChannelsInfo.FormattedIndex, allChannelsInfo.RigStateName, allChannelsInfo.RigStateColorHex);
             }
 
-            if (!string.IsNullOrWhiteSpace(hit.RigStateName) && hit.RigStateName != "None")
+            // Populate multi-channel tooltip matching reference image
+            TooltipWellName.Text = allChannelsInfo.WellName;
+            TooltipIndexText.Text = allChannelsInfo.IndexDateTime.HasValue
+                ? $"Date Time: {allChannelsInfo.FormattedIndex}"
+                : $"Depth: {allChannelsInfo.FormattedIndex}";
+
+            if (!string.IsNullOrWhiteSpace(allChannelsInfo.RigStateName) && allChannelsInfo.RigStateName != "None")
             {
-                TooltipRigStateText.Text = hit.RigStateName;
+                TooltipRigStateText.Text = allChannelsInfo.RigStateName;
                 try
                 {
-                    var rsBrush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(hit.RigStateColorHex ?? "#4CAF50")!;
-                    TooltipRigStateBadge.Background = rsBrush;
+                    var rsBrush = (System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString(allChannelsInfo.RigStateColorHex ?? "#4CAF50")!;
+                    TooltipRigStateBullet.Fill = rsBrush;
+                    TooltipRigStateText.Foreground = rsBrush;
                 }
                 catch
                 {
-                    TooltipRigStateBadge.Background = System.Windows.Media.Brushes.ForestGreen;
+                    TooltipRigStateBullet.Fill = System.Windows.Media.Brushes.ForestGreen;
+                    TooltipRigStateText.Foreground = System.Windows.Media.Brushes.ForestGreen;
                 }
-                TooltipRigStateBadge.Visibility = Visibility.Visible;
+                TooltipRigStateRow.Visibility = Visibility.Visible;
             }
             else
             {
-                TooltipRigStateBadge.Visibility = Visibility.Collapsed;
+                TooltipRigStateRow.Visibility = Visibility.Collapsed;
             }
 
-            // Position Tooltip dynamically near mouse cursor
+            TooltipChannelsList.ItemsSource = allChannelsInfo.Channels;
+
+            // Position Tooltip dynamically near mouse cursor or curve anchor
             double containerWidth = ChartContainer.ActualWidth;
             double containerHeight = ChartContainer.ActualHeight;
 
             SeriesTooltipCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            double tipWidth = SeriesTooltipCard.DesiredSize.Width > 0 ? SeriesTooltipCard.DesiredSize.Width : 180;
-            double tipHeight = SeriesTooltipCard.DesiredSize.Height > 0 ? SeriesTooltipCard.DesiredSize.Height : 90;
+            double tipWidth = SeriesTooltipCard.DesiredSize.Width > 0 ? SeriesTooltipCard.DesiredSize.Width : 190;
+            double tipHeight = SeriesTooltipCard.DesiredSize.Height > 0 ? SeriesTooltipCard.DesiredSize.Height : 120;
 
-            double left = mousePos.X + 16;
-            double top = mousePos.Y + 16;
+            double anchorX = mousePos.X;
+            double anchorY = mousePos.Y;
+
+            double left = anchorX + 16;
+            double top = anchorY - (tipHeight / 2);
 
             // Flip horizontally if extending beyond right edge
             if (left + tipWidth > containerWidth - 12)
             {
-                left = mousePos.X - tipWidth - 16;
+                left = anchorX - tipWidth - 16;
             }
 
             // Flip vertically if extending beyond bottom edge
             if (top + tipHeight > containerHeight - 12)
             {
-                top = mousePos.Y - tipHeight - 16;
+                top = containerHeight - tipHeight - 12;
             }
 
             left = Math.Max(8, left);
@@ -173,6 +162,14 @@ public partial class RigStateDocumentView : UserControl
         else
         {
             SeriesTooltipCard.Visibility = Visibility.Collapsed;
+            if (vm != null)
+            {
+                var telemetry = _renderer.GetCursorTelemetry(mousePos);
+                if (telemetry.HasValue)
+                {
+                    vm.UpdateCursorTelemetry(telemetry.Value.FormattedIndex, telemetry.Value.RigStateName, telemetry.Value.RigStateColorHex);
+                }
+            }
         }
     }
 

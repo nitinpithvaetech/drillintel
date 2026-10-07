@@ -164,47 +164,47 @@
                 <Canvas x:Name="TooltipCanvas" IsHitTestVisible="False">
                     <Border x:Name="SeriesTooltipCard" 
                             Visibility="Collapsed"
-                            Background="#1E293B" 
+                            Background="#FFFFE1" 
                             BorderBrush="#475569" 
                             BorderThickness="1" 
-                            CornerRadius="8" 
-                            Padding="10,8" 
-                            MinWidth="160" MaxWidth="280">
+                            CornerRadius="3" 
+                            Padding="8,6" 
+                            MinWidth="175" MaxWidth="320">
                         <Border.Effect>
-                            <DropShadowEffect BlurRadius="12" Direction="270" ShadowDepth="4" Opacity="0.4" Color="#000000" />
+                            <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="3" Opacity="0.35" Color="#000000" />
                         </Border.Effect>
                         <StackPanel>
-                            <!-- Series Header & Channel Color Dot -->
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Ellipse x:Name="TooltipSeriesBullet" Grid.Column="0" Width="10" Height="10" Fill="#1976D2" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock x:Name="TooltipSeriesTitle" Grid.Column="1" Text="Channel" FontWeight="Bold" FontSize="12" Foreground="White" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-                                <TextBlock x:Name="TooltipTrackTitle" Grid.Column="2" Text="Track" FontSize="10" Foreground="#94A3B8" Margin="8,0,0,0" VerticalAlignment="Center" />
-                            </Grid>
+                            <!-- Well / Rig Name Header -->
+                            <TextBlock x:Name="TooltipWellName" Text="Etech 420" FontWeight="Bold" FontSize="11.5" Foreground="#0F172A" Margin="0,0,0,2" />
 
-                            <!-- Curve Value & Unit -->
-                            <StackPanel Orientation="Horizontal" Margin="0,2,0,4">
-                                <TextBlock x:Name="TooltipValueText" Text="0.00" FontSize="16" FontWeight="ExtraBold" Foreground="#38BDF8" />
-                                <TextBlock x:Name="TooltipUnitText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#94A3B8" VerticalAlignment="Bottom" Margin="3,0,0,2" />
+                            <!-- Date Time / Index -->
+                            <TextBlock x:Name="TooltipIndexText" Text="Date Time: --" FontSize="10.5" Foreground="#1E293B" Margin="0,0,0,2" />
+
+                            <!-- Rig State Name & Bullet -->
+                            <StackPanel Orientation="Horizontal" x:Name="TooltipRigStateRow" Margin="0,0,0,4">
+                                <Ellipse x:Name="TooltipRigStateBullet" Width="7" Height="7" Fill="#4CAF50" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                <TextBlock x:Name="TooltipRigStateText" Text="Rotary Drill" FontWeight="Bold" FontSize="11" Foreground="#15803D" VerticalAlignment="Center" />
                             </StackPanel>
 
-                            <!-- Index: Date/Time or Depth -->
-                            <StackPanel Orientation="Horizontal" Margin="0,1,0,3">
-                                <materialDesign:PackIcon x:Name="TooltipIndexIcon" Kind="ClockOutline" Width="12" Height="12" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,4,0" />
-                                <TextBlock x:Name="TooltipIndexText" Text="--" FontSize="10.5" Foreground="#CBD5E1" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <Border Height="1" Background="#CBD5E1" Margin="0,1,0,4" />
 
-                            <!-- Rig State Badge (shown when rig state is active) -->
-                            <Border x:Name="TooltipRigStateBadge" Background="#4CAF50" CornerRadius="4" Padding="6,2" Margin="0,4,0,0" HorizontalAlignment="Left" Visibility="Collapsed">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Rig State: " FontSize="10" FontWeight="SemiBold" Foreground="White" />
-                                    <TextBlock x:Name="TooltipRigStateText" Text="Rotary Drill" FontSize="10" FontWeight="Bold" Foreground="White" />
-                                </StackPanel>
-                            </Border>
+                            <!-- Channels List (All channels values at this index) -->
+                            <ItemsControl x:Name="TooltipChannelsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Grid.Column="0" Width="7" Height="7" Fill="{Binding LineColorHex}" VerticalAlignment="Center" Margin="0,0,5,0" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ChannelTitle, StringFormat='{}{0}:'}" FontSize="11" Foreground="#1E293B" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="2" Text="{Binding FormattedValueWithUnit}" FontWeight="Bold" FontSize="11" Foreground="#0F172A" Margin="6,0,0,0" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                     </Border>
                 </Canvas>

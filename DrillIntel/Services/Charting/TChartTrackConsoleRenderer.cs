@@ -142,21 +142,13 @@ public class TChartTrackConsoleRenderer
                     bool otherSide;
                     if (isHorizontal)
                     {
-                        if (ch.objXAxis.Location == enumRTAxisLocation.Right)
-                            otherSide = true;
-                        else if (ch.objXAxis.Location == enumRTAxisLocation.Left && chList.Count == 1)
-                            otherSide = false;
-                        else
-                            otherSide = (cIdx % 2 != 0);
+                        // Depth and HoleDepth on Left (otherSide = false), all other channels on Right (otherSide = true)
+                        otherSide = !IsDepthOrHoleDepthChannel(ch);
                     }
                     else
                     {
-                        if (ch.objXAxis.Location == enumRTAxisLocation.Top)
-                            otherSide = true;
-                        else if (ch.objXAxis.Location == enumRTAxisLocation.Bottom && chList.Count == 1)
-                            otherSide = false;
-                        else
-                            otherSide = (cIdx % 2 != 0);
+                        // In vertical orientation: all channel axes are on Top (otherSide = true)
+                        otherSide = true;
                     }
 
                     if (isHorizontal)
@@ -178,15 +170,15 @@ public class TChartTrackConsoleRenderer
 
             if (isHorizontal)
             {
-                _tChart.Panel.MarginBottom = 48; // Multi-line DateTime labels + Axis Title
+                _tChart.Panel.MarginBottom = 54; // Multi-line DateTime labels + Axis Title
                 _tChart.Panel.MarginTop = 18;
-                _tChart.Panel.MarginLeft = Math.Max(26, maxLeftAxes * 32 + 20);
-                _tChart.Panel.MarginRight = Math.Max(22, maxRightAxes * 34 + 18);
+                _tChart.Panel.MarginLeft = Math.Max(30, maxLeftAxes * 56 + 24);
+                _tChart.Panel.MarginRight = Math.Max(26, maxRightAxes * 56 + 24);
             }
             else
             {
-                _tChart.Panel.MarginBottom = Math.Max(26, maxBottomAxes * 32 + 20);
-                _tChart.Panel.MarginTop = Math.Max(32, maxTopAxes * 34 + 22);
+                _tChart.Panel.MarginBottom = 22; // Clean bottom margin: zero channel axes on bottom
+                _tChart.Panel.MarginTop = Math.Max(36, maxTopAxes * 48 + 26);
                 _tChart.Panel.MarginLeft = 24;
                 _tChart.Panel.MarginRight = 14;
             }
@@ -268,6 +260,7 @@ public class TChartTrackConsoleRenderer
         activeAxis.Labels.Font.Size = 8;
         activeAxis.Labels.Font.Color = Color.DarkSlateGray;
         activeAxis.Labels.Separation = 40;
+        activeAxis.Labels.CustomSize = isHorizontal ? 30 : 28;
 
         // Axis Title on Index Axis
         activeAxis.Title.Visible = console.ShowAxisTitles;
@@ -275,6 +268,7 @@ public class TChartTrackConsoleRenderer
         activeAxis.Title.Font.Size = 8;
         activeAxis.Title.Font.Bold = true;
         activeAxis.Title.Font.Color = Color.DarkSlateGray;
+        activeAxis.Title.Distance = 10;
 
         if (console.IndexType == enumIndexType.TimeLog)
         {
@@ -386,27 +380,9 @@ public class TChartTrackConsoleRenderer
             }
 
             // 1. Create and configure Custom Axis for this channel
-            // In vertical orientation: Custom Horizontal axis spanning startPercent..endPercent of X
-            // In horizontal orientation: Custom Vertical axis spanning startPercent..endPercent of Y
-            bool placeOnOtherSide;
-            if (isHorizontal)
-            {
-                if (channel.objXAxis.Location == enumRTAxisLocation.Right)
-                    placeOnOtherSide = true;
-                else if (channel.objXAxis.Location == enumRTAxisLocation.Left && visibleChannels.Count == 1)
-                    placeOnOtherSide = false;
-                else
-                    placeOnOtherSide = (chIdx % 2 != 0);
-            }
-            else
-            {
-                if (channel.objXAxis.Location == enumRTAxisLocation.Top)
-                    placeOnOtherSide = true;
-                else if (channel.objXAxis.Location == enumRTAxisLocation.Bottom && visibleChannels.Count == 1)
-                    placeOnOtherSide = false;
-                else
-                    placeOnOtherSide = (chIdx % 2 != 0);
-            }
+            // In vertical orientation: Put all channel axes on Top (placeOnOtherSide = true)
+            // In horizontal orientation: Depth and HoleDepth on Left (placeOnOtherSide = false), all other channels on Right (placeOnOtherSide = true)
+            bool placeOnOtherSide = isHorizontal ? !IsDepthOrHoleDepthChannel(channel) : true;
 
             var customAxis = new SteemaAxis(_tChart.Chart)
             {
@@ -424,20 +400,7 @@ public class TChartTrackConsoleRenderer
             int sideIndex = 0;
             for (int prev = 0; prev < chIdx; prev++)
             {
-                bool prevSide;
-                var prevLoc = visibleChannels[prev].objXAxis.Location;
-                if (isHorizontal)
-                {
-                    prevSide = prevLoc == enumRTAxisLocation.Right ? true :
-                               (prevLoc == enumRTAxisLocation.Left && visibleChannels.Count == 1) ? false :
-                               (prev % 2 != 0);
-                }
-                else
-                {
-                    prevSide = prevLoc == enumRTAxisLocation.Top ? true :
-                               (prevLoc == enumRTAxisLocation.Bottom && visibleChannels.Count == 1) ? false :
-                               (prev % 2 != 0);
-                }
+                bool prevSide = isHorizontal ? !IsDepthOrHoleDepthChannel(visibleChannels[prev]) : true;
 
                 if (prevSide == placeOnOtherSide)
                     sideIndex++;
@@ -445,15 +408,15 @@ public class TChartTrackConsoleRenderer
 
             if (sideIndex > 0)
             {
-                // In horizontal orientation: Left axis offsets negative (into left margin); Right axis offsets positive (into right margin)
-                // In vertical orientation: Bottom axis offsets positive (down into bottom margin); Top axis offsets negative (up into top margin)
+                // In horizontal orientation: Left and Right axes offset negative (outward into left/right margins)
+                // In vertical orientation: Top axes offset negative (outward into top margin)
                 if (isHorizontal)
                 {
-                    customAxis.RelativePosition = placeOnOtherSide ? (sideIndex * 34) : (-sideIndex * 34);
+                    customAxis.RelativePosition = -sideIndex * 56;
                 }
                 else
                 {
-                    customAxis.RelativePosition = placeOnOtherSide ? (-sideIndex * 34) : (sideIndex * 34);
+                    customAxis.RelativePosition = -sideIndex * 48;
                 }
             }
 
@@ -466,13 +429,16 @@ public class TChartTrackConsoleRenderer
             customAxis.Ticks.Color = axisColor;
             customAxis.MinorTicks.Color = Color.FromArgb(120, axisColor);
 
+            int labelFontSize = (int)Math.Max(7, channel.objXAxis.LabelFontSize);
+
             // Font & Labels
             customAxis.Labels.Font.Name = !string.IsNullOrWhiteSpace(channel.objXAxis.LabelFontName) ? channel.objXAxis.LabelFontName : "Segoe UI";
-            customAxis.Labels.Font.Size = (int)Math.Max(7, channel.objXAxis.LabelFontSize);
+            customAxis.Labels.Font.Size = labelFontSize;
             customAxis.Labels.Font.Color = axisColor;
             customAxis.Labels.Font.Bold = channel.objXAxis.LabelFontBold;
             customAxis.Labels.Font.Italic = channel.objXAxis.LabelFontItalic;
             customAxis.Labels.Angle = (int)channel.objXAxis.LabelAngle;
+            customAxis.Labels.TextAlign = Steema.TeeChart.Drawing.StringAlignment.Center;
 
             // Axis Title: Channel Title (Unit) matching channel color
             string axisTitle = !string.IsNullOrWhiteSpace(channel.Title) ? channel.Title : channel.Mnemonic;
@@ -484,18 +450,24 @@ public class TChartTrackConsoleRenderer
             customAxis.Title.Text = axisTitle;
             customAxis.Title.Visible = console.ShowAxisTitles;
             customAxis.Title.Font.Name = !string.IsNullOrWhiteSpace(channel.objXAxis.LabelFontName) ? channel.objXAxis.LabelFontName : "Segoe UI";
-            customAxis.Title.Font.Size = (int)Math.Max(7, channel.objXAxis.LabelFontSize);
+            customAxis.Title.Font.Size = labelFontSize;
             customAxis.Title.Font.Bold = true;
             customAxis.Title.Font.Color = axisColor;
+            customAxis.Title.Alignment = Steema.TeeChart.Drawing.StringAlignment.Center;
+            customAxis.Title.TextAlign = Steema.TeeChart.Drawing.StringAlignment.Center;
 
             if (isHorizontal)
             {
-                // Vertical axis along the left or right edge: rotate title vertically
+                // Vertical axis along the left or right edge: reserve label width & space title cleanly
+                customAxis.Labels.CustomSize = Math.Max(28, labelFontSize * 3);
+                customAxis.Title.Distance = Math.Max(10, labelFontSize + 2);
                 customAxis.Title.Angle = placeOnOtherSide ? 270 : 90;
             }
             else
             {
-                // Horizontal axis along the top or bottom: title displayed horizontally
+                // Horizontal axis along the top: reserve label height & space title cleanly above labels
+                customAxis.Labels.CustomSize = Math.Max(18, labelFontSize + 10);
+                customAxis.Title.Distance = Math.Max(14, labelFontSize + 6);
                 customAxis.Title.Angle = 0;
             }
 
@@ -692,6 +664,33 @@ public class TChartTrackConsoleRenderer
         List<RigStateInterval> intervals)
     {
         // Custom background shading for rig-state intervals can be hooked into AfterDraw
+    }
+
+    /// <summary>
+    /// Checks if a channel represents Bit Depth, Hole Depth, or general depth measurements.
+    /// </summary>
+    public static bool IsDepthOrHoleDepthChannel(VHTrackChannel channel)
+    {
+        if (channel == null) return false;
+        var mnemonic = channel.Mnemonic?.Trim() ?? string.Empty;
+        var title = channel.Title?.Trim() ?? string.Empty;
+
+        if (ChartDataService.MnemonicAliases.TryGetValue("BIT_DEPTH", out var bitAliases) &&
+            bitAliases.Any(a => string.Equals(a, mnemonic, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (ChartDataService.MnemonicAliases.TryGetValue("HOLE_DEPTH", out var holeAliases) &&
+            holeAliases.Any(a => string.Equals(a, mnemonic, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (mnemonic.IndexOf("DEPTH", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            title.IndexOf("Depth", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            mnemonic.Equals("MD", StringComparison.OrdinalIgnoreCase) ||
+            mnemonic.Equals("DBIT", StringComparison.OrdinalIgnoreCase) ||
+            mnemonic.Equals("DMEA", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
     }
 
     public static Color ParseColor(string? colorStr, Color fallback)
@@ -1036,6 +1035,225 @@ public class TChartTrackConsoleRenderer
         int c2 = Math.Clamp(high, 0, list.Count - 1);
         return Math.Abs(list[c1] - target) < Math.Abs(list[c2] - target) ? c1 : c2;
     }
+
+    /// <summary>
+    /// Retrieves a multi-channel tooltip hover payload for all visible channels at the mouse position.
+    /// Snaps to the nearest index point (Date/Time or Depth) along the chart index axis.
+    /// </summary>
+    public ChartAllChannelsHoverInfo? GetAllChannelsHoverInfo(System.Windows.Point mousePixel, string? wellName = null)
+    {
+        if (_currentConsole == null || _currentData == null || _currentData.IndexValues.Count == 0) return null;
+
+        bool isHorizontal = _currentConsole.TrackOrientation == enumTrackOrientation.Horizontal;
+        var indexAxis = isHorizontal ? _tChart.Axes.Bottom : _tChart.Axes.Left;
+        if (indexAxis == null || !indexAxis.Visible) return null;
+
+        var chartRect = _tChart.Chart.ChartRect;
+        if (chartRect.Width > 0 && chartRect.Height > 0)
+        {
+            if (mousePixel.X < chartRect.Left - 10 || mousePixel.X > chartRect.Right + 10 ||
+                mousePixel.Y < chartRect.Top - 10 || mousePixel.Y > chartRect.Bottom + 10)
+            {
+                return null;
+            }
+        }
+
+        double mouseIndexVal;
+        try
+        {
+            mouseIndexVal = indexAxis.CalcPosPoint((int)(isHorizontal ? mousePixel.X : mousePixel.Y));
+        }
+        catch
+        {
+            return null;
+        }
+
+        int sampleIdx = FindClosestIndex(_currentData.IndexValues, mouseIndexVal);
+        if (sampleIdx < 0 || sampleIdx >= _currentData.IndexValues.Count) return null;
+
+        double sampleIndexVal = _currentData.IndexValues[sampleIdx];
+
+        DateTime? indexDt = null;
+        string formattedIndex;
+        if (_currentConsole.IndexType == enumIndexType.TimeLog)
+        {
+            try
+            {
+                indexDt = DateTime.FromOADate(sampleIndexVal);
+                formattedIndex = indexDt.Value.ToString("MMM-dd-yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                formattedIndex = sampleIndexVal.ToString("F1", CultureInfo.InvariantCulture);
+            }
+        }
+        else
+        {
+            formattedIndex = $"{sampleIndexVal:N2} m";
+        }
+
+        // Rig State Resolution
+        string rsName = "None";
+        int? rsNum = null;
+        string rsColorHex = "#9E9E9E";
+        if (sampleIdx < _currentData.RigStateNumbers.Count)
+        {
+            rsNum = _currentData.RigStateNumbers[sampleIdx];
+            int clr = sampleIdx < _currentData.RigStateColors.Count ? _currentData.RigStateColors[sampleIdx] : 0;
+            if (clr != 0)
+            {
+                rsColorHex = RigStateService.ConvertColorToHex(clr);
+            }
+
+            if (_currentRigStateIntervals != null && _currentRigStateIntervals.Count > 0)
+            {
+                var interval = _currentRigStateIntervals.FirstOrDefault(i =>
+                    (sampleIndexVal >= Math.Min(i.StartIndex, i.EndIndex) - 1e-5 && sampleIndexVal <= Math.Max(i.StartIndex, i.EndIndex) + 1e-5) ||
+                    i.StateNumber == rsNum);
+                if (interval != null)
+                {
+                    rsName = interval.StateName;
+                    if (string.IsNullOrEmpty(rsColorHex)) rsColorHex = interval.ColorHex;
+                }
+            }
+
+            if (string.IsNullOrEmpty(rsName) || rsName == "None")
+            {
+                var defItem = RigStateService.DefaultRigStateItems.FirstOrDefault(i => i.Number == rsNum);
+                if (defItem != default)
+                {
+                    rsName = defItem.Name;
+                    if (string.IsNullOrEmpty(rsColorHex)) rsColorHex = RigStateService.ConvertColorToHex(defItem.Color);
+                }
+                else
+                {
+                    rsName = $"State {rsNum}";
+                }
+            }
+        }
+
+        var channelItems = new List<ChannelValueHoverInfo>();
+        int anchorX = (int)mousePixel.X;
+        int anchorY = (int)mousePixel.Y;
+        bool foundDepthAnchor = false;
+
+        var visibleTracks = _currentConsole.Tracks.Where(t => t.Visible).OrderBy(t => t.DisplayOrder).ToList();
+        foreach (var track in visibleTracks)
+        {
+            foreach (var ch in track.Channels.Where(c => c.Visible))
+            {
+                double val = 0.0;
+                bool hasVal = false;
+                if (_currentData.ChannelValues.TryGetValue(ch.Mnemonic, out var cVals) && sampleIdx < cVals.Count)
+                {
+                    val = cVals[sampleIdx];
+                    hasVal = true;
+                }
+                else if (ch.__chartSeries is Series s && sampleIdx < s.Count)
+                {
+                    val = isHorizontal ? s.YValues[sampleIdx] : s.XValues[sampleIdx];
+                    hasVal = true;
+                }
+
+                if (!hasVal) continue;
+
+                string valStr = val.ToString("N2", CultureInfo.InvariantCulture);
+                string unitStr = !string.IsNullOrWhiteSpace(ch.Unit) ? ch.Unit.Trim() : string.Empty;
+                string titleStr = !string.IsNullOrWhiteSpace(ch.Title) ? ch.Title.Trim() : ch.Mnemonic.Trim();
+                string colorHex = !string.IsNullOrWhiteSpace(ch.LineColor) ? ch.LineColor : "#1976D2";
+
+                channelItems.Add(new ChannelValueHoverInfo
+                {
+                    TrackTitle = track.Title,
+                    ChannelMnemonic = ch.Mnemonic,
+                    ChannelTitle = titleStr,
+                    Unit = unitStr,
+                    LineColorHex = colorHex,
+                    Value = val,
+                    FormattedValue = valStr
+                });
+
+                if (!foundDepthAnchor && ch.__chartSeries is Series depthSeries && sampleIdx < depthSeries.Count)
+                {
+                    if (IsDepthOrHoleDepthChannel(ch))
+                    {
+                        anchorX = depthSeries.CalcXPos(sampleIdx);
+                        anchorY = depthSeries.CalcYPos(sampleIdx);
+                        foundDepthAnchor = true;
+                    }
+                }
+            }
+        }
+
+        if (!foundDepthAnchor)
+        {
+            try
+            {
+                if (isHorizontal)
+                {
+                    anchorX = indexAxis.CalcXPosValue(sampleIndexVal);
+                }
+                else
+                {
+                    anchorY = indexAxis.CalcYPosValue(sampleIndexVal);
+                }
+            }
+            catch { }
+        }
+
+        return new ChartAllChannelsHoverInfo
+        {
+            WellName = !string.IsNullOrWhiteSpace(wellName) ? wellName : "Etech 420",
+            FormattedIndex = formattedIndex,
+            IndexDateTime = indexDt,
+            IndexValue = sampleIndexVal,
+            RigStateName = rsName,
+            RigStateNumber = rsNum,
+            RigStateColorHex = rsColorHex,
+            SampleIndex = sampleIdx,
+            AnchorPixelX = anchorX,
+            AnchorPixelY = anchorY,
+            Channels = channelItems
+        };
+    }
+}
+
+/// <summary>
+/// Tooltip information for all visible channels at a single index point.
+/// </summary>
+public class ChartAllChannelsHoverInfo
+{
+    public string WellName { get; set; } = string.Empty;
+    public string FormattedIndex { get; set; } = string.Empty;
+    public DateTime? IndexDateTime { get; set; }
+    public double IndexValue { get; set; }
+    public string RigStateName { get; set; } = "None";
+    public int? RigStateNumber { get; set; }
+    public string RigStateColorHex { get; set; } = "#9E9E9E";
+    public int SampleIndex { get; set; }
+    public int AnchorPixelX { get; set; }
+    public int AnchorPixelY { get; set; }
+    public List<ChannelValueHoverInfo> Channels { get; set; } = new();
+}
+
+/// <summary>
+/// Individual channel reading within a multi-channel tooltip.
+/// </summary>
+public class ChannelValueHoverInfo
+{
+    public string TrackTitle { get; set; } = string.Empty;
+    public string ChannelMnemonic { get; set; } = string.Empty;
+    public string ChannelTitle { get; set; } = string.Empty;
+    public string Unit { get; set; } = string.Empty;
+    public string LineColorHex { get; set; } = "#1976D2";
+    public double Value { get; set; }
+    public string FormattedValue { get; set; } = string.Empty;
+
+    public string FormattedValueWithUnit => string.IsNullOrWhiteSpace(Unit)
+        ? FormattedValue
+        : $"{FormattedValue} {Unit.Trim()}";
+
+    public string DisplayText => $"{ChannelTitle}: {FormattedValueWithUnit}";
 }
 
 /// <summary>
