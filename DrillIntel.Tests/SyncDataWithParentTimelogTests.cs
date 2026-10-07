@@ -416,5 +416,122 @@ public class SyncDataWithParentTimelogTests
             catch { }
         }
     }
+
+    [Fact]
+    public void CombinedDateTimeField_ProvidesFormattedText_AndSupportsTwoWayBinding()
+    {
+        var session = new ProjectSession();
+        var timeLog = new TimeLog
+        {
+            ObjectID = "TL_COMBINED",
+            nameLog = "Combined Log",
+            nameWell = "WellA",
+            nameWellbore = "WB1"
+        };
+
+        var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+
+        // Set combined From and To dates directly
+        var testFrom = new DateTime(2026, 6, 15, 8, 30, 0);
+        var testTo = new DateTime(2026, 6, 20, 17, 45, 0);
+
+        vm.FromDateTime = testFrom;
+        vm.ToDateTime = testTo;
+
+        // Verify underlying Date and Time properties updated
+        Assert.Equal(new DateTime(2026, 6, 15), vm.FromDate);
+        Assert.Equal(testFrom, vm.FromDateTime);
+        Assert.Equal(new DateTime(2026, 6, 20), vm.ToDate);
+        Assert.Equal(testTo, vm.ToDateTime);
+
+        // Verify formatting adheres to DD/MM/YYYY HH:MM
+        Assert.Equal("15/06/2026 08:30", vm.FromDateTimeText);
+        Assert.Equal("20/06/2026 17:45", vm.ToDateTimeText);
+    }
+
+    [Fact]
+    public void CombinedDateTimeField_DirectTextEditing_ParsesMultipleDateFormats()
+    {
+        var session = new ProjectSession();
+        var timeLog = new TimeLog
+        {
+            ObjectID = "TL_PARSE",
+            nameLog = "Parse Log",
+            nameWell = "WellA",
+            nameWellbore = "WB1"
+        };
+
+        var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+
+        // 1. Slash format (DD/MM/YYYY HH:MM)
+        vm.FromDateTimeText = "05/11/2026 14:15";
+        Assert.Equal(new DateTime(2026, 11, 5, 14, 15, 0), vm.FromDateTime);
+        Assert.Equal("05/11/2026 14:15", vm.FromDateTimeText);
+
+        // 2. Hyphen format (DD-MM-YYYY HH:MM)
+        vm.ToDateTimeText = "10-12-2026 23:59";
+        Assert.Equal(new DateTime(2026, 12, 10, 23, 59, 0), vm.ToDateTime);
+        Assert.Equal("10/12/2026 23:59", vm.ToDateTimeText);
+
+        // 3. ISO format (YYYY-MM-DD HH:MM)
+        vm.FromDateTimeText = "2026-07-04 09:00";
+        Assert.Equal(new DateTime(2026, 7, 4, 9, 0, 0), vm.FromDateTime);
+        Assert.Equal("04/07/2026 09:00", vm.FromDateTimeText);
+    }
+
+    [Fact]
+    public void CombinedDateTimeField_PresetChanges_UpdatesBothCombinedFieldsInstantly()
+    {
+        var session = new ProjectSession();
+        var timeLog = new TimeLog
+        {
+            ObjectID = "TL_PRESET",
+            nameLog = "Preset Log",
+            nameWell = "WellA",
+            nameWellbore = "WB1",
+            startIndex = "2026-06-01 00:00:00",
+            endIndex = "2026-06-10 18:00:00"
+        };
+
+        var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+
+        // Test All Available Data preset
+        vm.SelectedDateRangePreset = "All Available Data";
+        Assert.Equal("01/06/2026 00:00", vm.FromDateTimeText);
+        Assert.Equal("10/06/2026 18:00", vm.ToDateTimeText);
+
+        // Test Last 24 Hours preset
+        vm.SelectedDateRangePreset = "Last 24 Hours";
+        Assert.Equal(vm.ToDateTime.AddHours(-24), vm.FromDateTime);
+
+        // Test Last 7 Days preset
+        vm.SelectedDateRangePreset = "Last 7 Days";
+        Assert.Equal(vm.ToDateTime.AddDays(-7), vm.FromDateTime);
+    }
+
+    [Theory]
+    [InlineData("25/12/2026 10:30", true, 2026, 12, 25, 10, 30)]
+    [InlineData("25-12-2026 10:30", true, 2026, 12, 25, 10, 30)]
+    [InlineData("2026-12-25 10:30", true, 2026, 12, 25, 10, 30)]
+    [InlineData("25/12/2026 10:30:45", true, 2026, 12, 25, 10, 30)]
+    [InlineData("25/12/2026", true, 2026, 12, 25, 0, 0)]
+    [InlineData("invalid-date-string", false, 0, 0, 0, 0, 0)]
+    [InlineData("", false, 0, 0, 0, 0, 0)]
+    public void DateTimePicker_TryParseDateTime_HandlesAllStandardFormatsCorrectly(
+        string input, bool expectedSuccess, int year, int month, int day, int hour, int minute)
+    {
+        bool success = DrillIntel.Controls.DateTimePicker.TryParseDateTime(input, out var parsed);
+        Assert.Equal(expectedSuccess, success);
+
+        if (expectedSuccess)
+        {
+            Assert.Equal(year, parsed.Year);
+            Assert.Equal(month, parsed.Month);
+            Assert.Equal(day, parsed.Day);
+            Assert.Equal(hour, parsed.Hour);
+            Assert.Equal(minute, parsed.Minute);
+        }
+    }
 }
+
 

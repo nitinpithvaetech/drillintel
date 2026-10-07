@@ -6,6 +6,7 @@
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
         xmlns:converters="clr-namespace:DrillIntel.Converters"
+        xmlns:controls="clr-namespace:DrillIntel.Controls"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=viewmodels:SyncDataWithParentTimelogViewModel}"
         Title="Sync Data with Parent Timelog" 
@@ -125,7 +126,7 @@
                     </StackPanel>
                 </DockPanel>
 
-                <!-- Date & Timestamp Pickers -->
+                <!-- Single Combined Date & Time Input Fields -->
                 <Grid IsEnabled="{Binding CanSelectDates}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -133,46 +134,32 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <!-- From Date & Timestamp -->
+                    <!-- From Date & Time (Single Field) -->
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="From Date &amp; Time:" FontSize="12" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,4" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="3*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="2*" />
-                            </Grid.ColumnDefinitions>
-                            <DatePicker Grid.Column="0" 
-                                        SelectedDate="{Binding FromDate, Mode=TwoWay}" 
-                                        DisplayDateStart="{Binding MinAvailableDate}"
-                                        DisplayDateEnd="{Binding MaxAvailableDate}"
-                                        ToolTip="Select start date for synchronization" />
-                            <materialDesign:TimePicker Grid.Column="2" 
-                                                       SelectedTime="{Binding FromTime, Mode=TwoWay}" 
-                                                       Is24Hours="True"
-                                                       ToolTip="Select start timestamp (HH:mm:ss)" />
-                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <materialDesign:PackIcon Kind="CalendarClock" Width="15" Height="15" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="From Date &amp; Time:" FontSize="12" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center" />
+                            <TextBlock Text=" (DD/MM/YYYY HH:MM)" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        </StackPanel>
+                        <controls:DateTimePicker 
+                            SelectedDateTime="{Binding FromDateTime, Mode=TwoWay}" 
+                            DisplayDateStart="{Binding MinAvailableDate}"
+                            DisplayDateEnd="{Binding MaxAvailableDate}"
+                            ToolTip="Select start date and time for synchronization (DD/MM/YYYY HH:MM)" />
                     </StackPanel>
 
-                    <!-- To Date & Timestamp -->
+                    <!-- To Date & Time (Single Field) -->
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="To Date &amp; Time:" FontSize="12" FontWeight="SemiBold" Foreground="#334155" Margin="0,0,0,4" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="3*" />
-                                <ColumnDefinition Width="8" />
-                                <ColumnDefinition Width="2*" />
-                            </Grid.ColumnDefinitions>
-                            <DatePicker Grid.Column="0" 
-                                        SelectedDate="{Binding ToDate, Mode=TwoWay}" 
-                                        DisplayDateStart="{Binding MinAvailableDate}"
-                                        DisplayDateEnd="{Binding MaxAvailableDate}"
-                                        ToolTip="Select end date for synchronization" />
-                            <materialDesign:TimePicker Grid.Column="2" 
-                                                       SelectedTime="{Binding ToTime, Mode=TwoWay}" 
-                                                       Is24Hours="True"
-                                                       ToolTip="Select end timestamp (HH:mm:ss)" />
-                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <materialDesign:PackIcon Kind="CalendarClock" Width="15" Height="15" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="To Date &amp; Time:" FontSize="12" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center" />
+                            <TextBlock Text=" (DD/MM/YYYY HH:MM)" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        </StackPanel>
+                        <controls:DateTimePicker 
+                            SelectedDateTime="{Binding ToDateTime, Mode=TwoWay}" 
+                            DisplayDateStart="{Binding MinAvailableDate}"
+                            DisplayDateEnd="{Binding MaxAvailableDate}"
+                            ToolTip="Select end date and time for synchronization (DD/MM/YYYY HH:MM)" />
                     </StackPanel>
                 </Grid>
             </StackPanel>

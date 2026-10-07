@@ -68,6 +68,16 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             var time = FromTime?.TimeOfDay ?? TimeSpan.Zero;
             return date.Add(time);
         }
+        set
+        {
+            if (FromDateTime != value)
+            {
+                FromDate = value.Date;
+                FromTime = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FromDateTimeText));
+            }
+        }
     }
 
     public DateTime ToDateTime
@@ -78,7 +88,68 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             var time = ToTime?.TimeOfDay ?? new TimeSpan(23, 59, 59);
             return date.Add(time);
         }
+        set
+        {
+            if (ToDateTime != value)
+            {
+                ToDate = value.Date;
+                ToTime = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ToDateTimeText));
+            }
+        }
     }
+
+    public string FromDateTimeText
+    {
+        get => FromDateTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        set
+        {
+            if (TryParseDateTime(value, out var dt))
+            {
+                FromDateTime = dt;
+            }
+        }
+    }
+
+    public string ToDateTimeText
+    {
+        get => ToDateTime.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        set
+        {
+            if (TryParseDateTime(value, out var dt))
+            {
+                ToDateTime = dt;
+            }
+        }
+    }
+
+    partial void OnFromDateChanged(DateTime value)
+    {
+        OnPropertyChanged(nameof(FromDateTime));
+        OnPropertyChanged(nameof(FromDateTimeText));
+    }
+
+    partial void OnFromTimeChanged(DateTime? value)
+    {
+        OnPropertyChanged(nameof(FromDateTime));
+        OnPropertyChanged(nameof(FromDateTimeText));
+    }
+
+    partial void OnToDateChanged(DateTime value)
+    {
+        OnPropertyChanged(nameof(ToDateTime));
+        OnPropertyChanged(nameof(ToDateTimeText));
+    }
+
+    partial void OnToTimeChanged(DateTime? value)
+    {
+        OnPropertyChanged(nameof(ToDateTime));
+        OnPropertyChanged(nameof(ToDateTimeText));
+    }
+
+    public static bool TryParseDateTime(string? text, out DateTime result) =>
+        DrillIntel.Controls.DateTimePicker.TryParseDateTime(text, out result);
 
     [ObservableProperty]
     private DateTime _minAvailableDate = DateTime.MinValue;
