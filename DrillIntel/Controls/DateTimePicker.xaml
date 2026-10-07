@@ -1,0 +1,387 @@
+<UserControl x:Class="DrillIntel.Controls.DateTimePicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d" 
+             x:Name="RootControl"
+             Height="32"
+             Focusable="False">
+
+    <UserControl.Resources>
+        <!-- Stepper Small Button Style -->
+        <Style x:Key="StepperSmallButton" TargetType="Button">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Background" Value="#F1F5F9" />
+            <Setter Property="Foreground" Value="#475569" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="3" 
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0" />
+                                <Setter TargetName="border" Property="BorderBrush" Value="#94A3B8" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#CBD5E1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Preset Chip Button Style -->
+        <Style x:Key="PresetChipButton" TargetType="Button">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="2,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Background" Value="#F1F5F9" />
+            <Setter Property="Foreground" Value="#334155" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="chipBorder" 
+                                Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="4" 
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="chipBorder" Property="Background" Value="#E0F2FE" />
+                                <Setter TargetName="chipBorder" Property="BorderBrush" Value="#7DD3FC" />
+                                <Setter Property="Foreground" Value="#0284C7" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="chipBorder" Property="Background" Value="#BAE6FD" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Single Combined Input Field Container -->
+        <Border x:Name="OuterBorder"
+                Background="#FFFFFF"
+                BorderBrush="#CBD5E1"
+                BorderThickness="1"
+                CornerRadius="6"
+                SnapsToDevicePixels="True">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="BorderBrush" Value="#0284C7" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Icon: Calendar & Clock (Clickable to open picker) -->
+                <Button Grid.Column="0"
+                        x:Name="IconLaunchButton"
+                        Style="{StaticResource MaterialDesignFlatButton}"
+                        Padding="8,0,4,0"
+                        Height="30"
+                        MinWidth="30"
+                        Cursor="Hand"
+                        Click="OnOpenDropDownClick"
+                        ToolTip="Click to open Date &amp; Time Picker">
+                    <materialDesign:PackIcon Kind="CalendarClock" 
+                                             Width="17" 
+                                             Height="17" 
+                                             Foreground="#0284C7" 
+                                             VerticalAlignment="Center" />
+                </Button>
+
+                <!-- Center: Editable Combined Text Box (DD/MM/YYYY HH:MM) -->
+                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="2,0">
+                    <TextBlock x:Name="WatermarkTextBlock"
+                               Text="DD/MM/YYYY HH:MM"
+                               FontSize="12"
+                               Foreground="#94A3B8"
+                               VerticalAlignment="Center"
+                               Margin="2,0,0,0"
+                               IsHitTestVisible="False"
+                               Visibility="Collapsed" />
+                    <TextBox x:Name="DateTimeTextBox"
+                             FontSize="12"
+                             FontWeight="SemiBold"
+                             Foreground="#0F172A"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             VerticalContentAlignment="Center"
+                             Padding="2,0"
+                             PreviewKeyDown="OnTextBoxKeyDown"
+                             LostFocus="OnTextBoxLostFocus"
+                             ToolTip="Enter Date &amp; Time in format DD/MM/YYYY HH:MM" />
+                </Grid>
+
+                <!-- Right: Dropdown Menu Arrow -->
+                <Button Grid.Column="2"
+                        x:Name="DropDownButton"
+                        Style="{StaticResource MaterialDesignFlatButton}"
+                        Padding="2,0,6,0"
+                        Height="30"
+                        MinWidth="24"
+                        Cursor="Hand"
+                        Click="OnOpenDropDownClick"
+                        ToolTip="Click to open Date &amp; Time Picker">
+                    <materialDesign:PackIcon Kind="MenuDown" 
+                                             Width="18" 
+                                             Height="18" 
+                                             Foreground="#64748B" 
+                                             VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Dropdown Popup for Unified Date & Time Selection -->
+        <Popup x:Name="DropDownPopup"
+               PlacementTarget="{Binding ElementName=OuterBorder}"
+               Placement="Bottom"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               PopupAnimation="Fade"
+               Opened="OnPopupOpened"
+               Closed="OnPopupClosed">
+            <Border Background="#FFFFFF"
+                    BorderBrush="#CBD5E1"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="12"
+                    Margin="0,4,0,0">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" 
+                                      ShadowDepth="4" 
+                                      Direction="270" 
+                                      Opacity="0.18" 
+                                      Color="#0F172A" />
+                </Border.Effect>
+
+                <StackPanel>
+                    <!-- Header Banner: Displays live formatted preview -->
+                    <Border Background="#F0F7FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,10">
+                        <DockPanel LastChildFill="False">
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                <materialDesign:PackIcon Kind="CalendarClock" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Date &amp; Time Selection" FontSize="12" FontWeight="SemiBold" Foreground="#0369A1" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <Border DockPanel.Dock="Right" Background="#E0F2FE" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                                <TextBlock x:Name="PopupPreviewTextBlock" Text="01/01/2026 00:00" FontSize="12" FontWeight="Bold" Foreground="#0284C7" VerticalAlignment="Center" />
+                            </Border>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Body: Side-by-side Date (Calendar) and Time Selection -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="170" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left Column: Calendar Date Selection -->
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Select Date" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="2,0,0,4" />
+                            <Border BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="2" Background="#FFFFFF">
+                                <Calendar x:Name="PopupCalendar"
+                                          SelectionMode="SingleDate"
+                                          SelectedDatesChanged="OnCalendarSelectedDatesChanged" />
+                            </Border>
+
+                            <!-- Quick Date Shortcuts -->
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                <Button Content="Today" 
+                                        Click="OnTodayClick" 
+                                        Height="24" 
+                                        FontSize="11" 
+                                        Padding="8,0" 
+                                        Margin="0,0,4,0" 
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                        BorderBrush="#CBD5E1" 
+                                        Foreground="#334155" 
+                                        ToolTip="Select Today's Date" />
+                                <Button x:Name="MinDateButton" 
+                                        Content="Log Start" 
+                                        Click="OnMinDateClick" 
+                                        Height="24" 
+                                        FontSize="11" 
+                                        Padding="8,0" 
+                                        Margin="0,0,4,0" 
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                        BorderBrush="#CBD5E1" 
+                                        Foreground="#334155" 
+                                        Visibility="Collapsed" 
+                                        ToolTip="Select Start Date of TimeLog" />
+                                <Button x:Name="MaxDateButton" 
+                                        Content="Log End" 
+                                        Click="OnMaxDateClick" 
+                                        Height="24" 
+                                        FontSize="11" 
+                                        Padding="8,0" 
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                        BorderBrush="#CBD5E1" 
+                                        Foreground="#334155" 
+                                        Visibility="Collapsed" 
+                                        ToolTip="Select End Date of TimeLog" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Center Divider -->
+                        <Rectangle Grid.Column="1" Width="1" Fill="#E2E8F0" VerticalAlignment="Stretch" HorizontalAlignment="Center" />
+
+                        <!-- Right Column: Time Selection (Hours & Minutes + Quick Presets) -->
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Select Time (24h)" FontSize="11" FontWeight="SemiBold" Foreground="#475569" Margin="2,0,0,4" />
+
+                            <!-- Digital Time Spinner Box -->
+                            <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="6,6" Margin="0,0,0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Hour Stepper -->
+                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                                        <Button Style="{StaticResource StepperSmallButton}" Click="OnHourUpClick" ToolTip="Increase Hour">
+                                            <materialDesign:PackIcon Kind="ChevronUp" Width="14" Height="14" Foreground="#475569" />
+                                        </Button>
+                                        <TextBox x:Name="HourTextBox" 
+                                                 Text="12" 
+                                                 FontSize="16" 
+                                                 FontWeight="Bold" 
+                                                 Foreground="#0F172A" 
+                                                 HorizontalContentAlignment="Center" 
+                                                 BorderThickness="0" 
+                                                 Background="Transparent" 
+                                                 Width="36" 
+                                                 Margin="0,2" 
+                                                 LostFocus="OnHourTextBoxLostFocus"
+                                                 PreviewKeyDown="OnTimeTextBoxKeyDown"
+                                                 ToolTip="Hour (00 - 23)" />
+                                        <Button Style="{StaticResource StepperSmallButton}" Click="OnHourDownClick" ToolTip="Decrease Hour">
+                                            <materialDesign:PackIcon Kind="ChevronDown" Width="14" Height="14" Foreground="#475569" />
+                                        </Button>
+                                    </StackPanel>
+
+                                    <!-- Separator Colon -->
+                                    <TextBlock Grid.Column="1" Text=":" FontSize="20" FontWeight="Bold" Foreground="#64748B" VerticalAlignment="Center" Margin="2,0" />
+
+                                    <!-- Minute Stepper -->
+                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                                        <Button Style="{StaticResource StepperSmallButton}" Click="OnMinuteUpClick" ToolTip="Increase Minute">
+                                            <materialDesign:PackIcon Kind="ChevronUp" Width="14" Height="14" Foreground="#475569" />
+                                        </Button>
+                                        <TextBox x:Name="MinuteTextBox" 
+                                                 Text="00" 
+                                                 FontSize="16" 
+                                                 FontWeight="Bold" 
+                                                 Foreground="#0F172A" 
+                                                 HorizontalContentAlignment="Center" 
+                                                 BorderThickness="0" 
+                                                 Background="Transparent" 
+                                                 Width="36" 
+                                                 Margin="0,2" 
+                                                 LostFocus="OnMinuteTextBoxLostFocus"
+                                                 PreviewKeyDown="OnTimeTextBoxKeyDown"
+                                                 ToolTip="Minute (00 - 59)" />
+                                        <Button Style="{StaticResource StepperSmallButton}" Click="OnMinuteDownClick" ToolTip="Decrease Minute">
+                                            <materialDesign:PackIcon Kind="ChevronDown" Width="14" Height="14" Foreground="#475569" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Quick Time Presets -->
+                            <TextBlock Text="Quick Presets:" FontSize="10.5" FontWeight="SemiBold" Foreground="#64748B" Margin="2,0,0,4" />
+                            <UniformGrid Columns="2" Margin="0,0,0,4">
+                                <Button Content="00:00" Click="OnPresetTimeClick" Tag="00:00" Style="{StaticResource PresetChipButton}" ToolTip="Start of Day (00:00)" />
+                                <Button Content="06:00" Click="OnPresetTimeClick" Tag="06:00" Style="{StaticResource PresetChipButton}" ToolTip="Morning (06:00)" />
+                                <Button Content="12:00" Click="OnPresetTimeClick" Tag="12:00" Style="{StaticResource PresetChipButton}" ToolTip="Noon (12:00)" />
+                                <Button Content="18:00" Click="OnPresetTimeClick" Tag="18:00" Style="{StaticResource PresetChipButton}" ToolTip="Evening (18:00)" />
+                                <Button Content="23:59" Click="OnPresetTimeClick" Tag="23:59" Style="{StaticResource PresetChipButton}" ToolTip="End of Day (23:59)" />
+                                <Button Content="Now" Click="OnPresetTimeClick" Tag="Now" Style="{StaticResource PresetChipButton}" ToolTip="Current Time" />
+                            </UniformGrid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Footer Bar: Action Buttons -->
+                    <Border Margin="0,12,0,0" Padding="0,8,0,0" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0">
+                        <DockPanel LastChildFill="False">
+                            <Button DockPanel.Dock="Left" 
+                                    Content="Reset" 
+                                    Click="OnResetClick" 
+                                    Style="{StaticResource MaterialDesignFlatButton}" 
+                                    FontSize="11.5" 
+                                    Padding="8,0" 
+                                    Height="28" 
+                                    Foreground="#64748B" 
+                                    ToolTip="Reset to previous value" />
+
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Cancel" 
+                                        Click="OnCancelClick" 
+                                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                        BorderBrush="#CBD5E1" 
+                                        Foreground="#475569" 
+                                        FontSize="11.5" 
+                                        Height="28" 
+                                        Padding="10,0" 
+                                        Margin="0,0,6,0" />
+                                <Button Content="Apply" 
+                                        Click="OnApplyClick" 
+                                        Style="{StaticResource MaterialDesignRaisedButton}" 
+                                        Background="#0284C7" 
+                                        BorderBrush="#0284C7" 
+                                        Foreground="#FFFFFF" 
+                                        FontSize="11.5" 
+                                        FontWeight="SemiBold" 
+                                        Height="28" 
+                                        Padding="14,0" 
+                                        ToolTip="Apply selected date &amp; time" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
+</UserControl>
+
