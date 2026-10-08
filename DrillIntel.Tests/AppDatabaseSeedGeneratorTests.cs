@@ -266,10 +266,114 @@ public class AppDatabaseSeedGeneratorTests
             ";
             cmd.ExecuteNonQuery();
 
-            // 8. Backward Compatibility Views
+            // 8. APP_BS_GLOBAL_PROFILE
+            cmd.CommandText = @"
+                CREATE TABLE APP_BS_GLOBAL_PROFILE (
+                    ID                          TEXT NOT NULL PRIMARY KEY,
+                    NAME                        TEXT NOT NULL,
+                    TYPE                        INTEGER NOT NULL,
+                    NOTES                       TEXT,
+                    CREATED_BY                  TEXT,
+                    CREATED_DATE                TEXT,
+                    MODIFIED_BY                 TEXT,
+                    MODIFIED_DATE               TEXT,
+                    DOWNSAMPLE_ON               INTEGER,
+                    DATA_POINTS                 INTEGER,
+                    TIME_PERIOD                 INTEGER,
+                    GROUP_FUNC                  TEXT,
+                    SHOW_DEPTH_TRACK            INTEGER,
+                    TRACK_WIDTH                 INTEGER,
+                    FILTER_BY_RANGE             INTEGER,
+                    MIN_HKLD                    REAL,
+                    MAX_HKLD                    REAL,
+                    FILTER_BY_INTERVAL          INTEGER,
+                    DEPTH_INTERVAL              REAL,
+                    INTERVAL_WINDOW             REAL,
+                    POINTS_TO_PLOT              INTEGER,
+                    PKUP_PUMP_CHANNEL           TEXT,
+                    PKUP_PUMP_CUTOFF            REAL,
+                    PKUP_RPM_CUTOFF             REAL,
+                    PKUP_MAX_MOVEMENT           REAL,
+                    PKUP_MIN_MOVEMENT           REAL,
+                    PKUP_PLOT_POINTS            INTEGER,
+                    PKUP_STATIC_METHOD          INTEGER,
+                    PKUP_DYNAMIC_METHOD         INTEGER,
+                    PKUP_LOCAL_MAX              INTEGER,
+                    SLK_PUMP_CHANNEL            TEXT,
+                    SLK_PUMP_CUTOFF             REAL,
+                    SLK_RPM_CUTOFF              REAL,
+                    SLK_MAX_MOVEMENT            REAL,
+                    SLK_MIN_MOVEMENT            REAL,
+                    SLK_PLOT_POINTS             INTEGER,
+                    SLK_STATIC_METHOD           INTEGER,
+                    SLK_DYNAMIC_METHOD          INTEGER,
+                    SLK_LOCAL_MAX               INTEGER,
+                    ROT_PUMP_CHANNEL            TEXT,
+                    ROT_PUMP_CUTOFF             REAL,
+                    ROT_MIN_RPM                 REAL,
+                    ROT_MAX_RPM                 REAL,
+                    ROT_PLOT_POINTS             INTEGER,
+                    ROT_CHANGE                  REAL,
+                    ROT_POINTS                  REAL,
+                    ROT_CHECK_PUSO              INTEGER,
+                    TIME_THRESHOLD              REAL,
+                    ENFORCE_PUSO                INTEGER,
+                    PKUP_MULTI_METHOD           INTEGER,
+                    SLK_MULTI_METHOD            INTEGER,
+                    ROB_MULTI_METHOD            INTEGER,
+                    SHOW_MULTI                  INTEGER,
+                    PKUP_RIGSTATES              TEXT,
+                    SLK_RIGSTATES               TEXT,
+                    ROT_RIGSTATES               TEXT,
+                    ENFORCE_RULE                INTEGER,
+                    PLOT_ONBOTTOM               INTEGER,
+                    IS_DEFAULT                  INTEGER,
+                    CASING_PKUP_MIN_MOVEMENT    REAL,
+                    CASING_PKUP_MAX_MOVEMENT    REAL,
+                    CASING_SLK_MIN_MOVEMENT     REAL,
+                    CASING_SLK_MAX_MOVEMENT     REAL,
+                    CASING_PKUP_RIGSTATES       TEXT,
+                    CASING_SLK_RIGSTATES        TEXT
+                );
+
+                INSERT INTO APP_BS_GLOBAL_PROFILE (
+                    ID, NAME, TYPE, NOTES, CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE,
+                    DOWNSAMPLE_ON, DATA_POINTS, TIME_PERIOD, GROUP_FUNC, SHOW_DEPTH_TRACK, TRACK_WIDTH,
+                    FILTER_BY_RANGE, MIN_HKLD, MAX_HKLD, FILTER_BY_INTERVAL, DEPTH_INTERVAL, INTERVAL_WINDOW,
+                    POINTS_TO_PLOT, PKUP_PUMP_CHANNEL, PKUP_PUMP_CUTOFF, PKUP_RPM_CUTOFF, PKUP_MAX_MOVEMENT,
+                    PKUP_MIN_MOVEMENT, PKUP_PLOT_POINTS, PKUP_STATIC_METHOD, PKUP_DYNAMIC_METHOD, PKUP_LOCAL_MAX,
+                    SLK_PUMP_CHANNEL, SLK_PUMP_CUTOFF, SLK_RPM_CUTOFF, SLK_MAX_MOVEMENT, SLK_MIN_MOVEMENT,
+                    SLK_PLOT_POINTS, SLK_STATIC_METHOD, SLK_DYNAMIC_METHOD, SLK_LOCAL_MAX,
+                    ROT_PUMP_CHANNEL, ROT_PUMP_CUTOFF, ROT_MIN_RPM, ROT_MAX_RPM, ROT_PLOT_POINTS,
+                    ROT_CHANGE, ROT_POINTS, ROT_CHECK_PUSO, TIME_THRESHOLD, ENFORCE_PUSO,
+                    PKUP_MULTI_METHOD, SLK_MULTI_METHOD, ROB_MULTI_METHOD, SHOW_MULTI,
+                    PKUP_RIGSTATES, SLK_RIGSTATES, ROT_RIGSTATES, ENFORCE_RULE, PLOT_ONBOTTOM,
+                    IS_DEFAULT, CASING_PKUP_MIN_MOVEMENT, CASING_PKUP_MAX_MOVEMENT,
+                    CASING_SLK_MIN_MOVEMENT, CASING_SLK_MAX_MOVEMENT, CASING_PKUP_RIGSTATES, CASING_SLK_RIGSTATES
+                ) VALUES (
+                    'DEFAULT-BS-PROFILE-001', 'Default Profile', 0, 'Default Broomstick Global Profile',
+                    'SYSTEM', datetime('now'), 'SYSTEM', datetime('now'),
+                    0, 6, 0, '', 0, 100,
+                    0, 0.0, 0.0, 0, 100.0, 10.0,
+                    0, 'SPPA', 99.0, 12.0, 70.0,
+                    5.0, 0, 0, 0, 0,
+                    'SPPA', 99.0, 12.0, 70.0, 5.0,
+                    0, 0, 0, 0,
+                    'SPPA', 99.0, 12.0, 30.0, 0,
+                    1.0, 1.0, 0, 1.0, 0,
+                    0, 0, 0, 0,
+                    '', '', '', 0, 0,
+                    1, 0.0, 0.0,
+                    0.0, 0.0, '', ''
+                );
+            ";
+            cmd.ExecuteNonQuery();
+
+            // 9. Backward Compatibility Views
             cmd.CommandText = @"
                 CREATE VIEW IF NOT EXISTS VMX_COMMON_RIGSTATE_SETUP AS SELECT * FROM APP_RIGSTATE_COMMON_SETUP;
                 CREATE VIEW IF NOT EXISTS VMX_COMMON_RIGSTATE_ITEMS AS SELECT * FROM APP_RIGSTATE_COMMON_ITEMS;
+                CREATE VIEW IF NOT EXISTS VMX_BS_GLOBAL_PROFILE AS SELECT * FROM APP_BS_GLOBAL_PROFILE;
             ";
             cmd.ExecuteNonQuery();
 
@@ -308,6 +412,14 @@ public class AppDatabaseSeedGeneratorTests
             vCmd.CommandText = "SELECT COUNT(*) FROM APP_UNIT_CONVERSIONS;";
             long convCount = (long)vCmd.ExecuteScalar()!;
             Assert.True(convCount >= 10);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE;";
+            long bsCount = (long)vCmd.ExecuteScalar()!;
+            Assert.True(bsCount >= 1);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM VMX_BS_GLOBAL_PROFILE;";
+            long bsViewCount = (long)vCmd.ExecuteScalar()!;
+            Assert.True(bsViewCount >= 1);
         }
     }
 }

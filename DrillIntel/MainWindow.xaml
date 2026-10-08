@@ -241,7 +241,7 @@
                             <materialDesign:PackIcon Kind="CogSyncOutline" Foreground="#673AB7" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Broomstick Settings">
+                    <Fluent:Button Header="Broomstick Settings" Command="{Binding OpenGlobalBroomstickSettingsCommand}">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="TuneVariant" Foreground="#607D8B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
@@ -265,9 +265,20 @@
                             </materialDesign:PackIcon>
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Broomstick Settings" IsEnabled="{Binding IsProjectOpen}">
+                    <Fluent:Button Header="Broomstick Settings" Command="{Binding OpenProjectBroomstickSettingsCommand}" IsEnabled="{Binding IsProjectOpen}">
                         <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="TuneVariant" Foreground="#607D8B" Width="32" Height="32" />
+                            <materialDesign:PackIcon Kind="TuneVariant" Width="32" Height="32">
+                                <materialDesign:PackIcon.Style>
+                                    <Style TargetType="materialDesign:PackIcon">
+                                        <Setter Property="Foreground" Value="#9E9E9E" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.IsProjectOpen, RelativeSource={RelativeSource AncestorType=Fluent:RibbonWindow}}" Value="True">
+                                                <Setter Property="Foreground" Value="#607D8B" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </materialDesign:PackIcon.Style>
+                            </materialDesign:PackIcon>
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>

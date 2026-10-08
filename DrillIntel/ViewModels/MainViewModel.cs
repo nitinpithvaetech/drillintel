@@ -288,6 +288,8 @@ public partial class MainViewModel : ObservableObject
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
         SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+        OpenProjectBroomstickSettingsCommand.NotifyCanExecuteChanged();
+        OpenBroomstickSettingsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
 
         if (Application.Current?.Dispatcher != null)
@@ -511,6 +513,53 @@ public partial class MainViewModel : ObservableObject
         else
         {
             OpenGlobalRigStateMaster();
+        }
+    }
+
+    [RelayCommand]
+    private void OpenGlobalBroomstickSettings()
+    {
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb.GetDataService();
+        var contextName = "Application Master Template (Default for New Projects)";
+
+        var vm = new BroomstickProfileEditorViewModel(dataService, contextName, isProjectContext: false);
+        var window = new DrillIntel.Views.Broomstick.BroomstickProfileEditorWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void OpenProjectBroomstickSettings()
+    {
+        if (!_session.IsProjectOpen) return;
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var appDataService = appDb?.GetDataService();
+        var dataService = _session.GetDataService();
+        var contextName = $"Project: {_session.ProjectName}";
+
+        var vm = new BroomstickProfileEditorViewModel(dataService, contextName, appDataService: appDataService, isProjectContext: true);
+        var window = new DrillIntel.Views.Broomstick.BroomstickProfileEditorWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand]
+    private void OpenBroomstickSettings()
+    {
+        if (_session.IsProjectOpen)
+        {
+            OpenProjectBroomstickSettings();
+        }
+        else
+        {
+            OpenGlobalBroomstickSettings();
         }
     }
 

@@ -97,6 +97,14 @@ public class AppDatabaseService : IAppDatabaseService
             DrillIntel.Models.Unit.CreateDefaultUnits(ds);
             DrillIntel.Models.UnitConverter.EnsureTableExists(ds);
             DrillIntel.Models.UnitConverter.CreateDefaultConversion(ds);
+
+            // Ensure APP_BS_GLOBAL_PROFILE exists and has default profile seeded
+            DrillIntel.Data.Objects.DataObjects.Models.BroomstickProfile.EnsureTableExists(ds);
+            if (!ds.IsRecordExist("SELECT 1 FROM APP_BS_GLOBAL_PROFILE LIMIT 1;"))
+            {
+                var defaultProfile = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProfile.CreateDefault();
+                DrillIntel.Data.Objects.DataObjects.Models.BroomstickProfile.SaveProfile(ds, defaultProfile, "SYSTEM", out _);
+            }
         }
     }
 

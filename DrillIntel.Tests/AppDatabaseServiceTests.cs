@@ -213,5 +213,85 @@ public class AppDatabaseServiceTests : IDisposable
         Assert.NotEmpty(curveDicts);
         Assert.Contains(curveDicts, d => d.Mnemonic == "DEPTH" && d.StandardChannel == "Depth");
     }
+
+    [Fact]
+    public void AppDatabase_SeedsAndLoadsBroomstickProfile_Successfully()
+    {
+        using var appDbService = new AppDatabaseService(_appDbPath, _templatePath);
+        appDbService.Initialize();
+
+        var ds = appDbService.GetDataService();
+        var profiles = BroomstickProfile.LoadAllProfiles(ds, out string error);
+        Assert.Empty(error);
+        Assert.NotEmpty(profiles);
+
+        var defaultProfile = BroomstickProfile.GetDefaultProfile(ds, out string defError);
+        Assert.Empty(defError);
+        Assert.NotNull(defaultProfile);
+        Assert.True(defaultProfile.IsDefault);
+        Assert.Equal("Default Profile", defaultProfile.Name);
+    }
+
+    [Fact]
+    public void ProjectCreation_CopiesMasterBroomstickProfile_IntoNewProjectDatabase()
+    {
+        using (var appDbService = new AppDatabaseService(_appDbPath, _templatePath))
+        {
+            appDbService.Initialize();
+            var appDs = appDbService.GetDataService();
+
+            // Create a custom master broomstick profile
+            var customMaster = BroomstickProfile.CreateDefault("Master Custom BS Profile");
+            customMaster.DepthInterval = 250.0;
+            customMaster.PkupPumpCutOff = 88.5;
+            bool savedMaster = BroomstickProfile.SaveProfile(appDs, customMaster, "AdminUser", out string saveErr);
+            Assert.True(savedMaster, saveErr);
+
+            // Create project database (SchemaInitializer creates project schema)
+            SchemaInitializer.CreateDatabase(_projectDbPath);
+
+            using (var projectSession = new ProjectSession())
+            {
+                projectSession.Load(_projectDbPath);
+                var projDs = projectSession.GetDataService();
+
+                // Project database schema has APP_BS_GLOBAL_PROFILE
+                Assert.True(projDs.TableExists("APP_BS_GLOBAL_PROFILE"));
+
+                // Copy master profiles to project as done in ProjectService.CreateNewProjectAsync
+                bool copied = BroomstickProfile.CopyMasterProfilesToProject(appDs, projDs, out string copyErr);
+                Assert.True(copied, copyErr);
+
+                // Verify project has the copied profiles
+                var projectProfiles = BroomstickProfile.LoadAllProfiles(projDs, out string projLoadErr);
+                Assert.Empty(projLoadErr);
+                Assert.NotEmpty(projectProfiles);
+
+                var copiedProfile = projectProfiles.FirstOrDefault(p => p.ID == customMaster.ID);
+                Assert.NotNull(copiedProfile);
+                Assert.Equal("Master Custom BS Profile", copiedProfile.Name);
+                Assert.Equal(250.0, copiedProfile.DepthInterval);
+                Assert.Equal(88.5, copiedProfile.PkupPumpCutOff);
+
+                // Modify project profile — must NOT alter App master database
+                copiedProfile.DepthInterval = 500.0;
+                copiedProfile.PkupPumpCutOff = 44.0;
+                bool savedProj = BroomstickProfile.SaveProfile(projDs, copiedProfile, "ProjectUser", out string projSaveErr);
+                Assert.True(savedProj, projSaveErr);
+
+                // Verify isolation: App DB remains unchanged
+                var appProfile = BroomstickProfile.LoadProfile(appDs, customMaster.ID, out string appLoadErr);
+                Assert.NotNull(appProfile);
+                Assert.Equal(250.0, appProfile.DepthInterval);
+                Assert.Equal(88.5, appProfile.PkupPumpCutOff);
+
+                // Project DB reflects modified value
+                var updatedProjProfile = BroomstickProfile.LoadProfile(projDs, customMaster.ID, out string projReloadErr);
+                Assert.NotNull(updatedProjProfile);
+                Assert.Equal(500.0, updatedProjProfile.DepthInterval);
+                Assert.Equal(44.0, updatedProjProfile.PkupPumpCutOff);
+            }
+        }
+    }
 }
 

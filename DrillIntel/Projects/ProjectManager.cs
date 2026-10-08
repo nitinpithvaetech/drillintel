@@ -550,6 +550,78 @@ CREATE TABLE IF NOT EXISTS VMX_COMMON_RIGSTATE_ITEMS (
 );
 
 -- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS APP_BS_GLOBAL_PROFILE (
+    ID                          TEXT NOT NULL,
+    NAME                        TEXT NOT NULL,
+    TYPE                        INTEGER NOT NULL,
+    NOTES                       TEXT,
+    CREATED_BY                  TEXT,
+    CREATED_DATE                TEXT,
+    MODIFIED_BY                 TEXT,
+    MODIFIED_DATE               TEXT,
+    DOWNSAMPLE_ON               INTEGER,
+    DATA_POINTS                 INTEGER,
+    TIME_PERIOD                 INTEGER,
+    GROUP_FUNC                  TEXT,
+    SHOW_DEPTH_TRACK            INTEGER,
+    TRACK_WIDTH                 INTEGER,
+    FILTER_BY_RANGE             INTEGER,
+    MIN_HKLD                    REAL,
+    MAX_HKLD                    REAL,
+    FILTER_BY_INTERVAL          INTEGER,
+    DEPTH_INTERVAL              REAL,
+    INTERVAL_WINDOW             REAL,
+    POINTS_TO_PLOT              INTEGER,
+    PKUP_PUMP_CHANNEL           TEXT,
+    PKUP_PUMP_CUTOFF            REAL,
+    PKUP_RPM_CUTOFF             REAL,
+    PKUP_MAX_MOVEMENT           REAL,
+    PKUP_MIN_MOVEMENT           REAL,
+    PKUP_PLOT_POINTS            INTEGER,
+    PKUP_STATIC_METHOD          INTEGER,
+    PKUP_DYNAMIC_METHOD         INTEGER,
+    PKUP_LOCAL_MAX              INTEGER,
+    SLK_PUMP_CHANNEL            TEXT,
+    SLK_PUMP_CUTOFF             REAL,
+    SLK_RPM_CUTOFF              REAL,
+    SLK_MAX_MOVEMENT            REAL,
+    SLK_MIN_MOVEMENT            REAL,
+    SLK_PLOT_POINTS             INTEGER,
+    SLK_STATIC_METHOD           INTEGER,
+    SLK_DYNAMIC_METHOD          INTEGER,
+    SLK_LOCAL_MAX               INTEGER,
+    ROT_PUMP_CHANNEL            TEXT,
+    ROT_PUMP_CUTOFF             REAL,
+    ROT_MIN_RPM                 REAL,
+    ROT_MAX_RPM                 REAL,
+    ROT_PLOT_POINTS             INTEGER,
+    ROT_CHANGE                  REAL,
+    ROT_POINTS                  REAL,
+    ROT_CHECK_PUSO              INTEGER,
+    TIME_THRESHOLD              REAL,
+    ENFORCE_PUSO                INTEGER,
+    PKUP_MULTI_METHOD           INTEGER,
+    SLK_MULTI_METHOD            INTEGER,
+    ROB_MULTI_METHOD            INTEGER,
+    SHOW_MULTI                  INTEGER,
+    PKUP_RIGSTATES              TEXT,
+    SLK_RIGSTATES               TEXT,
+    ROT_RIGSTATES               TEXT,
+    ENFORCE_RULE                INTEGER,
+    PLOT_ONBOTTOM               INTEGER,
+    IS_DEFAULT                  INTEGER,
+    CASING_PKUP_MIN_MOVEMENT    REAL,
+    CASING_PKUP_MAX_MOVEMENT    REAL,
+    CASING_SLK_MIN_MOVEMENT     REAL,
+    CASING_SLK_MAX_MOVEMENT     REAL,
+    CASING_PKUP_RIGSTATES       TEXT,
+    CASING_SLK_RIGSTATES        TEXT,
+    PRIMARY KEY (ID)
+);
+
+CREATE VIEW IF NOT EXISTS VMX_BS_GLOBAL_PROFILE AS SELECT * FROM APP_BS_GLOBAL_PROFILE;
+
+-- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS VMX_AKPI_DRLG_CONNECTIONS (
     WELL_ID                TEXT NOT NULL,
     ENTRY_ID                 INTEGER NOT NULL,
@@ -935,6 +1007,9 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
                 // Copy master RigState setup and items from Application Database into the new project
                 CopyMasterSetupToProject(_session.GetDataService());
 
+                // Copy master Broomstick profiles from Application Database into the new project
+                CopyMasterBsGlobalProfilesToProject(_session.GetDataService());
+
                 // Save well and linked wellbore information through the repository
                 var repo = new DrillIntel.Data.WellDataRepository(_session);
                 var wellId = Guid.NewGuid().ToString();
@@ -1018,6 +1093,10 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
             {
                 _session.Load(filePath);
                 _recentProjectsService?.AddOrUpdate(filePath);
+
+                // Ensure project database schema has APP_BS_GLOBAL_PROFILE and default seed
+                EnsureProjectSchemaUpToDate(_session.GetDataService());
+
                 return true;
             }
             catch (Exception ex)
@@ -1029,6 +1108,26 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
                     System.Windows.MessageBoxImage.Error);
 
                 return false;
+            }
+        }
+
+        private void EnsureProjectSchemaUpToDate(IDataServiceDIntel projectDataService)
+        {
+            try
+            {
+                if (projectDataService == null) return;
+
+                BroomstickProfile.EnsureTableExists(projectDataService);
+
+                var dt = projectDataService.GetTable("SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE;");
+                if (dt != null && dt.Rows.Count > 0 && Convert.ToInt32(dt.Rows[0][0]) == 0)
+                {
+                    CopyMasterBsGlobalProfilesToProject(projectDataService);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to ensure project schema up to date: {ex.Message}");
             }
         }
 
@@ -1055,6 +1154,31 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
             {
                 // Non-fatal: log for diagnostics so well creation proceeds even if master DB access fails
                 System.Diagnostics.Debug.WriteLine($"Failed to copy master setup to new project: {ex.Message}");
+            }
+        }
+
+        private void CopyMasterBsGlobalProfilesToProject(IDataServiceDIntel projectDataService)
+        {
+            try
+            {
+                var appDbService = _appDatabaseService ?? (Application.Current != null ? App.AppDatabaseService : null);
+                if (appDbService != null)
+                {
+                    var appDataService = appDbService.GetDataService();
+                    if (appDataService != null)
+                    {
+                        BroomstickProfile.CopyMasterProfilesToProject(appDataService, projectDataService, out string error);
+                        if (!string.IsNullOrEmpty(error))
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Warning copying master Broomstick profiles: {error}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: log for diagnostics so well creation proceeds even if master DB access fails
+                System.Diagnostics.Debug.WriteLine($"Failed to copy master Broomstick profiles to new project: {ex.Message}");
             }
         }
 
