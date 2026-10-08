@@ -186,7 +186,8 @@
                         </Fluent:DropDownButton.Icon>
                         <Fluent:MenuItem Header="Sync data to Parent Timelog" 
                                          Command="{Binding SyncDataToParentTimelogCommand}"
-                                         ToolTip="Synchronize data to Parent Timelog (Select a Timelog in the Well Tree to enable)">
+                                         IsEnabled="{Binding CanSyncDataToParentTimelog}"
+                                         ToolTip="Synchronize data to Parent Timelog (Requires a Timelog properly linked with another Timelog in Tab-3)">
                             <Fluent:MenuItem.Icon>
                                 <materialDesign:PackIcon Kind="Sync" Foreground="#0284C7" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>

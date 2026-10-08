@@ -68,13 +68,14 @@ public class SyncDataWithParentTimelogTests
             Assert.False(mainVm.CanSyncDataToParentTimelog);
             Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
 
-            // 5. User selects a TimeLog node in the tree -> Command MUST BE ENABLED!
+            // 5. User selects an unlinked TimeLog node in the tree -> Command must be DISABLED!
             var timeLog = new TimeLog
             {
                 ObjectID = "TL_001",
                 nameLog = "Source Time log",
                 nameWell = "Camel1_2016",
-                nameWellbore = "Wellbore1"
+                nameWellbore = "Wellbore1",
+                LinkToParent = false
             };
             var timeLogNode = new WellTreeNode
             {
@@ -83,6 +84,17 @@ public class SyncDataWithParentTimelogTests
                 Tag = timeLog
             };
             dashboardVm.OnTreeNodeSelected(timeLogNode);
+            Assert.False(timeLogNode.IsLinkedTimeLog);
+            Assert.False(mainVm.CanSyncDataToParentTimelog);
+            Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // 5b. When timelog is properly linked with another timelog in Tab-3 -> Command MUST BE ENABLED!
+            timeLog.LinkToParent = true;
+            timeLog.LinkWellID = "Camel1_2016";
+            timeLog.LinkWellboreID = "Wellbore1";
+            timeLog.LinkLogID = "TL_PARENT";
+            timeLogNode.NotifyLinkedStatusChanged();
+            Assert.True(timeLogNode.IsLinkedTimeLog);
             Assert.True(mainVm.CanSyncDataToParentTimelog);
             Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
 
@@ -530,6 +542,240 @@ public class SyncDataWithParentTimelogTests
             Assert.Equal(day, parsed.Day);
             Assert.Equal(hour, parsed.Hour);
             Assert.Equal(minute, parsed.Minute);
+        }
+    }
+
+    [Fact]
+    public void WellTreeNode_IsLinkedTimeLog_EnforcesAllTab3LinkageCriteria()
+    {
+        // 1. Non-TimeLog nodes are never considered linked
+        var wellNode = new WellTreeNode { Type = WellTreeNodeType.Well, Name = "Well1" };
+        Assert.False(wellNode.IsLinkedTimeLog);
+
+        var depthNode = new WellTreeNode { Type = WellTreeNodeType.DepthLog, Name = "DepthLog1" };
+        Assert.False(depthNode.IsLinkedTimeLog);
+
+        var folderNode = new WellTreeNode { Type = WellTreeNodeType.Folder, Name = "Timelogs" };
+        Assert.False(folderNode.IsLinkedTimeLog);
+
+        // 2. TimeLog node with no tag
+        var nodeNoTag = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Name = "Log1" };
+        Assert.False(nodeNoTag.IsLinkedTimeLog);
+
+        // 3. TimeLog node with LinkToParent = false
+        var tlUnchecked = new TimeLog
+        {
+            ObjectID = "TL_1",
+            nameLog = "Log 1",
+            LinkToParent = false,
+            LinkWellID = "W1",
+            LinkWellboreID = "WB1",
+            LinkLogID = "TL_PARENT"
+        };
+        var nodeUnchecked = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlUnchecked };
+        Assert.False(nodeUnchecked.IsLinkedTimeLog);
+
+        // 4. TimeLog node with LinkToParent = true, but missing WellName/WellID
+        var tlMissingWell = new TimeLog
+        {
+            ObjectID = "TL_1",
+            LinkToParent = true,
+            LinkWellID = "   ",
+            LinkWellboreID = "WB1",
+            LinkLogID = "TL_PARENT"
+        };
+        var nodeMissingWell = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlMissingWell };
+        Assert.False(nodeMissingWell.IsLinkedTimeLog);
+
+        // 5. TimeLog node with LinkToParent = true, but missing WellboreName/WellboreID
+        var tlMissingWb = new TimeLog
+        {
+            ObjectID = "TL_1",
+            LinkToParent = true,
+            LinkWellID = "W1",
+            LinkWellboreID = "",
+            LinkLogID = "TL_PARENT"
+        };
+        var nodeMissingWb = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlMissingWb };
+        Assert.False(nodeMissingWb.IsLinkedTimeLog);
+
+        // 6. TimeLog node with LinkToParent = true, but missing Parent Timelog
+        var tlMissingLog = new TimeLog
+        {
+            ObjectID = "TL_1",
+            LinkToParent = true,
+            LinkWellID = "W1",
+            LinkWellboreID = "WB1",
+            LinkLogID = ""
+        };
+        var nodeMissingLog = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlMissingLog };
+        Assert.False(nodeMissingLog.IsLinkedTimeLog);
+
+        // 7. TimeLog node linking to itself
+        var tlSelfLink = new TimeLog
+        {
+            ObjectID = "TL_1",
+            LinkToParent = true,
+            LinkWellID = "W1",
+            LinkWellboreID = "WB1",
+            LinkLogID = "TL_1"
+        };
+        var nodeSelfLink = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlSelfLink };
+        Assert.False(nodeSelfLink.IsLinkedTimeLog);
+
+        // 8. Properly linked TimeLog node meeting all Tab-3 criteria
+        var tlValid = new TimeLog
+        {
+            ObjectID = "TL_CHILD",
+            nameLog = "Child Log",
+            LinkToParent = true,
+            LinkWellID = "Well_A",
+            LinkWellboreID = "WB_A",
+            LinkLogID = "TL_PARENT"
+        };
+        var nodeValid = new WellTreeNode { Type = WellTreeNodeType.TimeLog, Tag = tlValid };
+        Assert.True(nodeValid.IsLinkedTimeLog);
+    }
+
+    [Fact]
+    public void DashboardViewModel_CanSyncDataToParentTimelog_EvaluatesCorrectly()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_db_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            var repo = new WellDataRepository(session);
+            var vm = new DashboardViewModel(session, repo);
+
+            // No project open
+            var unlinkedNode = new WellTreeNode
+            {
+                Type = WellTreeNodeType.TimeLog,
+                Tag = new TimeLog { ObjectID = "TL1", LinkToParent = false }
+            };
+            var linkedNode = new WellTreeNode
+            {
+                Type = WellTreeNodeType.TimeLog,
+                Tag = new TimeLog
+                {
+                    ObjectID = "TL2",
+                    LinkToParent = true,
+                    LinkWellID = "W1",
+                    LinkWellboreID = "WB1",
+                    LinkLogID = "TL_P"
+                }
+            };
+
+            Assert.False(vm.CanSyncDataToParentTimelog(linkedNode));
+
+            // Load project
+            session.Load(tempDb);
+
+            // Target node unlinked -> cannot sync
+            Assert.False(vm.CanSyncDataToParentTimelog(unlinkedNode));
+            Assert.False(vm.SyncDataToParentTimelogCommand.CanExecute(unlinkedNode));
+
+            // Target node linked -> can sync
+            Assert.True(vm.CanSyncDataToParentTimelog(linkedNode));
+            Assert.True(vm.SyncDataToParentTimelogCommand.CanExecute(linkedNode));
+
+            // Null node argument falls back to SelectedNode
+            vm.OnTreeNodeSelected(unlinkedNode);
+            Assert.False(vm.CanSyncDataToParentTimelog(null));
+            Assert.False(vm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            vm.OnTreeNodeSelected(linkedNode);
+            Assert.True(vm.CanSyncDataToParentTimelog(null));
+            Assert.True(vm.SyncDataToParentTimelogCommand.CanExecute(null));
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public void MainViewModel_DynamicallyUpdatesAvailability_WhenTimelogSelectionChanges()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_dynamic_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var dummyProjectService = new DummyProjectService();
+            var mainVm = new MainViewModel(session, dummyProjectService);
+            var dashboardVm = (DashboardViewModel)mainVm.CurrentViewModel;
+
+            var unlinkedNode = new WellTreeNode
+            {
+                Name = "Child_Unlinked",
+                Type = WellTreeNodeType.TimeLog,
+                Tag = new TimeLog
+                {
+                    ObjectID = "TL_RAW",
+                    nameLog = "Child_Unlinked",
+                    LinkToParent = false
+                }
+            };
+
+            var linkedNode = new WellTreeNode
+            {
+                Name = "Child_Linked",
+                Type = WellTreeNodeType.TimeLog,
+                Tag = new TimeLog
+                {
+                    ObjectID = "TL_SYNC",
+                    nameLog = "Child_Linked",
+                    LinkToParent = true,
+                    LinkWellID = "Well_1",
+                    LinkWellboreID = "Wellbore_1",
+                    LinkLogID = "TL_PARENT"
+                }
+            };
+
+            // 1. Select unlinked timelog -> processing menu command is disabled
+            dashboardVm.OnTreeNodeSelected(unlinkedNode);
+            Assert.False(mainVm.CanSyncDataToParentTimelog);
+            Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // 2. Select linked timelog -> processing menu command is dynamically enabled
+            dashboardVm.OnTreeNodeSelected(linkedNode);
+            Assert.True(mainVm.CanSyncDataToParentTimelog);
+            Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // 3. Switch back to unlinked timelog -> dynamically disabled again
+            dashboardVm.OnTreeNodeSelected(unlinkedNode);
+            Assert.False(mainVm.CanSyncDataToParentTimelog);
+            Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+
+            // 4. Link the unlinked timelog and notify -> dynamically becomes enabled
+            ((TimeLog)unlinkedNode.Tag).LinkToParent = true;
+            ((TimeLog)unlinkedNode.Tag).LinkWellID = "Well_1";
+            ((TimeLog)unlinkedNode.Tag).LinkWellboreID = "Wellbore_1";
+            ((TimeLog)unlinkedNode.Tag).LinkLogID = "TL_PARENT";
+            unlinkedNode.NotifyLinkedStatusChanged();
+
+            Assert.True(unlinkedNode.IsLinkedTimeLog);
+            Assert.True(mainVm.CanSyncDataToParentTimelog);
+            Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
         }
     }
 }

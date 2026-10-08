@@ -61,7 +61,7 @@
             <MenuItem Header="Sync data to Parent Timelog" 
                       Command="{Binding PlacementTarget.Tag.SyncDataToParentTimelogCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                      Visibility="{Binding PlacementTarget.DataContext.Type, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=TimeLog}">
+                      Visibility="{Binding PlacementTarget.DataContext.IsLinkedTimeLog, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}">
                 <MenuItem.Icon>
                     <materialDesign:PackIcon Kind="Sync" Width="18" Height="18" Foreground="#0284C7" />
                 </MenuItem.Icon>
