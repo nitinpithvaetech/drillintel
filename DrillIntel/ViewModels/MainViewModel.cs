@@ -706,7 +706,7 @@ public partial class MainViewModel : ObservableObject
     public bool CanSyncDataToParentTimelog =>
         _session.IsProjectOpen &&
         CurrentViewModel is DashboardViewModel db &&
-        db.SelectedNode?.IsTimeLogNode == true;
+        db.SelectedNode?.IsLinkedTimeLog == true;
 
     public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
     public Action? SyncDataToParentTimelogHandler { get; set; }

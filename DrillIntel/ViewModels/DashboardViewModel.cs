@@ -33,6 +33,30 @@ public partial class DashboardViewModel : ObservableObject
     [ObservableProperty]
     private WellTreeNode? _selectedNode;
 
+    partial void OnSelectedNodeChanged(WellTreeNode? oldValue, WellTreeNode? newValue)
+    {
+        if (oldValue != null)
+        {
+            oldValue.PropertyChanged -= OnSelectedNodeItemPropertyChanged;
+        }
+        if (newValue != null)
+        {
+            newValue.PropertyChanged += OnSelectedNodeItemPropertyChanged;
+        }
+
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnSelectedNodeItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WellTreeNode.IsLinkedTimeLog) ||
+            e.PropertyName == nameof(WellTreeNode.Tag))
+        {
+            SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(SelectedNode));
+        }
+    }
+
     [ObservableProperty]
     private bool _hasData;
 
@@ -126,6 +150,9 @@ public partial class DashboardViewModel : ObservableObject
                 (string.IsNullOrEmpty(dl.__dataTableName) || (!timeTables.Contains(dl.__dataTableName) && !dl.__dataTableName.StartsWith("timeLog", StringComparison.OrdinalIgnoreCase)))
             ).ToList();
 
+            string? prevSelectedLogId = (SelectedNode?.Tag as TimeLog)?.ObjectID;
+            string? prevSelectedName = SelectedNode?.Name;
+
             WellTree.Clear();
             AvailableWells.Clear();
 
@@ -199,6 +226,17 @@ public partial class DashboardViewModel : ObservableObject
 
                 WellTree.Add(wellNode);
                 HasData = true;
+
+                if (!string.IsNullOrEmpty(prevSelectedLogId) || !string.IsNullOrEmpty(prevSelectedName))
+                {
+                    var matching = timeFolder.Children.FirstOrDefault(c =>
+                        (c.Tag is TimeLog tl && !string.IsNullOrEmpty(prevSelectedLogId) && tl.ObjectID == prevSelectedLogId) ||
+                        (!string.IsNullOrEmpty(prevSelectedName) && c.Name == prevSelectedName));
+                    if (matching != null)
+                    {
+                        OnTreeNodeSelected(matching);
+                    }
+                }
             }
             else
             {
@@ -450,6 +488,7 @@ public partial class DashboardViewModel : ObservableObject
 
         if (result == true)
         {
+            node?.NotifyLinkedStatusChanged();
             _session?.NotifyDataChanged();
             await RefreshAsync();
         }
@@ -637,11 +676,19 @@ public partial class DashboardViewModel : ObservableObject
 
     public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
 
-    [RelayCommand]
+    public bool CanSyncDataToParentTimelog(WellTreeNode? node)
+    {
+        var targetNode = node ?? SelectedNode;
+        if (targetNode == null) return false;
+        if (_session == null || !_session.IsProjectOpen) return false;
+        return targetNode.IsLinkedTimeLog;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSyncDataToParentTimelog))]
     public async Task SyncDataToParentTimelog(WellTreeNode? node)
     {
         var targetNode = node ?? SelectedNode;
-        if (targetNode == null) return;
+        if (targetNode == null || !CanSyncDataToParentTimelog(targetNode)) return;
 
         TimeLog? timeLog = targetNode.Tag as TimeLog;
         if (timeLog == null && _repository != null)

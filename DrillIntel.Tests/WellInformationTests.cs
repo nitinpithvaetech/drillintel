@@ -275,7 +275,7 @@ public class WellInformationTests
     }
 
     [Fact]
-    public void MainViewModel_SyncDataToParentTimelogCommand_CanExecute_And_Executes()
+    public async Task MainViewModel_SyncDataToParentTimelogCommand_CanExecute_And_Executes()
     {
         string tempDb = Path.Combine(Path.GetTempPath(), $"main_sync_test_{Guid.NewGuid():N}.dintel");
         SchemaInitializer.CreateDatabase(tempDb);
@@ -293,10 +293,18 @@ public class WellInformationTests
             session.Load(tempDb);
             Assert.False(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
 
-            // Select a timelog from the well tree
+            // Select a properly linked timelog from the well tree
             if (mainVm.CurrentViewModel is DashboardViewModel db)
             {
-                var timeLog = new DrillIntel.Data.Objects.DataObjects.Models.TimeLog { ObjectID = "TL_1", nameLog = "Test Log" };
+                var timeLog = new DrillIntel.Data.Objects.DataObjects.Models.TimeLog
+                {
+                    ObjectID = "TL_1",
+                    nameLog = "Test Log",
+                    LinkToParent = true,
+                    LinkWellID = "Well_1",
+                    LinkWellboreID = "WB_1",
+                    LinkLogID = "TL_Parent"
+                };
                 db.OnTreeNodeSelected(new DrillIntel.Models.WellTreeNode { Name = "Test Log", Type = DrillIntel.Models.WellTreeNodeType.TimeLog, Tag = timeLog });
             }
             Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
@@ -307,7 +315,7 @@ public class WellInformationTests
                 handlerCalled = true;
             };
 
-            mainVm.SyncDataToParentTimelogCommand.Execute(null);
+            await mainVm.SyncDataToParentTimelogCommand.ExecuteAsync(null);
             Assert.True(handlerCalled);
         }
         finally
