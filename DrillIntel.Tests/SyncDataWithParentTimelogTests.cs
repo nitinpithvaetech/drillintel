@@ -1734,6 +1734,198 @@ public class SyncDataWithParentTimelogTests
             catch { }
         }
     }
+
+    [Fact]
+    public async Task InitializeAsync_WhenOnlyOneRecordExists_SetsBothFromAndToToThatValue()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_single_row_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_SINGLE (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            conn.Execute("INSERT INTO TL_SINGLE (DATETIME, DEPTH, ROP) VALUES ('2026-06-15 14:30:00', 1000.0, 25.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_S1",
+                nameLog = "Single Row Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_SINGLE"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.True(vm.HasTimelogData);
+            Assert.Equal(1, vm.RecordCount);
+            Assert.Equal(vm.FromDateTime, vm.ToDateTime);
+            Assert.Equal("15/06/2026 14:30", vm.FromDateTimeText);
+            Assert.Equal("15/06/2026 14:30", vm.ToDateTimeText);
+            Assert.True(vm.CanSelectDates);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenNoRecordsExist_DisablesFields_AndShowsNoTimelogDataAvailableMessage()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_empty_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_EMPTY_DATA (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_E1",
+                nameLog = "Empty Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_EMPTY_DATA"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.False(vm.HasTimelogData);
+            Assert.Equal(0, vm.RecordCount);
+            Assert.False(vm.CanSelectDates); // Fields disabled
+            Assert.False(vm.CanStart);       // Start button disabled
+            Assert.Equal("No timelog data available.", vm.ConfirmationMessage);
+            Assert.Equal("No timelog data available.", vm.ProgressStatus);
+
+            // Attempting sync directly prevents execution
+            await vm.StartSyncCommand.ExecuteAsync(null);
+            Assert.True(vm.HasError);
+            Assert.Contains("No timelog data available", vm.ErrorMessage);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenMultipleRecordsOutOfOrder_SortsByDateTimeAscending_AndAssignsMinToFromAndMaxToTo()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_sort_asc_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_SORT_TEST (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            // Insert in non-chronological order
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-20 18:00:00', 3000.0, 30.0);");
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-01 08:00:00', 1000.0, 10.0);");
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-10 12:00:00', 2000.0, 20.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_SORT1",
+                nameLog = "Sort Test Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_SORT_TEST"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.True(vm.HasTimelogData);
+            Assert.Equal(3, vm.RecordCount);
+            Assert.True(vm.FromDateTime < vm.ToDateTime);
+            Assert.Equal("01/09/2026 08:00", vm.FromDateTimeText);
+            Assert.Equal("20/09/2026 18:00", vm.ToDateTimeText);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSyncAsync_WhenFromDateTimeGreaterThanToDateTime_PreventsSyncAndShowsErrorMessage()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_inv_range_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_RANGE_TEST (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            conn.Execute("INSERT INTO TL_RANGE_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-06-01 10:00:00', 100.0, 10.0);");
+            conn.Execute("INSERT INTO TL_RANGE_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-06-10 10:00:00', 200.0, 20.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_RNG1",
+                nameLog = "Range Test Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_RANGE_TEST"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            // Manually set invalid range: From > To
+            vm.FromDate = new DateTime(2026, 6, 15);
+            vm.ToDate = new DateTime(2026, 6, 5);
+
+            Assert.Contains("Invalid Date Range", vm.ConfirmationMessage);
+
+            await vm.StartSyncCommand.ExecuteAsync(null);
+
+            Assert.True(vm.HasError);
+            Assert.False(vm.HasSuccess);
+            Assert.Contains("Invalid Date Range", vm.ErrorMessage);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
 }
 
 

@@ -67,9 +67,54 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
 
     public Task? CurrentTargetUpdateTask { get; private set; }
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStart))]
+    [NotifyPropertyChangedFor(nameof(CanSelectDates))]
+    [NotifyPropertyChangedFor(nameof(ConfirmationMessage))]
+    private bool _hasTimelogData = true;
+
+    [ObservableProperty]
+    private int _recordCount;
+
     // (3) Confirmation Message
-    public string ConfirmationMessage =>
-        $"Data from selected Timelog '{SourceTimeLogName}' will be synchronized into Parent Timelog '{TargetTimeLogName}' for the date range {FromDateTimeText} to {ToDateTimeText}.";
+    public string ConfirmationMessage
+    {
+        get
+        {
+            if (!HasTimelogData)
+            {
+                return "No timelog data available.";
+            }
+            if (FromDateTime > ToDateTime)
+            {
+                return "Invalid Date Range: 'From Date & Time' cannot be later than 'To Date & Time'.";
+            }
+            return $"Data from selected Timelog '{SourceTimeLogName}' will be synchronized into Parent Timelog '{TargetTimeLogName}' for the date range {FromDateTimeText} to {ToDateTimeText}.";
+        }
+    }
+
+    public void EnsureFromDateTimeLessThanToDateTime(bool isSingleRecord = false)
+    {
+        if (isSingleRecord) return;
+
+        if (FromDateTime > ToDateTime)
+        {
+            var tempDate = FromDate;
+            var tempTime = FromTime;
+
+            FromDate = ToDate;
+            FromTime = ToTime;
+
+            ToDate = tempDate;
+            ToTime = tempTime;
+
+            OnPropertyChanged(nameof(FromDateTime));
+            OnPropertyChanged(nameof(FromDateTimeText));
+            OnPropertyChanged(nameof(ToDateTime));
+            OnPropertyChanged(nameof(ToDateTimeText));
+            OnPropertyChanged(nameof(ConfirmationMessage));
+        }
+    }
 
     partial void OnSelectedParentTimeLogChanged(TimeLogOption? value)
     {
@@ -320,9 +365,9 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
          !TargetTimeLogName.Equals("(None)", StringComparison.OrdinalIgnoreCase) &&
          !TargetTimeLogName.Equals("(Select Timelog)", StringComparison.OrdinalIgnoreCase));
 
-    public bool CanStart => !IsRunning && HasSelectedTimelog;
+    public bool CanStart => !IsRunning && HasSelectedTimelog && HasTimelogData;
 
-    public bool CanSelectDates => !IsRunning;
+    public bool CanSelectDates => !IsRunning && HasTimelogData;
 
     public string CloseButtonText => IsRunning ? "Cancel" : "Close";
 
@@ -363,8 +408,15 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                 string tableName = _sourceTimeLog.__dataTableName;
                 if (!string.IsNullOrWhiteSpace(tableName) && dataService.TableExists(tableName))
                 {
-                    var dtMin = RigStateService.GetMinDateFromTable(dataService, tableName);
-                    var dtMax = RigStateService.GetMaxDateFromTable(dataService, tableName);
+                    var (dtMin, dtMax, count) = RigStateService.GetMinMaxDateFromTableWithCount(dataService, tableName);
+                    RecordCount = count;
+                    if (count == 0)
+                    {
+                        HasTimelogData = false;
+                        ProgressStatus = "No timelog data available.";
+                        return;
+                    }
+
                     if (dtMin != DateTime.MinValue && dtMax != DateTime.MinValue)
                     {
                         string wellDateFormat = _sourceTimeLog.__wellDateFormat;
@@ -378,6 +430,12 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                             if (dtMax.Kind != DateTimeKind.Utc) dtMax = DateTime.SpecifyKind(dtMax, DateTimeKind.Utc);
                         }
 
+                        if (count > 1 && dtMin > dtMax)
+                        {
+                            (dtMin, dtMax) = (dtMax, dtMin);
+                        }
+
+                        HasTimelogData = true;
                         DataStartDateTime = dtMin;
                         DataEndDateTime = dtMax;
                         MinAvailableDate = dtMin.Date;
@@ -388,6 +446,8 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
 
                         ToDate = DateTime.SpecifyKind(dtMax.Date, dtMax.Kind);
                         ToTime = dtMax;
+
+                        EnsureFromDateTimeLessThanToDateTime(isSingleRecord: count == 1);
                         return;
                     }
                 }
@@ -400,6 +460,8 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
 
                 if (minDt != DateTime.MinValue && maxDt != DateTime.MinValue)
                 {
+                    if (minDt > maxDt) (minDt, maxDt) = (maxDt, minDt);
+
                     string wellDateFormat = _sourceTimeLog.__wellDateFormat;
                     if (string.IsNullOrWhiteSpace(wellDateFormat) && !string.IsNullOrWhiteSpace(_sourceTimeLog.WellID))
                     {
@@ -411,6 +473,7 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                         if (maxDt.Kind != DateTimeKind.Utc) maxDt = DateTime.SpecifyKind(maxDt, DateTimeKind.Utc);
                     }
 
+                    HasTimelogData = true;
                     DataStartDateTime = minDt;
                     DataEndDateTime = maxDt;
                     MinAvailableDate = minDt.Date;
@@ -421,24 +484,55 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
 
                     ToDate = DateTime.SpecifyKind(maxDt.Date, maxDt.Kind);
                     ToTime = maxDt;
+
+                    EnsureFromDateTimeLessThanToDateTime();
                     return;
                 }
             }
         }
         catch { }
 
-        if (DateTime.TryParse(_sourceTimeLog.startIndex, CultureInfo.InvariantCulture, DateTimeStyles.None, out var s))
+        bool hasStart = DateTime.TryParse(_sourceTimeLog.startIndex, CultureInfo.InvariantCulture, DateTimeStyles.None, out var s);
+        bool hasEnd = DateTime.TryParse(_sourceTimeLog.endIndex, CultureInfo.InvariantCulture, DateTimeStyles.None, out var e);
+
+        if (hasStart && hasEnd)
         {
+            if (s > e) (s, e) = (e, s);
+            HasTimelogData = true;
             DataStartDateTime = s;
             FromDate = s.Date;
             FromTime = s;
             MinAvailableDate = s.Date;
-        }
-        if (DateTime.TryParse(_sourceTimeLog.endIndex, CultureInfo.InvariantCulture, DateTimeStyles.None, out var e))
-        {
+
             DataEndDateTime = e;
             ToDate = e.Date;
             ToTime = e;
+            MaxAvailableDate = e.Date;
+
+            EnsureFromDateTimeLessThanToDateTime();
+        }
+        else if (hasStart)
+        {
+            HasTimelogData = true;
+            DataStartDateTime = s;
+            DataEndDateTime = s;
+            FromDate = s.Date;
+            FromTime = s;
+            ToDate = s.Date;
+            ToTime = s;
+            MinAvailableDate = s.Date;
+            MaxAvailableDate = s.Date;
+        }
+        else if (hasEnd)
+        {
+            HasTimelogData = true;
+            DataStartDateTime = e;
+            DataEndDateTime = e;
+            FromDate = e.Date;
+            FromTime = e;
+            ToDate = e.Date;
+            ToTime = e;
+            MinAvailableDate = e.Date;
             MaxAvailableDate = e.Date;
         }
     }
@@ -456,6 +550,7 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
         {
             DateTime minDt = DateTime.MinValue;
             DateTime maxDt = DateTime.MinValue;
+            int? detectedRecordCount = null;
 
             var dataService = _session.GetDataService();
             var connection = _session.IsProjectOpen ? _session.GetConnection() : null;
@@ -560,35 +655,55 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             }
 
             // 2. Query physical SQLite data table rows if available
-            if (!string.IsNullOrWhiteSpace(tableName) && connection != null)
+            if (!string.IsNullOrWhiteSpace(tableName))
             {
-                try
+                if (dataService != null && dataService.TableExists(tableName))
                 {
-                    var tableExists = await connection.ExecuteScalarAsync<int>(
-                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name;",
-                        new { name = tableName });
-
-                    if (tableExists > 0)
+                    var (svcMin, svcMax, svcCount) = RigStateService.GetMinMaxDateFromTableWithCount(dataService, tableName);
+                    detectedRecordCount = svcCount;
+                    if (svcCount == 0)
                     {
+                        minDt = DateTime.MinValue;
+                        maxDt = DateTime.MinValue;
+                    }
+                    else
+                    {
+                        minDt = svcMin;
+                        maxDt = svcMax;
+                    }
+                }
+
+                if (minDt == DateTime.MinValue && maxDt == DateTime.MinValue && detectedRecordCount != 0 && connection != null)
+                {
+                    try
+                    {
+                        var tableExists = await connection.ExecuteScalarAsync<int>(
+                            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name;",
+                            new { name = tableName });
+
+                        if (tableExists > 0)
+                        {
                         var colNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                         try
                         {
-                            var cols = await connection.QueryAsync<string>($"SELECT name FROM pragma_table_info('{tableName.Replace("'", "''")}');");
-                            foreach (var c in cols) if (!string.IsNullOrWhiteSpace(c)) colNames.Add(c);
+                            using var cmd = connection.CreateCommand();
+                            cmd.CommandText = $"SELECT * FROM [{tableName.Replace("]", "]]")}] LIMIT 0;";
+                            using var reader = await cmd.ExecuteReaderAsync();
+                            for (int i = 0; i < reader.FieldCount; i++)
+                            {
+                                colNames.Add(reader.GetName(i));
+                            }
                         }
                         catch { }
 
-                        if (colNames.Count == 0)
+                        if (colNames.Count == 0 && dataService != null)
                         {
                             try
                             {
-                                var colRows = await connection.QueryAsync<dynamic>($"PRAGMA table_info([{tableName.Replace("]", "]]")}]);");
-                                foreach (var r in colRows)
+                                using var rdr = dataService.ExecuteReader($"SELECT * FROM [{tableName.Replace("]", "]]")}] LIMIT 0;");
+                                for (int i = 0; i < rdr.FieldCount; i++)
                                 {
-                                    if (r is IDictionary<string, object> dict && dict.TryGetValue("name", out var n) && n != null)
-                                    {
-                                        colNames.Add(n.ToString()!);
-                                    }
+                                    colNames.Add(rdr.GetName(i));
                                 }
                             }
                             catch { }
@@ -596,49 +711,128 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
 
                         if (colNames.Contains("DATETIME"))
                         {
-                            string orderCol = colNames.Contains("INDEX_DOUBLE") ? "INDEX_DOUBLE" : "rowid";
-                            var firstVal = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' ORDER BY [{orderCol}] ASC LIMIT 1;");
-                            var lastVal = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' ORDER BY [{orderCol}] DESC LIMIT 1;");
+                            int count = await connection.ExecuteScalarAsync<int>(
+                                $"SELECT COUNT(*) FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '';");
+                            detectedRecordCount = count;
 
-                            if (firstVal != null) minDt = ParseRowDateTime(firstVal);
-                            if (lastVal != null) maxDt = ParseRowDateTime(lastVal);
-
-                            if (minDt == DateTime.MinValue || maxDt == DateTime.MinValue)
+                            if (count == 0)
                             {
-                                var minAgg = await connection.QueryFirstOrDefaultAsync<object>(
-                                    $"SELECT MIN(DATETIME) FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '';");
-                                var maxAgg = await connection.QueryFirstOrDefaultAsync<object>(
-                                    $"SELECT MAX(DATETIME) FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '';");
-                                if (minDt == DateTime.MinValue && minAgg != null) minDt = ParseRowDateTime(minAgg);
-                                if (maxDt == DateTime.MinValue && maxAgg != null) maxDt = ParseRowDateTime(maxAgg);
+                                minDt = DateTime.MinValue;
+                                maxDt = DateTime.MinValue;
+                            }
+                            else if (count == 1)
+                            {
+                                var singleVal = await connection.QueryFirstOrDefaultAsync<object>(
+                                    $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' LIMIT 1;");
+                                if (singleVal != null)
+                                {
+                                    var singleDt = ParseRowDateTime(singleVal);
+                                    minDt = singleDt;
+                                    maxDt = singleDt;
+                                }
+                            }
+                            else
+                            {
+                                var sampleVal = await connection.QueryFirstOrDefaultAsync<object>(
+                                    $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' LIMIT 1;");
+                                string sampleStr = Convert.ToString(sampleVal)?.Trim() ?? string.Empty;
+
+                                if (IsIsoFormat(sampleStr))
+                                {
+                                    var firstVal = await connection.QueryFirstOrDefaultAsync<object>(
+                                        $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' ORDER BY DATETIME ASC LIMIT 1;");
+                                    var lastVal = await connection.QueryFirstOrDefaultAsync<object>(
+                                        $"SELECT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '' ORDER BY DATETIME DESC LIMIT 1;");
+
+                                    if (firstVal != null) minDt = ParseRowDateTime(firstVal);
+                                    if (lastVal != null) maxDt = ParseRowDateTime(lastVal);
+                                }
+                                else
+                                {
+                                    var distinctRows = await connection.QueryAsync<object>(
+                                        $"SELECT DISTINCT DATETIME FROM [{tableName}] WHERE DATETIME IS NOT NULL AND DATETIME != '';");
+                                    var parsedList = new List<DateTime>();
+                                    foreach (var rowVal in distinctRows)
+                                    {
+                                        var p = ParseRowDateTime(rowVal);
+                                        if (p != DateTime.MinValue) parsedList.Add(p);
+                                    }
+                                    if (parsedList.Count > 0)
+                                    {
+                                        parsedList.Sort();
+                                        minDt = parsedList[0];
+                                        maxDt = parsedList[^1];
+                                    }
+                                }
                             }
                         }
                         else if (colNames.Contains("DATE") && colNames.Contains("TIME"))
                         {
-                            var firstVal = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT (DATE || ' ' || TIME) FROM [{tableName}] WHERE DATE IS NOT NULL AND DATE != '' ORDER BY rowid ASC LIMIT 1;");
-                            var lastVal = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT (DATE || ' ' || TIME) FROM [{tableName}] WHERE DATE IS NOT NULL AND DATE != '' ORDER BY rowid DESC LIMIT 1;");
+                            int count = await connection.ExecuteScalarAsync<int>(
+                                $"SELECT COUNT(*) FROM [{tableName}] WHERE DATE IS NOT NULL AND DATE != '';");
+                            detectedRecordCount = count;
 
-                            if (firstVal != null) minDt = ParseRowDateTime(firstVal);
-                            if (lastVal != null) maxDt = ParseRowDateTime(lastVal);
+                            if (count == 0)
+                            {
+                                minDt = DateTime.MinValue;
+                                maxDt = DateTime.MinValue;
+                            }
+                            else if (count == 1)
+                            {
+                                var singleVal = await connection.QueryFirstOrDefaultAsync<object>(
+                                    $"SELECT (DATE || ' ' || TIME) FROM [{tableName}] WHERE DATE IS NOT NULL AND DATE != '' LIMIT 1;");
+                                if (singleVal != null)
+                                {
+                                    var singleDt = ParseRowDateTime(singleVal);
+                                    minDt = singleDt;
+                                    maxDt = singleDt;
+                                }
+                            }
+                            else
+                            {
+                                var distinctRows = await connection.QueryAsync<object>(
+                                    $"SELECT DISTINCT (DATE || ' ' || TIME) FROM [{tableName}] WHERE DATE IS NOT NULL AND DATE != '';");
+                                var parsedList = new List<DateTime>();
+                                foreach (var rowVal in distinctRows)
+                                {
+                                    var p = ParseRowDateTime(rowVal);
+                                    if (p != DateTime.MinValue) parsedList.Add(p);
+                                }
+                                if (parsedList.Count > 0)
+                                {
+                                    parsedList.Sort();
+                                    minDt = parsedList[0];
+                                    maxDt = parsedList[^1];
+                                }
+                            }
                         }
                         else if (colNames.Contains("INDEX_DOUBLE"))
                         {
-                            var minIdx = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT MIN(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
-                            var maxIdx = await connection.QueryFirstOrDefaultAsync<object>(
-                                $"SELECT MAX(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
-                            if (minIdx != null && double.TryParse(minIdx.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double minOa) && minOa > 0)
-                                minDt = DateTime.FromOADate(minOa);
-                            if (maxIdx != null && double.TryParse(maxIdx.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double maxOa) && maxOa > 0)
-                                maxDt = DateTime.FromOADate(maxOa);
+                            int count = await connection.ExecuteScalarAsync<int>(
+                                $"SELECT COUNT(*) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                            detectedRecordCount = count;
+
+                            if (count == 0)
+                            {
+                                minDt = DateTime.MinValue;
+                                maxDt = DateTime.MinValue;
+                            }
+                            else
+                            {
+                                var minIdx = await connection.QueryFirstOrDefaultAsync<object>(
+                                    $"SELECT MIN(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                                var maxIdx = await connection.QueryFirstOrDefaultAsync<object>(
+                                    $"SELECT MAX(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                                if (minIdx != null && double.TryParse(minIdx.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double minOa) && minOa > 0)
+                                    minDt = DateTime.FromOADate(minOa);
+                                if (maxIdx != null && double.TryParse(maxIdx.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double maxOa) && maxOa > 0)
+                                    maxDt = DateTime.FromOADate(maxOa);
+                            }
                         }
                     }
                 }
                 catch { }
+                }
             }
 
             // 3. Fallback to VMX_TIME_LOG metadata (MIN_DATE / MAX_DATE)
@@ -758,8 +952,26 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                 }
             }
 
+            // Check if no records exist:
+            if (detectedRecordCount == 0 || (minDt == DateTime.MinValue && maxDt == DateTime.MinValue && !string.IsNullOrWhiteSpace(tableName)))
+            {
+                HasTimelogData = false;
+                RecordCount = 0;
+                ProgressStatus = "No timelog data available.";
+                OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(CanSelectDates));
+                OnPropertyChanged(nameof(ConfirmationMessage));
+                StartSyncCommand.NotifyCanExecuteChanged();
+                return;
+            }
+
             // 8. Order check and single bound adjustment
-            if (minDt != DateTime.MinValue && maxDt != DateTime.MinValue && minDt > maxDt)
+            if (detectedRecordCount == 1)
+            {
+                if (minDt != DateTime.MinValue && maxDt == DateTime.MinValue) maxDt = minDt;
+                else if (maxDt != DateTime.MinValue && minDt == DateTime.MinValue) minDt = maxDt;
+            }
+            else if (minDt != DateTime.MinValue && maxDt != DateTime.MinValue && minDt > maxDt)
             {
                 var temp = minDt;
                 minDt = maxDt;
@@ -777,6 +989,9 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             // 9. Assign properties
             if (minDt != DateTime.MinValue && maxDt != DateTime.MinValue)
             {
+                HasTimelogData = true;
+                RecordCount = detectedRecordCount ?? 1;
+
                 DataStartDateTime = minDt;
                 DataEndDateTime = maxDt;
 
@@ -789,6 +1004,8 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                 ToDate = DateTime.SpecifyKind(maxDt.Date, maxDt.Kind);
                 ToTime = maxDt;
 
+                EnsureFromDateTimeLessThanToDateTime(isSingleRecord: detectedRecordCount == 1);
+
                 SelectedDateRangePreset = "All Available Data";
                 OnPropertyChanged(nameof(SelectedDateRangePreset));
 
@@ -797,9 +1014,19 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
                 OnPropertyChanged(nameof(ToDateTime));
                 OnPropertyChanged(nameof(ToDateTimeText));
                 OnPropertyChanged(nameof(ConfirmationMessage));
+                OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(CanSelectDates));
+                StartSyncCommand.NotifyCanExecuteChanged();
             }
         }
         catch { }
+    }
+
+    public static bool IsIsoFormat(string? str)
+    {
+        if (string.IsNullOrWhiteSpace(str) || str.Length < 10) return false;
+        return char.IsDigit(str[0]) && char.IsDigit(str[1]) && char.IsDigit(str[2]) && char.IsDigit(str[3]) &&
+               str[4] == '-' && char.IsDigit(str[5]) && char.IsDigit(str[6]) && str[7] == '-';
     }
 
     public static DateTime ParseRowDateTime(object? val)
@@ -1287,6 +1514,7 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             OnPropertyChanged(nameof(ToDateTimeText));
         }
 
+        EnsureFromDateTimeLessThanToDateTime(isSingleRecord: RecordCount == 1);
         OnPropertyChanged(nameof(ConfirmationMessage));
     }
 
@@ -1313,6 +1541,14 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
             HasError = true;
             ErrorMessage = "Source Timelog from WellTree is missing or invalid.";
             ProgressStatus = "Validation failed: Missing source timelog.";
+            return;
+        }
+
+        if (!HasTimelogData)
+        {
+            HasError = true;
+            ErrorMessage = "No timelog data available.";
+            ProgressStatus = "Validation failed: No timelog data available.";
             return;
         }
 
@@ -1427,6 +1663,10 @@ public partial class SyncDataWithParentTimelogViewModel : ObservableObject
         {
             DateTime minDate = FromDateTime;
             DateTime maxDate = ToDateTime;
+            if (minDate > maxDate)
+            {
+                (minDate, maxDate) = (maxDate, minDate);
+            }
 
             // Time zone handling matching frmSyncTimeData.vb
             if (_repository != null)

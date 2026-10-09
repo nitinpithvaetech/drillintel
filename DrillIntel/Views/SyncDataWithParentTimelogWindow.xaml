@@ -20,6 +20,7 @@
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
     </Window.Resources>
 
     <Grid Margin="20">
@@ -108,6 +109,15 @@
         <!-- (2) Date Range GroupBox -->
         <GroupBox Grid.Row="2" Header="Date Range" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp1" Padding="14">
             <StackPanel>
+                <!-- Banner shown when no timelog data is available -->
+                <Border Background="#FEF2F2" BorderBrush="#FCA5A5" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,12"
+                        Visibility="{Binding HasTimelogData, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="AlertCircleOutline" Width="18" Height="18" Foreground="#DC2626" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="No timelog data available" FontWeight="SemiBold" Foreground="#991B1B" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Help text & Preset Dropdown -->
                 <DockPanel Margin="0,0,0,12" LastChildFill="False">
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">

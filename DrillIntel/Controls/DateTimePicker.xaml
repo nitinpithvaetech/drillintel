@@ -100,6 +100,10 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter Property="BorderBrush" Value="#0284C7" />
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Background" Value="#F1F5F9" />
+                            <Setter Property="BorderBrush" Value="#E2E8F0" />
+                        </Trigger>
                     </Style.Triggers>
                 </Style>
             </Border.Style>
