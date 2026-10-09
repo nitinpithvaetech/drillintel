@@ -29,6 +29,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header: Operation Banner -->
@@ -44,8 +45,8 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="Sync Data with Parent Timelog" FontSize="18" FontWeight="Bold" Foreground="#0369A1" />
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                        <TextBlock Text="Source Timelog: " FontWeight="SemiBold" Foreground="#64748B" FontSize="12" />
-                        <TextBlock Text="{Binding SourceTimeLogName}" FontWeight="Bold" Foreground="#0F172A" FontSize="12" Margin="0,0,16,0" />
+                        <TextBlock Text="Selected Timelog: " FontWeight="SemiBold" Foreground="#64748B" FontSize="12" />
+                        <TextBlock Text="{Binding SelectedTimelogNodeName}" FontWeight="Bold" Foreground="#0284C7" FontSize="12" Margin="0,0,16,0" />
                         <TextBlock Text="Well Name: " FontWeight="SemiBold" Foreground="#64748B" FontSize="12" />
                         <TextBlock Text="{Binding SourceWellName}" Foreground="#334155" FontSize="12" Margin="0,0,16,0" />
                         <TextBlock Text="Wellbore Name: " FontWeight="SemiBold" Foreground="#64748B" FontSize="12" />
@@ -56,7 +57,7 @@
         </Border>
 
         <!-- (1) Target Information GroupBox -->
-        <GroupBox Grid.Row="1" Header="Target Information" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp1" Padding="14">
+        <GroupBox Grid.Row="1" Header="Target Parent Timelog Information" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp1" Padding="14">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -91,11 +92,11 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Time Log -->
+                <!-- Parent Time Log (Read-only Display, no dropdown) -->
                 <StackPanel Grid.Column="4">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <materialDesign:PackIcon Kind="FileClockOutline" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Time Log" FontWeight="SemiBold" FontSize="12" Foreground="#475569" VerticalAlignment="Center" />
+                        <TextBlock Text="Parent Time Log" FontWeight="SemiBold" FontSize="12" Foreground="#475569" VerticalAlignment="Center" />
                     </StackPanel>
                     <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,8">
                         <TextBlock Text="{Binding TargetTimeLogName}" FontWeight="Bold" FontSize="13" Foreground="#0369A1" TextTrimming="CharacterEllipsis" ToolTip="Target Parent Timelog Name" />
@@ -111,7 +112,7 @@
                 <DockPanel Margin="0,0,0,12" LastChildFill="False">
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                         <materialDesign:PackIcon Kind="InformationOutline" Width="16" Height="16" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Specify the date &amp; time window of data to synchronize to the parent timelog:" 
+                        <TextBlock Text="Date &amp; time window derived from the selected Timelog node to synchronize to the parent timelog:" 
                                    FontSize="12" Foreground="#64748B" VerticalAlignment="Center" />
                     </StackPanel>
 
@@ -165,8 +166,23 @@
             </StackPanel>
         </GroupBox>
 
+        <!-- (3) Confirmation Message Banner -->
+        <Border Grid.Row="3" Background="#EFF6FF" BorderBrush="#93C5FD" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <materialDesign:PackIcon Grid.Column="0" Kind="InformationOutline" Width="26" Height="26" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Synchronization Confirmation" FontWeight="Bold" FontSize="13" Foreground="#0369A1" />
+                    <TextBlock Text="{Binding ConfirmationMessage}" TextWrapping="Wrap" FontSize="12" Foreground="#1E3A8A" Margin="0,3,0,0" LineHeight="18" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- (4) Progress, Feedback & Status Section -->
-        <Border Grid.Row="3" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,16" Background="#FAFAFA">
+        <Border Grid.Row="4" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,16" Background="#FAFAFA">
             <StackPanel VerticalAlignment="Center">
                 <!-- Status Message and Percentage -->
                 <DockPanel LastChildFill="False" Margin="0,0,0,6">
@@ -180,7 +196,13 @@
                              Height="10" 
                              materialDesign:TransitionAssist.DisableTransitions="True"
                              Foreground="#0284C7"
-                             Margin="0,0,0,8" />
+                             Margin="0,0,0,6" />
+
+                <!-- Time Elapsed matching legacy lblTime -->
+                <DockPanel LastChildFill="False" Margin="0,0,0,6"
+                           Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ElapsedTimeText}" FontSize="11" FontWeight="Medium" Foreground="#64748B" />
+                </DockPanel>
 
                 <!-- Success Message Banner -->
                 <Border Background="#ECFDF5" BorderBrush="#6EE7B7" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,4,0,0"
@@ -214,8 +236,8 @@
             </StackPanel>
         </Border>
 
-        <!-- (3) Action Buttons -->
-        <DockPanel Grid.Row="4" LastChildFill="False">
+        <!-- (5) Action Buttons -->
+        <DockPanel Grid.Row="5" LastChildFill="False">
             <Button DockPanel.Dock="Right" 
                     Content="{Binding CloseButtonText}" 
                     Command="{Binding CloseCommand}" 
