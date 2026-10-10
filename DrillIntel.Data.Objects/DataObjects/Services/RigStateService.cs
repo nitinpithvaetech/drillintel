@@ -1828,9 +1828,47 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
         {
             if (val == null || val == DBNull.Value) return DateTime.MinValue;
             if (val is DateTime dt) return dt;
+            if (val is double d && d > 1.0 && d < 100000.0)
+            {
+                try { return DateTime.FromOADate(d); } catch { }
+            }
             string str = val.ToString()?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(str)) return DateTime.MinValue;
+
+            string[] formats =
+            {
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss.fff",
+                "yyyy-MM-ddTHH:mm:ss",
+                "yyyy-MM-ddTHH:mm:ss.fff",
+                "dd/MM/yyyy HH:mm:ss",
+                "dd/MM/yyyy HH:mm",
+                "d/M/yyyy HH:mm:ss",
+                "d/M/yyyy HH:mm",
+                "dd-MM-yyyy HH:mm:ss",
+                "dd-MM-yyyy HH:mm",
+                "dd-MMM-yyyy HH:mm:ss",
+                "d-MMM-yyyy HH:mm:ss",
+                "dd-MMM-yyyy HH:mm",
+                "d-MMM-yyyy HH:mm",
+                "yyyy/MM/dd HH:mm:ss",
+                "yyyy-MM-dd",
+                "dd/MM/yyyy",
+                "dd-MMM-yyyy"
+            };
+
+            if (DateTime.TryParseExact(str, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dExact))
+                return dExact;
+
             if (DateTime.TryParse(str, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d1)) return d1;
-            if (DateTime.TryParse(str, out var d2)) return d2;
+            if (DateTime.TryParse(str, CultureInfo.CurrentCulture, DateTimeStyles.None, out var d2)) return d2;
+            if (DateTime.TryParse(str, out var d3)) return d3;
+
+            if (double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedD) && parsedD > 1.0 && parsedD < 100000.0)
+            {
+                try { return DateTime.FromOADate(parsedD); } catch { }
+            }
+
             return DateTime.MinValue;
         }
 
@@ -1855,42 +1893,152 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
             return -16711936; // Default Green
         }
 
-        public static DateTime GetMinDateFromTable(IDataServiceDIntel db, string tableName)
+        private static bool IsIsoFormat(string? str)
+        {
+            if (string.IsNullOrWhiteSpace(str) || str.Length < 10) return false;
+            return char.IsDigit(str[0]) && char.IsDigit(str[1]) && char.IsDigit(str[2]) && char.IsDigit(str[3]) &&
+                   str[4] == '-' && char.IsDigit(str[5]) && char.IsDigit(str[6]) && str[7] == '-';
+        }
+
+        public static (DateTime minDate, DateTime maxDate, int count) GetMinMaxDateFromTableWithCount(IDataServiceDIntel db, string tableName)
         {
             try
             {
+                if (db == null || string.IsNullOrWhiteSpace(tableName))
+                    return (DateTime.MinValue, DateTime.MinValue, 0);
+
+                if (!db.TableExists(tableName))
+                    return (DateTime.MinValue, DateTime.MinValue, 0);
+
+                // 1. Try DATETIME column
+                if (IsColumnAvailable(db, tableName, "DATETIME"))
+                {
+                    var countObj = db.GetValueFromDatabase($"SELECT COUNT(*) FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '';");
+                    int totalCount = Convert.ToInt32(countObj ?? 0);
+                    if (totalCount == 0)
+                    {
+                        return (DateTime.MinValue, DateTime.MinValue, 0);
+                    }
+                    if (totalCount == 1)
+                    {
+                        var singleDtObj = db.GetValueFromDatabase($"SELECT [DATETIME] FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '' LIMIT 1;");
+                        DateTime singleDt = ParseDate(singleDtObj);
+                        return (singleDt, singleDt, 1);
+                    }
+
+                    // Check sample to see if ISO formatted
+                    var sampleObj = db.GetValueFromDatabase($"SELECT [DATETIME] FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '' LIMIT 1;");
+                    string sampleStr = Convert.ToString(sampleObj)?.Trim() ?? string.Empty;
+
+                    if (IsIsoFormat(sampleStr))
+                    {
+                        var minObj = db.GetValueFromDatabase($"SELECT [DATETIME] FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '' ORDER BY [DATETIME] ASC LIMIT 1;");
+                        var maxObj = db.GetValueFromDatabase($"SELECT [DATETIME] FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '' ORDER BY [DATETIME] DESC LIMIT 1;");
+                        DateTime minVal = ParseDate(minObj);
+                        DateTime maxVal = ParseDate(maxObj);
+                        if (minVal != DateTime.MinValue && maxVal != DateTime.MinValue && minVal > maxVal)
+                        {
+                            (minVal, maxVal) = (maxVal, minVal);
+                        }
+                        return (minVal, maxVal, totalCount);
+                    }
+                    else
+                    {
+                        // Non-ISO format (e.g. dd-MMM-yyyy or dd/MM/yyyy)
+                        var dtDistinct = db.GetTable($"SELECT DISTINCT [DATETIME] FROM [{tableName}] WHERE [DATETIME] IS NOT NULL AND [DATETIME] != '';");
+                        if (dtDistinct != null && dtDistinct.Rows.Count > 0)
+                        {
+                            var dates = new List<DateTime>();
+                            foreach (DataRow r in dtDistinct.Rows)
+                            {
+                                var d = ParseDate(r["DATETIME"]);
+                                if (d != DateTime.MinValue) dates.Add(d);
+                            }
+                            if (dates.Count > 0)
+                            {
+                                dates.Sort();
+                                return (dates[0], dates[^1], totalCount);
+                            }
+                        }
+                    }
+                }
+
+                // 2. Try DATE and TIME columns
+                if (IsColumnAvailable(db, tableName, "DATE") && IsColumnAvailable(db, tableName, "TIME"))
+                {
+                    var countObj = db.GetValueFromDatabase($"SELECT COUNT(*) FROM [{tableName}] WHERE [DATE] IS NOT NULL AND [DATE] != '';");
+                    int totalCount = Convert.ToInt32(countObj ?? 0);
+                    if (totalCount == 0) return (DateTime.MinValue, DateTime.MinValue, 0);
+
+                    var dtDistinct = db.GetTable($"SELECT DISTINCT (DATE || ' ' || TIME) AS [DATETIME] FROM [{tableName}] WHERE [DATE] IS NOT NULL AND [DATE] != '';");
+                    if (dtDistinct != null && dtDistinct.Rows.Count > 0)
+                    {
+                        var dates = new List<DateTime>();
+                        foreach (DataRow r in dtDistinct.Rows)
+                        {
+                            var d = ParseDate(r["DATETIME"]);
+                            if (d != DateTime.MinValue) dates.Add(d);
+                        }
+                        if (dates.Count > 0)
+                        {
+                            dates.Sort();
+                            return (dates[0], dates[^1], totalCount);
+                        }
+                    }
+                }
+
+                // 3. Try INDEX_DOUBLE (OADate)
+                if (IsColumnAvailable(db, tableName, "INDEX_DOUBLE"))
+                {
+                    var minIdx = db.GetValueFromDatabase($"SELECT MIN(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                    var maxIdx = db.GetValueFromDatabase($"SELECT MAX(INDEX_DOUBLE) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                    var countObj = db.GetValueFromDatabase($"SELECT COUNT(*) FROM [{tableName}] WHERE INDEX_DOUBLE IS NOT NULL AND INDEX_DOUBLE > 0;");
+                    int totalCount = Convert.ToInt32(countObj ?? 0);
+
+                    double minD = DataService.checkNull(minIdx, 0.0);
+                    double maxD = DataService.checkNull(maxIdx, 0.0);
+                    DateTime minDt = minD > 0 ? DateTime.FromOADate(minD) : DateTime.MinValue;
+                    DateTime maxDt = maxD > 0 ? DateTime.FromOADate(maxD) : DateTime.MinValue;
+                    if (minDt != DateTime.MinValue && maxDt != DateTime.MinValue && minDt > maxDt)
+                    {
+                        (minDt, maxDt) = (maxDt, minDt);
+                    }
+                    return (minDt, maxDt, totalCount);
+                }
+
+                // 4. Fallback: use rowid / DATA_INDEX
                 string dtCol = GetDateTimeColumnSql(db, tableName);
                 string idxCol = GetDataIndexColumnName(db, tableName);
-                var dt = db.GetTable($"SELECT {dtCol} FROM [{tableName}] ORDER BY [{idxCol}] ASC LIMIT 1;");
-                if (dt != null && dt.Rows.Count > 0)
+                var dtAsc = db.GetTable($"SELECT {dtCol} FROM [{tableName}] ORDER BY [{idxCol}] ASC LIMIT 1;");
+                var dtDesc = db.GetTable($"SELECT {dtCol} FROM [{tableName}] ORDER BY [{idxCol}] DESC LIMIT 1;");
+                DateTime fDt = (dtAsc != null && dtAsc.Rows.Count > 0) ? ParseDate(dtAsc.Rows[0]["DATETIME"]) : DateTime.MinValue;
+                DateTime lDt = (dtDesc != null && dtDesc.Rows.Count > 0) ? ParseDate(dtDesc.Rows[0]["DATETIME"]) : DateTime.MinValue;
+                if (fDt != DateTime.MinValue && lDt != DateTime.MinValue && fDt > lDt)
                 {
-                    return ParseDate(dt.Rows[0]["DATETIME"]);
+                    (fDt, lDt) = (lDt, fDt);
                 }
-                return DateTime.MinValue;
+                return (fDt, lDt, fDt != DateTime.MinValue ? 1 : 0);
             }
             catch
             {
-                return DateTime.MinValue;
+                return (DateTime.MinValue, DateTime.MinValue, 0);
             }
+        }
+
+        public static (DateTime minDate, DateTime maxDate) GetMinMaxDateFromTable(IDataServiceDIntel db, string tableName)
+        {
+            var (min, max, _) = GetMinMaxDateFromTableWithCount(db, tableName);
+            return (min, max);
+        }
+
+        public static DateTime GetMinDateFromTable(IDataServiceDIntel db, string tableName)
+        {
+            return GetMinMaxDateFromTable(db, tableName).minDate;
         }
 
         public static DateTime GetMaxDateFromTable(IDataServiceDIntel db, string tableName)
         {
-            try
-            {
-                string dtCol = GetDateTimeColumnSql(db, tableName);
-                string idxCol = GetDataIndexColumnName(db, tableName);
-                var dt = db.GetTable($"SELECT {dtCol} FROM [{tableName}] ORDER BY [{idxCol}] DESC LIMIT 1;");
-                if (dt != null && dt.Rows.Count > 0)
-                {
-                    return ParseDate(dt.Rows[0]["DATETIME"]);
-                }
-                return DateTime.MinValue;
-            }
-            catch
-            {
-                return DateTime.MinValue;
-            }
+            return GetMinMaxDateFromTable(db, tableName).maxDate;
         }
 
         public static double GetLastChannelValueByIndex(IDataServiceDIntel db, string dataTableName, string channelName, long beforeIndex)

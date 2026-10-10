@@ -575,6 +575,17 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             return TimeLogService.updateData(objDataService, WellID, WellboreID, LogID, objData, TimeZone, ref LastError);
         }
 
+        // --- [NEW LOGIC (syncColumns and addNewChannel delegating to HoleDepthCalculator matching legacy TimeLog)] ---
+        public static void syncColumns(IDataServiceDIntel objDataService, TimeLog objParentTimeLog, TimeLog objChildTimeLog)
+        {
+            HoleDepthCalculator.syncColumns(objDataService, objParentTimeLog, objChildTimeLog);
+        }
+
+        public static void addNewChannel(IDataServiceDIntel objDataService, TimeLog objTimeLog, LogChannel newChannel)
+        {
+            HoleDepthCalculator.addNewChannel(objDataService, objTimeLog, newChannel);
+        }
+
         // --- [NEW LOGIC (Remove / RemoveTimeLog: wrappers delegating to TimeLogService.RemoveTimeLog)] ---
         public bool Remove(IDataServiceDIntel objDataService, bool dropDataTable = true)
         {

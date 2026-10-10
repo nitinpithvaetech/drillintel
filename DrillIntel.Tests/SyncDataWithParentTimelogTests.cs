@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.DataObjects.Services;
 using DrillIntel.Models;
 using DrillIntel.Projects;
 using DrillIntel.Services;
@@ -767,6 +768,1153 @@ public class SyncDataWithParentTimelogTests
             Assert.True(unlinkedNode.IsLinkedTimeLog);
             Assert.True(mainVm.CanSyncDataToParentTimelog);
             Assert.True(mainVm.SyncDataToParentTimelogCommand.CanExecute(null));
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartButton_IsEnabled_OnlyWhenTimelogSelectedInDialog()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_btn_enable_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W-1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB-1', 'W-1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (LOG_ID, WELL_ID, WELLBORE_ID, LOG_NAME) VALUES ('TL-1', 'W-1', 'WB-1', 'Child Log');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (LOG_ID, WELL_ID, WELLBORE_ID, LOG_NAME) VALUES ('TL-2', 'W-1', 'WB-1', 'Parent Log');");
+
+            var repo = new WellDataRepository(session);
+            var childTimeLog = new TimeLog
+            {
+                ObjectID = "TL-1",
+                nameLog = "Child Log",
+                WellID = "W-1",
+                WellboreID = "WB-1",
+                LinkToParent = true,
+                LinkLogID = "TL-2"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, childTimeLog, repo);
+            await vm.InitializeAsync();
+
+            // When initialized with a linked parent log, Timelog is selected -> Start button is enabled
+            Assert.True(vm.HasSelectedTimelog);
+            Assert.True(vm.CanStart);
+            Assert.True(vm.StartSyncCommand.CanExecute(null));
+
+            // When user clears the selection
+            vm.SelectedParentTimeLog = null;
+            vm.TargetTimeLogName = "";
+
+            Assert.False(vm.HasSelectedTimelog);
+            Assert.False(vm.CanStart);
+            Assert.False(vm.StartSyncCommand.CanExecute(null));
+
+            // When user selects placeholder options "(None)" or "(Select Timelog)"
+            vm.TargetTimeLogName = "(None)";
+            Assert.False(vm.HasSelectedTimelog);
+            Assert.False(vm.CanStart);
+            Assert.False(vm.StartSyncCommand.CanExecute(null));
+
+            vm.TargetTimeLogName = "(Select Timelog)";
+            Assert.False(vm.HasSelectedTimelog);
+            Assert.False(vm.CanStart);
+            Assert.False(vm.StartSyncCommand.CanExecute(null));
+
+            // When user re-selects a Parent Timelog from the dropdown
+            var option = vm.AvailableParentTimeLogs.FirstOrDefault(o => o.LogId == "TL-2");
+            Assert.NotNull(option);
+            vm.SelectedParentTimeLog = option;
+
+            Assert.True(vm.HasSelectedTimelog);
+            Assert.True(vm.CanStart);
+            Assert.True(vm.StartSyncCommand.CanExecute(null));
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartButton_IsDisabled_WhileRunning()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_running_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL-R1",
+                nameLog = "Run Log",
+                nameWell = "Well1",
+                nameWellbore = "WB1"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.True(vm.CanStart);
+            Assert.True(vm.StartSyncCommand.CanExecute(null));
+            Assert.False(vm.IsRunning);
+            Assert.Equal("Close", vm.CloseButtonText);
+
+            // Simulate running state
+            vm.IsRunning = true;
+            Assert.False(vm.CanStart);
+            Assert.False(vm.StartSyncCommand.CanExecute(null));
+            Assert.False(vm.CanSelectDates);
+            Assert.Equal("Cancel", vm.CloseButtonText);
+
+            // Finish running state
+            vm.IsRunning = false;
+            Assert.True(vm.CanStart);
+            Assert.True(vm.StartSyncCommand.CanExecute(null));
+            Assert.True(vm.CanSelectDates);
+            Assert.Equal("Close", vm.CloseButtonText);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSync_ValidatesTimelogSelection_AndShowsError()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_val_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL-V1",
+                nameLog = "Val Log",
+                nameWell = "Well1",
+                nameWellbore = "WB1"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            // Clear timelog selection
+            vm.SelectedParentTimeLog = null;
+            vm.TargetTimeLogName = "";
+
+            // Attempt to trigger StartSync directly
+            await vm.StartSyncAsync();
+
+            Assert.True(vm.HasError);
+            Assert.Contains("Timelog selection is required", vm.ErrorMessage);
+            Assert.Contains("Validation failed", vm.ProgressStatus);
+            Assert.False(vm.HasSuccess);
+            Assert.False(vm.IsCompleted);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSync_HandlesMissingTargetTimelog_Gracefully()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_missing_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var repo = new WellDataRepository(session);
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL-M1",
+                nameLog = "Src Log",
+                nameWell = "Well1",
+                nameWellbore = "WB1"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog, repo);
+            await vm.InitializeAsync();
+
+            // Set a target timelog name that does not exist in database
+            vm.SelectedParentTimeLog = null;
+            vm.TargetTimeLogName = "NonExistentParentLog";
+
+            await vm.StartSyncAsync();
+
+            Assert.True(vm.HasError);
+            Assert.Contains("could not be found or loaded", vm.ErrorMessage);
+            Assert.False(vm.HasSuccess);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSync_HandlesMergeConflict_Gracefully()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_conflict_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W-1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB-1', 'W-1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (LOG_ID, WELL_ID, WELLBORE_ID, LOG_NAME) VALUES ('TL-SRC', 'W-1', 'WB-1', 'Source Log');");
+
+            var repo = new WellDataRepository(session);
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL-SRC",
+                nameLog = "Source Log",
+                WellID = "W-1",
+                WellboreID = "WB-1"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog, repo);
+            await vm.InitializeAsync();
+
+            // Create a pseudo option pointing to the same ObjectID but differing TargetTimeLogName
+            var option = new TimeLogOption
+            {
+                LogId = "TL-SRC",
+                LogName = "Conflicted Name",
+                WellId = "W-1",
+                WellboreId = "WB-1"
+            };
+            vm.SelectedParentTimeLog = option;
+            vm.TargetTimeLogName = "Conflicted Name";
+
+            await vm.StartSyncAsync();
+
+            Assert.True(vm.HasError);
+            Assert.Contains("Cannot synchronize a timelog into itself", vm.ErrorMessage);
+            Assert.Contains("conflict", vm.ProgressStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSync_MergesChildDataIntoParentTimelog_WithOverwriteDuplicates()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_merge_overwrite_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            // 1. Create physical data tables for child and parent timelogs
+            conn.Execute(@"
+                CREATE TABLE TL_SRC_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL,
+                    DEPTH REAL,
+                    HDTH REAL,
+                    ROP REAL,
+                    CUSTOM_CURVE REAL,
+                    NEXT_DEPTH REAL,
+                    FOOTAGE REAL,
+                    NEXT_DATETIME TEXT,
+                    TIME_DURATION REAL
+                );");
+
+            conn.Execute(@"
+                CREATE TABLE TL_PARENT_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL,
+                    DEPTH REAL,
+                    HDTH REAL,
+                    ROP REAL,
+                    NEXT_DEPTH REAL,
+                    FOOTAGE REAL,
+                    NEXT_DATETIME TEXT,
+                    TIME_DURATION REAL
+                );");
+
+            // 2. Populate child and parent data
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH, ROP, CUSTOM_CURVE) VALUES ('2026-06-01 10:00:00', 46174.4166666667, 1000.0, 1000.0, 50.0, 99.5);");
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH, ROP, CUSTOM_CURVE) VALUES ('2026-06-01 10:10:00', 46174.4236111111, 1010.0, 1010.0, 55.0, 102.3);");
+
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH, ROP) VALUES ('2026-06-01 09:00:00', 46174.375, 950.0, 950.0, 40.0);");
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH, ROP) VALUES ('2026-06-01 10:00:00', 46174.4166666667, 999.0, 999.0, 20.0);");
+
+            // 3. Register timelogs in VMX_TIME_LOG and VMX_TIME_LOG_COLUMNS
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, DUPLICATE_ACTION) VALUES ('W1', 'WB1', 'TL_SRC', 'ChildLog', 'TL_SRC_DATA', 0);");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, DUPLICATE_ACTION) VALUES ('W1', 'WB1', 'TL_PARENT', 'ParentLog', 'TL_PARENT_DATA', 0);");
+
+            conn.Execute("INSERT INTO VMX_TIME_LOG_COLUMNS (WELL_ID, WELLBORE_ID, LOG_ID, MNEMONIC, CHANNEL_NAME, DATA_TYPE) VALUES ('W1', 'WB1', 'TL_SRC', 'CUSTOM_CURVE', 'Custom Curve Channel', 'DOUBLE');");
+
+            var repo = new WellDataRepository(session);
+            var childTimeLog = new TimeLog
+            {
+                ObjectID = "TL_SRC",
+                nameLog = "ChildLog",
+                WellID = "W1",
+                WellboreID = "WB1",
+                __dataTableName = "TL_SRC_DATA",
+                DuplicateAction = enumDuplicateAction.OverwriteDuplicates,
+                LinkToParent = true,
+                LinkLogID = "TL_PARENT"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, childTimeLog, repo);
+            await vm.InitializeAsync();
+
+            vm.FromDateTime = new DateTime(2026, 6, 1, 9, 30, 0);
+            vm.ToDateTime = new DateTime(2026, 6, 1, 11, 0, 0);
+
+            // Execute sync via command
+            await vm.StartSyncCommand.ExecuteAsync(null);
+
+            // Verify ViewModel state
+            Assert.True(vm.IsCompleted);
+            Assert.True(vm.HasSuccess);
+            Assert.False(vm.HasError);
+            Assert.Equal(100, vm.ProgressPercent);
+            Assert.Equal("Data synced successfully to Parent Timelog.", vm.SuccessMessage);
+            Assert.StartsWith("Time Elapsed [", vm.ElapsedTimeText);
+
+            // Verify column synchronization: CUSTOM_CURVE column must have been added to parent table
+            var parentCols = await conn.QueryAsync<dynamic>("PRAGMA table_info(TL_PARENT_DATA);");
+            Assert.Contains(parentCols, c => string.Equals((string)c.name, "CUSTOM_CURVE", StringComparison.OrdinalIgnoreCase));
+
+            // Verify column metadata registered in VMX_TIME_LOG_COLUMNS for parent log
+            int colMetaCount = await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM VMX_TIME_LOG_COLUMNS WHERE LOG_ID = 'TL_PARENT' AND MNEMONIC = 'CUSTOM_CURVE';");
+            Assert.Equal(1, colMetaCount);
+
+            // Verify child data merged into parent table
+            var parentRows = (await conn.QueryAsync<dynamic>("SELECT * FROM TL_PARENT_DATA ORDER BY DATETIME;")).ToList();
+            Assert.Equal(3, parentRows.Count);
+
+            // First record: 09:00:00 preserved
+            Assert.Equal("2026-06-01 09:00:00", (string)parentRows[0].DATETIME);
+
+            // Overwritten record at 10:00:00 has updated DEPTH (1000 instead of 999) and CUSTOM_CURVE (99.5)
+            Assert.Equal("2026-06-01 10:00:00", (string)parentRows[1].DATETIME);
+            Assert.Equal(1000.0, Convert.ToDouble(parentRows[1].DEPTH));
+            Assert.Equal(99.5, Convert.ToDouble(parentRows[1].CUSTOM_CURVE));
+
+            // New record at 10:10:00 inserted
+            Assert.Equal("2026-06-01 10:10:00", (string)parentRows[2].DATETIME);
+            Assert.Equal(1010.0, Convert.ToDouble(parentRows[2].DEPTH));
+            Assert.Equal(102.3, Convert.ToDouble(parentRows[2].CUSTOM_CURVE));
+
+            // Verify record links calculated (NEXT_DEPTH, FOOTAGE, NEXT_DATETIME, TIME_DURATION)
+            Assert.NotNull(parentRows[1].NEXT_DATETIME);
+            Assert.Equal(1000.0, Convert.ToDouble(parentRows[2].NEXT_DEPTH));
+            Assert.Equal(10.0, Convert.ToDouble(parentRows[2].FOOTAGE));
+
+            // Verify indexes updated in VMX_TIME_LOG
+            var parentMeta = await conn.QuerySingleAsync<dynamic>("SELECT MIN_DATE, MAX_DATE FROM VMX_TIME_LOG WHERE LOG_ID = 'TL_PARENT';");
+            Assert.NotNull(parentMeta.MIN_DATE);
+            Assert.NotNull(parentMeta.MAX_DATE);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSync_HandlesSkipDuplicates_Correctly()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_skip_dup_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            // 1. Create physical tables
+            conn.Execute(@"
+                CREATE TABLE TL_SRC_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL,
+                    DEPTH REAL,
+                    HDTH REAL
+                );");
+
+            conn.Execute(@"
+                CREATE TABLE TL_PARENT_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL,
+                    DEPTH REAL,
+                    HDTH REAL
+                );");
+
+            // Parent already has data up to 10:00:00
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-01 09:00:00', 46174.375, 950.0, 950.0);");
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-01 10:00:00', 46174.4166666667, 1000.0, 1000.0);");
+
+            // Child has overlapping data at 09:30:00 (value 980) and new data at 10:30:00 (value 1050)
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-01 09:30:00', 46174.3958333333, 980.0, 980.0);");
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-01 10:30:00', 46174.4375, 1050.0, 1050.0);");
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, DUPLICATE_ACTION, MAX_DATE) VALUES ('W1', 'WB1', 'TL_SRC', 'ChildLog', 'TL_SRC_DATA', 1, '2026-06-01 10:30:00');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME, DUPLICATE_ACTION, MAX_DATE) VALUES ('W1', 'WB1', 'TL_PARENT', 'ParentLog', 'TL_PARENT_DATA', 1, '2026-06-01 10:00:00');");
+
+            var repo = new WellDataRepository(session);
+            var childTimeLog = new TimeLog
+            {
+                ObjectID = "TL_SRC",
+                nameLog = "ChildLog",
+                WellID = "W1",
+                WellboreID = "WB1",
+                __dataTableName = "TL_SRC_DATA",
+                DuplicateAction = enumDuplicateAction.SkipDuplicates,
+                LinkToParent = true,
+                LinkLogID = "TL_PARENT"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, childTimeLog, repo);
+            await vm.InitializeAsync();
+
+            vm.FromDateTime = new DateTime(2026, 6, 1, 9, 0, 0);
+            vm.ToDateTime = new DateTime(2026, 6, 1, 11, 0, 0);
+
+            await vm.StartSyncCommand.ExecuteAsync(null);
+
+            Assert.True(vm.IsCompleted);
+            Assert.True(vm.HasSuccess);
+
+            var parentRows = (await conn.QueryAsync<dynamic>("SELECT * FROM TL_PARENT_DATA ORDER BY DATETIME;")).ToList();
+            // Should contain 3 rows: original 09:00:00, original 10:00:00, and new 10:30:00. The duplicate 09:30:00 was skipped!
+            Assert.Equal(3, parentRows.Count);
+            Assert.Equal("2026-06-01 09:00:00", (string)parentRows[0].DATETIME);
+            Assert.Equal("2026-06-01 10:00:00", (string)parentRows[1].DATETIME);
+            Assert.Equal("2026-06-01 10:30:00", (string)parentRows[2].DATETIME);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SetsFromAndToDates_AutomaticallyFromDataTable()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_dates_table_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute(@"
+                CREATE TABLE TL_AUTO_SRC (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL,
+                    DEPTH REAL,
+                    HDTH REAL
+                );");
+
+            // Insert records with specific start and end timestamps
+            conn.Execute("INSERT INTO TL_AUTO_SRC (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-01 08:15:30', 46174.344097, 950.0, 950.0);");
+            conn.Execute("INSERT INTO TL_AUTO_SRC (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-02 12:00:00', 46175.500000, 980.0, 980.0);");
+            conn.Execute("INSERT INTO TL_AUTO_SRC (DATETIME, INDEX_DOUBLE, DEPTH, HDTH) VALUES ('2026-06-05 17:45:15', 46178.739757, 1050.0, 1050.0);");
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME) VALUES ('W1', 'WB1', 'TL_SRC_1', 'AutoLog', 'TL_AUTO_SRC');");
+
+            var repo = new WellDataRepository(session);
+            var sourceLog = new TimeLog
+            {
+                ObjectID = "TL_SRC_1",
+                nameLog = "AutoLog",
+                WellID = "W1",
+                WellboreID = "WB1",
+                __dataTableName = "TL_AUTO_SRC"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, sourceLog, repo);
+            await vm.InitializeAsync();
+
+            // Verify dates and times are automatically retrieved from the physical table
+            Assert.Equal(new DateTime(2026, 6, 1, 8, 15, 30), vm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 6, 5, 17, 45, 15), vm.ToDateTime);
+            Assert.Equal(new DateTime(2026, 6, 1, 8, 15, 30), vm.DataStartDateTime);
+            Assert.Equal(new DateTime(2026, 6, 5, 17, 45, 15), vm.DataEndDateTime);
+            Assert.Equal(new DateTime(2026, 6, 1), vm.MinAvailableDate);
+            Assert.Equal(new DateTime(2026, 6, 5), vm.MaxAvailableDate);
+            Assert.Equal("01/06/2026 08:15", vm.FromDateTimeText);
+            Assert.Equal("05/06/2026 17:45", vm.ToDateTimeText);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_SetsFromAndToDates_FromVmxTimeLogMetadata_WhenPhysicalTableMissing()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_dates_meta_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+            conn.Execute("INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, MIN_DATE, MAX_DATE) VALUES ('W1', 'WB1', 'TL_META_1', 'MetaLog', '2026-07-10 09:00:00', '2026-07-20 18:30:00');");
+
+            var repo = new WellDataRepository(session);
+            var sourceLog = new TimeLog
+            {
+                ObjectID = "TL_META_1",
+                nameLog = "MetaLog",
+                WellID = "W1",
+                WellboreID = "WB1"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, sourceLog, repo);
+            await vm.InitializeAsync();
+
+            Assert.Equal(new DateTime(2026, 7, 10, 9, 0, 0), vm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 7, 20, 18, 30, 0), vm.ToDateTime);
+            Assert.Equal("10/07/2026 09:00", vm.FromDateTimeText);
+            Assert.Equal("20/07/2026 18:30", vm.ToDateTimeText);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task DateRangePreset_AllAvailableData_RestoresExactDataStartAndEndTimestamps()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_preset_restore_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute(@"
+                CREATE TABLE TL_PRESET_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL
+                );");
+
+            conn.Execute("INSERT INTO TL_PRESET_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-08-01 11:22:33', 46235.473993);");
+            conn.Execute("INSERT INTO TL_PRESET_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-08-10 22:44:55', 46244.947859);");
+
+            var sourceLog = new TimeLog
+            {
+                ObjectID = "TL_P1",
+                nameLog = "PresetTimeLog",
+                __dataTableName = "TL_PRESET_DATA"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, sourceLog);
+            await vm.InitializeAsync();
+
+            Assert.Equal(new DateTime(2026, 8, 1, 11, 22, 33), vm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 8, 10, 22, 44, 55), vm.ToDateTime);
+
+            // Change preset to Last 24 Hours
+            vm.SelectedDateRangePreset = "Last 24 Hours";
+            Assert.Equal(vm.ToDateTime.AddHours(-24), vm.FromDateTime);
+
+            // Change preset back to All Available Data -> must restore exact original timestamps
+            vm.SelectedDateRangePreset = "All Available Data";
+            Assert.Equal(new DateTime(2026, 8, 1, 11, 22, 33), vm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 8, 10, 22, 44, 55), vm.ToDateTime);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_PreservesUtcKind_WhenWellDateFormatIsUtc()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_utc_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute(@"
+                CREATE TABLE TL_UTC_DATA (
+                    DATETIME TEXT PRIMARY KEY
+                );");
+            conn.Execute("INSERT INTO TL_UTC_DATA (DATETIME) VALUES ('2026-09-01 00:00:00');");
+            conn.Execute("INSERT INTO TL_UTC_DATA (DATETIME) VALUES ('2026-09-05 12:00:00');");
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME, DATE_FORMAT) VALUES ('W_UTC', 'UtcWell', 'UTC');");
+
+            var sourceLog = new TimeLog
+            {
+                ObjectID = "TL_UTC_LOG",
+                nameLog = "UtcLog",
+                WellID = "W_UTC",
+                __dataTableName = "TL_UTC_DATA",
+                __wellDateFormat = "UTC"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, sourceLog);
+            await vm.InitializeAsync();
+
+            Assert.Equal(DateTimeKind.Utc, vm.FromDateTime.Kind);
+            Assert.Equal(DateTimeKind.Utc, vm.ToDateTime.Kind);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Theory]
+    [InlineData("2026-06-01 08:30:00", 2026, 6, 1, 8, 30, 0)]
+    [InlineData("01-Jun-2026 08:30:00", 2026, 6, 1, 8, 30, 0)]
+    [InlineData("01/06/2026 08:30:00", 2026, 6, 1, 8, 30, 0)]
+    [InlineData("2026-06-01T08:30:00", 2026, 6, 1, 8, 30, 0)]
+    public void ParseRowDateTime_ParsesVariousFormatsAccurately(
+        string input, int year, int month, int day, int hour, int minute, int second)
+    {
+        var dt = SyncDataWithParentTimelogViewModel.ParseRowDateTime(input);
+        Assert.Equal(new DateTime(year, month, day, hour, minute, second), dt);
+    }
+
+    [Fact]
+    public async Task SelectedTimelogNode_FromAndToDates_DerivedAutomaticallyFromTreeNode()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_tree_node50_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+
+            // Timelog 50: Selected from tree. Rows from 01/08/2026 10:00:00 to 15/08/2026 18:30:00
+            conn.Execute(@"
+                CREATE TABLE TL_50_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL
+                );");
+            conn.Execute("INSERT INTO TL_50_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-08-01 10:00:00', 46235.416667);");
+            conn.Execute("INSERT INTO TL_50_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-08-10 14:15:00', 46244.593750);");
+            conn.Execute("INSERT INTO TL_50_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-08-15 18:30:00', 46249.770833);");
+
+            // Target Parent Log: TL_PARENT with different dates
+            conn.Execute(@"
+                CREATE TABLE TL_PARENT_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL
+                );");
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-01-01 00:00:00', 46023.0);");
+            conn.Execute("INSERT INTO TL_PARENT_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-12-31 23:59:59', 46388.0);");
+
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME)
+                VALUES ('W1', 'WB1', 'TL_PARENT', 'Parent Timelog', 'TL_PARENT_DATA');");
+
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME)
+                VALUES ('W1', 'WB1', '50', '50', 'TL_50_DATA');");
+
+            var repo = new WellDataRepository(session);
+            var selectedTimeLogNode = new TimeLog
+            {
+                ObjectID = "50",
+                nameLog = "50",
+                WellID = "W1",
+                WellboreID = "WB1",
+                LinkToParent = true,
+                LinkWellID = "W1",
+                LinkWellboreID = "WB1",
+                LinkLogID = "TL_PARENT",
+                __dataTableName = "TL_50_DATA"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, selectedTimeLogNode, repo);
+            await vm.InitializeAsync();
+
+            // 1. Clearly displays the selected Timelog node name
+            Assert.Equal("50", vm.SelectedTimelogNodeName);
+            Assert.Equal("50", vm.SourceTimeLogName);
+            Assert.Equal("Parent Timelog", vm.TargetTimeLogName);
+
+            // 2. From Date & To Date automatically derived from the selected Timelog node (NOT parent)
+            Assert.Equal(new DateTime(2026, 8, 1, 10, 0, 0), vm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 8, 15, 18, 30, 0), vm.ToDateTime);
+            Assert.Equal("01/08/2026 10:00", vm.FromDateTimeText);
+            Assert.Equal("15/08/2026 18:30", vm.ToDateTimeText);
+
+            // 3. Confirmation message explaining data will be synced for the given date range
+            Assert.Contains("50", vm.ConfirmationMessage);
+            Assert.Contains("Parent Timelog", vm.ConfirmationMessage);
+            Assert.Contains("01/08/2026 10:00", vm.ConfirmationMessage);
+            Assert.Contains("15/08/2026 18:30", vm.ConfirmationMessage);
+            Assert.True(vm.CanStart);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task RibbonCommand_WhenTimelog50SelectedInTree_OpensDialogWithNodeDerivedDatesAndConfirmation()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_ribbon_tree50_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Main Well');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Main Wellbore');");
+
+            conn.Execute(@"
+                CREATE TABLE TL_50_DATA (
+                    DATETIME TEXT PRIMARY KEY,
+                    INDEX_DOUBLE REAL
+                );");
+            conn.Execute("INSERT INTO TL_50_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-07-01 06:30:00', 46204.270833);");
+            conn.Execute("INSERT INTO TL_50_DATA (DATETIME, INDEX_DOUBLE) VALUES ('2026-07-20 16:45:00', 46223.697917);");
+
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME)
+                VALUES ('W1', 'WB1', '50', '50', 'TL_50_DATA');");
+
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME)
+                VALUES ('W1', 'WB1', 'TL_PARENT', 'Primary Parent Log');");
+
+            var dummyProjectService = new DummyProjectService();
+            var mainVm = new MainViewModel(session, dummyProjectService);
+            var dashboardVm = (DashboardViewModel)mainVm.CurrentViewModel;
+
+            var timeLog50 = new TimeLog
+            {
+                ObjectID = "50",
+                nameLog = "50",
+                WellID = "W1",
+                WellboreID = "WB1",
+                LinkToParent = true,
+                LinkWellID = "W1",
+                LinkWellboreID = "WB1",
+                LinkLogID = "TL_PARENT",
+                __dataTableName = "TL_50_DATA"
+            };
+
+            var treeNode = new WellTreeNode
+            {
+                Name = "50",
+                Type = WellTreeNodeType.TimeLog,
+                Tag = timeLog50
+            };
+            dashboardVm.OnTreeNodeSelected(treeNode);
+
+            SyncDataWithParentTimelogViewModel? dialogVm = null;
+            mainVm.OpenSyncDataDialogHandler = vm =>
+            {
+                dialogVm = vm;
+                return true;
+            };
+
+            Assert.True(mainVm.CanSyncDataToParentTimelog);
+            await mainVm.SyncDataToParentTimelogCommand.ExecuteAsync(null);
+
+            Assert.NotNull(dialogVm);
+            // 1. The selected Timelog node name
+            Assert.Equal("50", dialogVm.SelectedTimelogNodeName);
+            // 2. The From Date and To Date derived from that node
+            Assert.Equal(new DateTime(2026, 7, 1, 6, 30, 0), dialogVm.FromDateTime);
+            Assert.Equal(new DateTime(2026, 7, 20, 16, 45, 0), dialogVm.ToDateTime);
+            Assert.Equal("01/07/2026 06:30", dialogVm.FromDateTimeText);
+            Assert.Equal("20/07/2026 16:45", dialogVm.ToDateTimeText);
+            // 3. Confirmation message explaining data will be synced for the given date range
+            Assert.Equal(
+                "Data from selected Timelog '50' will be synchronized into Parent Timelog 'Primary Parent Log' for the date range 01/07/2026 06:30 to 20/07/2026 16:45.",
+                dialogVm.ConfirmationMessage);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmationMessage_DynamicallyUpdates_WhenDateRangeAdjusted()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_confirm_update_test_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("INSERT INTO VMX_WELL (WELL_ID, WELL_NAME) VALUES ('W1', 'Well1');");
+            conn.Execute("INSERT INTO VMX_WELLBORE (WELLBORE_ID, WELL_ID, WELLBORE_NAME) VALUES ('WB1', 'W1', 'Wellbore1');");
+            conn.Execute(@"
+                CREATE TABLE TL_SRC_DATA (
+                    DATETIME TEXT PRIMARY KEY
+                );");
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME) VALUES ('2026-08-01 00:00:00');");
+            conn.Execute("INSERT INTO TL_SRC_DATA (DATETIME) VALUES ('2026-08-10 23:59:59');");
+
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME, DATA_TABLE_NAME)
+                VALUES ('W1', 'WB1', 'TL_SRC', 'Timelog 50', 'TL_SRC_DATA');");
+            conn.Execute(@"
+                INSERT INTO VMX_TIME_LOG (WELL_ID, WELLBORE_ID, LOG_ID, LOG_NAME)
+                VALUES ('W1', 'WB1', 'TL_PARENT', 'ParentLog');");
+
+            var repo = new WellDataRepository(session);
+            var sourceLog = new TimeLog
+            {
+                ObjectID = "TL_SRC",
+                nameLog = "Timelog 50",
+                WellID = "W1",
+                WellboreID = "WB1",
+                LinkToParent = true,
+                LinkWellID = "W1",
+                LinkWellboreID = "WB1",
+                LinkLogID = "TL_PARENT",
+                __dataTableName = "TL_SRC_DATA"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, sourceLog, repo);
+            await vm.InitializeAsync();
+
+            Assert.Equal(
+                "Data from selected Timelog 'Timelog 50' will be synchronized into Parent Timelog 'ParentLog' for the date range 01/08/2026 00:00 to 10/08/2026 23:59.",
+                vm.ConfirmationMessage);
+
+            // User adjusts From Date & Time
+            vm.FromDateTimeText = "05/08/2026 12:00";
+            Assert.Equal(
+                "Data from selected Timelog 'Timelog 50' will be synchronized into Parent Timelog 'ParentLog' for the date range 05/08/2026 12:00 to 10/08/2026 23:59.",
+                vm.ConfirmationMessage);
+
+            // User adjusts To Date & Time
+            vm.ToDateTimeText = "08/08/2026 18:00";
+            Assert.Equal(
+                "Data from selected Timelog 'Timelog 50' will be synchronized into Parent Timelog 'ParentLog' for the date range 05/08/2026 12:00 to 08/08/2026 18:00.",
+                vm.ConfirmationMessage);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenOnlyOneRecordExists_SetsBothFromAndToToThatValue()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_single_row_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_SINGLE (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            conn.Execute("INSERT INTO TL_SINGLE (DATETIME, DEPTH, ROP) VALUES ('2026-06-15 14:30:00', 1000.0, 25.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_S1",
+                nameLog = "Single Row Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_SINGLE"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.True(vm.HasTimelogData);
+            Assert.Equal(1, vm.RecordCount);
+            Assert.Equal(vm.FromDateTime, vm.ToDateTime);
+            Assert.Equal("15/06/2026 14:30", vm.FromDateTimeText);
+            Assert.Equal("15/06/2026 14:30", vm.ToDateTimeText);
+            Assert.True(vm.CanSelectDates);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenNoRecordsExist_DisablesFields_AndShowsNoTimelogDataAvailableMessage()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_empty_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_EMPTY_DATA (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_E1",
+                nameLog = "Empty Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_EMPTY_DATA"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.False(vm.HasTimelogData);
+            Assert.Equal(0, vm.RecordCount);
+            Assert.False(vm.CanSelectDates); // Fields disabled
+            Assert.False(vm.CanStart);       // Start button disabled
+            Assert.Equal("No timelog data available.", vm.ConfirmationMessage);
+            Assert.Equal("No timelog data available.", vm.ProgressStatus);
+
+            // Attempting sync directly prevents execution
+            await vm.StartSyncCommand.ExecuteAsync(null);
+            Assert.True(vm.HasError);
+            Assert.Contains("No timelog data available", vm.ErrorMessage);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenMultipleRecordsOutOfOrder_SortsByDateTimeAscending_AndAssignsMinToFromAndMaxToTo()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_sort_asc_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_SORT_TEST (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            // Insert in non-chronological order
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-20 18:00:00', 3000.0, 30.0);");
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-01 08:00:00', 1000.0, 10.0);");
+            conn.Execute("INSERT INTO TL_SORT_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-09-10 12:00:00', 2000.0, 20.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_SORT1",
+                nameLog = "Sort Test Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_SORT_TEST"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            Assert.True(vm.HasTimelogData);
+            Assert.Equal(3, vm.RecordCount);
+            Assert.True(vm.FromDateTime < vm.ToDateTime);
+            Assert.Equal("01/09/2026 08:00", vm.FromDateTimeText);
+            Assert.Equal("20/09/2026 18:00", vm.ToDateTimeText);
+        }
+        finally
+        {
+            try
+            {
+                session.Close();
+                if (File.Exists(tempDb)) File.Delete(tempDb);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public async Task StartSyncAsync_WhenFromDateTimeGreaterThanToDateTime_PreventsSyncAndShowsErrorMessage()
+    {
+        string tempDb = Path.Combine(Path.GetTempPath(), $"sync_inv_range_{Guid.NewGuid():N}.dintel");
+        SchemaInitializer.CreateDatabase(tempDb);
+        var session = new ProjectSession();
+
+        try
+        {
+            session.Load(tempDb);
+            var conn = session.GetConnection();
+
+            conn.Execute("CREATE TABLE TL_RANGE_TEST (DATETIME TEXT, DEPTH REAL, ROP REAL);");
+            conn.Execute("INSERT INTO TL_RANGE_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-06-01 10:00:00', 100.0, 10.0);");
+            conn.Execute("INSERT INTO TL_RANGE_TEST (DATETIME, DEPTH, ROP) VALUES ('2026-06-10 10:00:00', 200.0, 20.0);");
+
+            var timeLog = new TimeLog
+            {
+                ObjectID = "TL_RNG1",
+                nameLog = "Range Test Log",
+                nameWell = "Camel1_2016",
+                nameWellbore = "Wellbore1",
+                __dataTableName = "TL_RANGE_TEST"
+            };
+
+            var vm = new SyncDataWithParentTimelogViewModel(session, timeLog);
+            await vm.InitializeAsync();
+
+            // Manually set invalid range: From > To
+            vm.FromDate = new DateTime(2026, 6, 15);
+            vm.ToDate = new DateTime(2026, 6, 5);
+
+            Assert.Contains("Invalid Date Range", vm.ConfirmationMessage);
+
+            await vm.StartSyncCommand.ExecuteAsync(null);
+
+            Assert.True(vm.HasError);
+            Assert.False(vm.HasSuccess);
+            Assert.Contains("Invalid Date Range", vm.ErrorMessage);
         }
         finally
         {
