@@ -20,6 +20,7 @@
 
             <!-- Wizard Converters -->
             <conv:EnumToBooleanConverter x:Key="EnumToBooleanConverter" />
+            <conv:IntToBooleanConverter x:Key="IntToBooleanConverter" />
             <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
             <conv:BoolToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <conv:InverseBooleanConverter x:Key="InverseBooleanConverter" />

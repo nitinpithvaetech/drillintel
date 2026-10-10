@@ -221,6 +221,11 @@
                             <materialDesign:PackIcon Kind="Broom" Foreground="#795548" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Manage Plans" Command="{Binding OpenBroomstickManagePlanCommand}" ToolTip="Manage and import Broomstick Hookload &amp; Torque plans (CSV/Excel)">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="Hook" Foreground="#10B981" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                 </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
             

@@ -564,6 +564,47 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void OpenBroomstickManagePlan()
+    {
+        var dataService = _session.IsProjectOpen
+            ? _session.GetDataService()
+            : (_appDatabaseService ?? App.AppDatabaseService)?.GetDataService();
+
+        if (dataService == null) return;
+
+        string wellId = string.Empty;
+        string wellboreId = string.Empty;
+        string logId = string.Empty;
+
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                wellId = tl.WellID;
+                wellboreId = tl.WellboreID;
+                logId = tl.ObjectID;
+            }
+            else if (dashVm.SelectedNode?.Tag is Wellbore wb)
+            {
+                wellId = wb.WellID;
+                wellboreId = wb.ObjectID;
+            }
+            else if (dashVm.SelectedWell != null)
+            {
+                wellId = dashVm.SelectedWell.ObjectID ?? "";
+            }
+        }
+
+        var vm = new BroomstickPlanManageViewModel(dataService, wellId, wellboreId, logId);
+        var window = new DrillIntel.Views.Broomstick.BroomstickPlanManageWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
+    }
+
+    [RelayCommand]
     private void OpenUnitMaster()
     {
         var appDb = _appDatabaseService ?? App.AppDatabaseService;

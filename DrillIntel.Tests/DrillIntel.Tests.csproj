@@ -13,12 +13,20 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="ExcelDataReader" Version="3.9.0" />
+    <PackageReference Include="ExcelDataReader.DataSet" Version="3.9.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DrillIntel\DrillIntel.csproj" />
     <ProjectReference Include="..\DrillIntel.Data.Objects\DrillIntel.Data.Objects.csproj" />
     <ProjectReference Include="..\DrillIntel.DataService\DrillIntel.DataService.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="TestData\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
