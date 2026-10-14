@@ -145,6 +145,20 @@
                                         <TextBlock Text="Load Mapping File" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
+                                <!-- Create Mapping File Button (Timelog only) -->
+                                <Button x:Name="CreateMappingFileButton"
+                                        Command="{Binding CreateMappingFileCommand}"
+                                        Visibility="{Binding IsTimeLog, Converter={StaticResource BoolToVisibilityConverter}}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Margin="8,0,0,0"
+                                        ToolTip="Create and save a .vmf mapping file of VuMax Channel vs Preview data column numbers"
+                                        Padding="12,4"
+                                        Height="36">
+                                    <StackPanel Orientation="Horizontal">
+                                        <materialDesign:PackIcon Kind="ContentSaveOutline" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                        <TextBlock Text="Create Mapping File" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Grid>
 

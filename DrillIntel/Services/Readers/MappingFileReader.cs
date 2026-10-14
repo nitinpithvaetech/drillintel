@@ -54,7 +54,7 @@ public class MappingFileReader
         {
             using var reader = new StreamReader(filePath);
             var firstLine = reader.ReadLine();
-            return firstLine != null && firstLine.Contains("[VuMaxDR Mapping Info.]", StringComparison.OrdinalIgnoreCase);
+            return firstLine != null && (firstLine.Contains("[VuMaxDR Mapping Info.]", StringComparison.OrdinalIgnoreCase) || firstLine.Contains("~"));
         }
         catch
         {
@@ -126,7 +126,7 @@ public class MappingFileReader
                     }
                 }
             }
-            else if (inMappings)
+            else if (inMappings || !trimmed.StartsWith("["))
             {
                 var parts = trimmed.Split('~');
                 if (parts.Length >= 2)

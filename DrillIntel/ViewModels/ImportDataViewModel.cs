@@ -597,8 +597,8 @@ public partial class ImportDataViewModel : ObservableObject
               }
             : new List<MappingChannels>
               {
-                //new MappingChannels { Mnemonic = "DATETIME", ChannelName = "DateTime" },
-                new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
+                  new MappingChannels { Mnemonic = "DATETIME", ChannelName = "DateTime" },
+                  new MappingChannels { Mnemonic = "DEPTH", ChannelName = "Depth" },
                   new MappingChannels { Mnemonic = "HKLD",  ChannelName = "Hookload" },
                   new MappingChannels { Mnemonic = "RPM",   ChannelName = "RPM" },
                   new MappingChannels { Mnemonic = "SPPA",  ChannelName = "Pump Pressure" },
@@ -820,6 +820,8 @@ public partial class ImportDataViewModel : ObservableObject
                 NextStepCommand?.NotifyCanExecuteChanged();
                 PreviousStepCommand?.NotifyCanExecuteChanged();
                 ApplySettingsCommand?.NotifyCanExecuteChanged();
+                UploadMappingFileCommand?.NotifyCanExecuteChanged();
+                CreateMappingFileCommand?.NotifyCanExecuteChanged();
             }
         }
     }
@@ -847,6 +849,7 @@ public partial class ImportDataViewModel : ObservableObject
     public RelayCommand<string> DropFileCommand { get; private set; } = null!;
     public AsyncRelayCommand SaveCommand { get; private set; } = null!;
     public RelayCommand UploadMappingFileCommand { get; private set; } = null!;
+    public RelayCommand CreateMappingFileCommand { get; private set; } = null!;
     public AsyncRelayCommand ApplySettingsCommand { get; private set; } = null!;
 
     private void InitializeCommands()
@@ -857,6 +860,7 @@ public partial class ImportDataViewModel : ObservableObject
         DropFileCommand = new RelayCommand<string>(ProcessFile);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsLoading && IsFileUploaded);
         UploadMappingFileCommand = new RelayCommand(UploadMappingFile, () => !IsLoading);
+        CreateMappingFileCommand = new RelayCommand(CreateMappingFile, () => !IsLoading);
         ApplySettingsCommand = new AsyncRelayCommand(ApplySettingsAsync, () => !IsLoading && IsFileUploaded);
     }
     
@@ -1337,6 +1341,112 @@ public partial class ImportDataViewModel : ObservableObject
             MappingFileName = dlg.FileName;
             await ApplyMappingFileAsync(dlg.FileName);
         }
+    }
+
+    internal Func<SaveFileDialog, bool?> ShowSaveFileDialogFunc { get; set; } = dlg => dlg.ShowDialog();
+
+    public void CreateMappingFile()
+    {
+        try
+        {
+            if (!IsTimeLog)
+            {
+                ShowMessageBox("Creating a mapping file is only supported for timelog import.", "Create Mapping File", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var entries = GenerateMappingFileEntries();
+            if (entries.Count == 0)
+            {
+                ShowMessageBox("No mapped channels found. Please map at least one column before creating a mapping file.", "Create Mapping File", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "VuMax Mapping Files (*.vmf)|*.vmf|All Files (*.*)|*.*",
+                DefaultExt = ".vmf",
+                AddExtension = true,
+                Title = "Save Mapping File",
+                FileName = !string.IsNullOrWhiteSpace(FileName)
+                    ? System.IO.Path.GetFileNameWithoutExtension(FileName) + "_Mapping.vmf"
+                    : "Mapping.vmf"
+            };
+
+            if (ShowSaveFileDialogFunc(dlg) == true)
+            {
+                try
+                {
+                    SaveMappingFile(dlg.FileName, entries);
+                    ShowMessageBox($"Mapping file saved successfully to:\n{dlg.FileName}", "Mapping File Saved", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CreateMappingFile Error] Failed to save mapping file to '{dlg.FileName}': {ex}");
+                    System.Diagnostics.Trace.TraceError($"[CreateMappingFile Error] Failed to save mapping file to '{dlg.FileName}': {ex}");
+                    Console.Error.WriteLine($"[CreateMappingFile Error] Failed to save mapping file to '{dlg.FileName}': {ex}");
+                    ShowMessageBox($"Failed to save mapping file:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CreateMappingFile Error] Unexpected error: {ex}");
+            System.Diagnostics.Trace.TraceError($"[CreateMappingFile Error] Unexpected error: {ex}");
+            Console.Error.WriteLine($"[CreateMappingFile Error] Unexpected error: {ex}");
+            ShowMessageBox($"An unexpected error occurred while creating the mapping file:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    public List<string> GenerateMappingFileEntries()
+    {
+        var entries = new List<string>();
+        foreach (var row in ColumnMappings)
+        {
+            if (string.IsNullOrWhiteSpace(row.VuMaxColumnID) || string.IsNullOrWhiteSpace(row.SourceColumnName))
+                continue;
+
+            int colIndex = GetPreviewColumnIndex(row.SourceColumnName);
+            if (colIndex >= 0)
+            {
+                entries.Add($"{row.VuMaxColumnID.Trim()}~{colIndex}");
+            }
+        }
+        return entries;
+    }
+
+    public int GetPreviewColumnIndex(string sourceColumnName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceColumnName))
+            return -1;
+
+        for (int i = 0; i < PreviewColumns.Count; i++)
+        {
+            if (string.Equals(PreviewColumns[i], sourceColumnName, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        if (PreviewRows?.Columns != null && PreviewRows.Columns.Count > 0)
+        {
+            int idx = PreviewRows.Columns.IndexOf(sourceColumnName);
+            if (idx >= 0)
+                return idx;
+        }
+
+        var trimmed = sourceColumnName.TrimStart('#').Trim();
+        if (int.TryParse(trimmed, out int parsed) && parsed >= 0)
+        {
+            return parsed;
+        }
+
+        return -1;
+    }
+
+    public void SaveMappingFile(string filePath, IEnumerable<string> entries)
+    {
+        System.IO.File.WriteAllLines(filePath, entries);
     }
 
     private async Task ApplyMappingFileAsync(string mappingFilePath)

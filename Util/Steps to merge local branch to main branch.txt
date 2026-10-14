@@ -1,0 +1,9 @@
+
+git add .
+git commit -m "My changes"
+git push origin xyz
+
+git checkout mainBranch
+git pull origin mainBranch
+git merge xyz
+git push origin mainBranch
