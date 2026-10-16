@@ -160,7 +160,7 @@
 
                 <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="BroomStick Manage Plan" Foreground="{DynamicResource PrimaryHueMidForegroundBrush}" FontSize="18" FontWeight="Bold" />
-                    <TextBlock Text="Manage, analyze and import Torque &amp; Drag Additional Hookload Plans (CSV / Excel via SavePlanEx)" Foreground="{DynamicResource PrimaryHueMidForegroundBrush}" FontSize="12" Opacity="0.9" Margin="0,2,0,0" />
+                    <TextBlock Text="Manage, analyze and import Torque &amp; Drag Additional Hookload Plans (CSV / Excel )" Foreground="{DynamicResource PrimaryHueMidForegroundBrush}" FontSize="12" Opacity="0.9" Margin="0,2,0,0" />
                 </StackPanel>
 
                 <!-- Header Actions -->
