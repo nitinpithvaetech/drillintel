@@ -35,6 +35,28 @@ public partial class MainViewModel : ObservableObject
 
     private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
 
+    public object? ActiveDocument { get; set; }
+    public Action<string, string>? UserAlertHandler { get; set; }
+
+    public void OnCalculateBroomstickPointsClicked()
+    {
+        if (ActiveDocument is DrillIntel.Models.HookloadDocument hookloadDoc)
+        {
+            _ = hookloadDoc.CalculateBroomstickPointsAsync();
+        }
+        else
+        {
+            if (UserAlertHandler != null)
+            {
+                UserAlertHandler("Please select an active Hookload Document to calculate Broomstick points.", "Broomstick Calculation");
+            }
+            else
+            {
+                MessageBox.Show("Please select an active Hookload Document to calculate Broomstick points.", "Broomstick Calculation", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+    }
+
     public MainViewModel(
         ProjectSession session,
         IProjectService projectService,
@@ -276,6 +298,7 @@ public partial class MainViewModel : ObservableObject
         NavigateToImportDepthlogCommand.NotifyCanExecuteChanged();
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
+        RecalculateRigStateCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenProjectRigStateMasterCommand.NotifyCanExecuteChanged();
@@ -681,6 +704,12 @@ public partial class MainViewModel : ObservableObject
         {
             OpenRigStateMaster();
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task RecalculateRigState()
+    {
+        await IdentifyRigStates();
     }
 
     private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;

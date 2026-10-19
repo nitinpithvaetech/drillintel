@@ -6,6 +6,7 @@
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:models="clr-namespace:DrillIntel.Models"
              xmlns:local="clr-namespace:DrillIntel.Views"
+             xmlns:converters="clr-namespace:DrillIntel.Converters"
              mc:Ignorable="d" d:DesignHeight="600" d:DesignWidth="800"
              TextElement.Foreground="{DynamicResource MaterialDesignBody}"
              TextElement.FontWeight="Regular"
@@ -17,6 +18,7 @@
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
         <Style x:Key="LeftAlignedCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -320,8 +322,11 @@
 
                         <!-- Progress Display -->
                         <StackPanel Margin="0,20,0,0" Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}">
-                            <ProgressBar Value="{Binding ImportProgressPercent}" Maximum="100" IsIndeterminate="{Binding IsIndeterminateProgress}" Height="6" />
-                            <TextBlock Text="{Binding ImportProgressStatus}" HorizontalAlignment="Center" Margin="0,8,0,0" FontSize="13" Foreground="Gray" FontWeight="Medium" />
+                            <DockPanel LastChildFill="False" Margin="0,0,0,6">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding ImportProgressStatus}" FontSize="13" FontWeight="Medium" Foreground="#424242" TextTrimming="CharacterEllipsis" MaxWidth="380" />
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding ImportProgressPercent, StringFormat='{}{0:F1}%'}" FontSize="13" FontWeight="Bold" Foreground="#1976D2" Visibility="{Binding IsIndeterminateProgress, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                            </DockPanel>
+                            <ProgressBar Value="{Binding ImportProgressPercent}" Maximum="100" IsIndeterminate="{Binding IsIndeterminateProgress}" Height="10" materialDesign:TransitionAssist.DisableTransitions="True" />
                         </StackPanel>
                     </StackPanel>
                 </materialDesign:Card>

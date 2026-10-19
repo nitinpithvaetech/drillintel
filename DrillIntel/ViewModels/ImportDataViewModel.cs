@@ -69,6 +69,9 @@ public partial class ImportDataViewModel : ObservableObject
     [ObservableProperty]
     private string _projectWellName = "Loading Well...";
 
+    [ObservableProperty]
+    private bool _autoRecalculateRigState = true;
+
     private async void LoadExistingWells()
     {
         try
@@ -2002,7 +2005,57 @@ public partial class ImportDataViewModel : ObservableObject
                     await _repository.LogTimeLogAsync(SelectedExistingTimeLog);
                     _session.NotifyDataChanged();
 
-                    MessageBox.Show($"Update successful!\n\nRecords Processed: {updateResult.TotalRows:N0}\nQC Score: {updateResult.QcScore:F1}%\nTarget Table: {updateTargetTableName}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    bool recalcSuccess = false;
+                    string recalcError = string.Empty;
+                    if (AutoRecalculateRigState)
+                    {
+                        try
+                        {
+                            var dataService = _session.GetDataService();
+                            if (dataService != null)
+                            {
+                                IsIndeterminateProgress = false;
+                                ImportProgressPercent = 0;
+                                ImportProgressStatus = "Recalculating rig states for full well (0.0%)...";
+
+                                var recalcProgress = new Progress<double>(percent =>
+                                {
+                                    ImportProgressPercent = Math.Min(100.0, Math.Max(0.0, percent));
+                                    ImportProgressStatus = $"Recalculating rig states (Full Well): {percent:F1}% completed...";
+                                });
+
+                                recalcSuccess = await RigStateService.RecalculateRigStateAsync(
+                                    dataService,
+                                    SelectedExistingTimeLog,
+                                    startDate: null,
+                                    endDate: null,
+                                    progress: recalcProgress);
+
+                                if (!recalcSuccess)
+                                {
+                                    recalcError = RigStateService.LastError;
+                                }
+                                else
+                                {
+                                    ImportProgressPercent = 100;
+                                    ImportProgressStatus = "Rig State recalculation completed successfully!";
+                                    _session.NotifyDataChanged();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            recalcError = ex.Message;
+                        }
+                    }
+
+                    string recalcMsg = AutoRecalculateRigState
+                        ? (recalcSuccess
+                            ? "\nRig States: Recalculated for full well (100% completed)."
+                            : (!string.IsNullOrWhiteSpace(recalcError) ? $"\nRig States: Recalculation notice - {recalcError}" : ""))
+                        : "";
+
+                    ShowMessageBox($"Update successful!\n\nRecords Processed: {updateResult.TotalRows:N0}\nQC Score: {updateResult.QcScore:F1}%\nTarget Table: {updateTargetTableName}{recalcMsg}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
 
                 ColumnMappings.Clear();
@@ -2462,14 +2515,63 @@ public partial class ImportDataViewModel : ObservableObject
                         timeLog.endIndex = importResult.MaxDate;
 
                     await _repository.LogTimeLogAsync(timeLog);
+                    _session.NotifyDataChanged();
+
+                    bool recalcSuccess = false;
+                    string recalcError = string.Empty;
+                    if (AutoRecalculateRigState)
+                    {
+                        try
+                        {
+                            var dataService = _session.GetDataService();
+                            if (dataService != null)
+                            {
+                                IsIndeterminateProgress = false;
+                                ImportProgressPercent = 0;
+                                ImportProgressStatus = "Recalculating rig states for full well (0.0%)...";
+
+                                var recalcProgress = new Progress<double>(percent =>
+                                {
+                                    ImportProgressPercent = Math.Min(100.0, Math.Max(0.0, percent));
+                                    ImportProgressStatus = $"Recalculating rig states (Full Well): {percent:F1}% completed...";
+                                });
+
+                                recalcSuccess = await RigStateService.RecalculateRigStateAsync(
+                                    dataService,
+                                    timeLog,
+                                    startDate: null,
+                                    endDate: null,
+                                    progress: recalcProgress);
+
+                                if (!recalcSuccess)
+                                {
+                                    recalcError = RigStateService.LastError;
+                                }
+                                else
+                                {
+                                    ImportProgressPercent = 100;
+                                    ImportProgressStatus = "Rig State recalculation completed successfully!";
+                                    _session.NotifyDataChanged();
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            recalcError = ex.Message;
+                        }
+                    }
+
+                    string seqNotice = !importResult.IsSequential && importResult.NonSequentialCount > 0
+                        ? $"\nWarning: {importResult.NonSequentialCount} non-sequential timestamp(s) detected."
+                        : "";
+                    string recalcMsg = AutoRecalculateRigState
+                        ? (recalcSuccess
+                            ? "\nRig States: Recalculated for full well (100% completed)."
+                            : (!string.IsNullOrWhiteSpace(recalcError) ? $"\nRig States: Recalculation notice - {recalcError}" : ""))
+                        : "";
+
+                    ShowMessageBox($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}{seqNotice}{recalcMsg}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
-
-                _session.NotifyDataChanged();
-
-                string seqNotice = !importResult.IsSequential && importResult.NonSequentialCount > 0
-                    ? $"\nWarning: {importResult.NonSequentialCount} non-sequential timestamp(s) detected."
-                    : "";
-                ShowMessageBox($"Import successful!\n\nRecords Imported: {importResult.TotalRows:N0}\nQC Score: {importResult.QcScore:F1}%\nTarget Table: {targetTableName}{seqNotice}", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             
             ColumnMappings.Clear();
@@ -2507,7 +2609,6 @@ public partial class ImportDataViewModel : ObservableObject
         finally
         {
             IsLoading = false;
-            ImportProgressStatus = string.Empty;
         }
     }
 

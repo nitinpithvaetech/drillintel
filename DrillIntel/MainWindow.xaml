@@ -140,9 +140,9 @@
             <!-- Data Processing Tab -->
             <Fluent:RibbonTabItem Header="Processing" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Algorithms">
-                    <Fluent:Button Header="Identify Rig States" Command="{Binding IdentifyRigStatesCommand}">
+                    <Fluent:Button Header="Re-calculate rig state" Command="{Binding RecalculateRigStateCommand}" ToolTip="Re-calculate rig state for the entire well or custom range">
                         <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="RobotOutline" Foreground="#00BCD4" Width="32" Height="32" />
+                            <materialDesign:PackIcon Kind="CalculatorVariant" Foreground="#512DA8" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                     <Fluent:Button Header="Generate KPIs">

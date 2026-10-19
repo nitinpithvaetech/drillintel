@@ -1850,6 +1850,130 @@ public class TimeLogImportRulesTests : IDisposable
             if (File.Exists(csvPath)) File.Delete(csvPath);
         }
     }
+
+    [Fact]
+    public async Task ImportTimelog_AutomaticallyRecalculatesRigState_ForFullWell_AndPopulatesRigStateColumns()
+    {
+        var vm = new ImportDataViewModel(_session)
+        {
+            SuppressMessageBoxes = true,
+            TypeOfDataInput = ImportDataType.TimeLogData,
+            OperationType = OperationType.NewData,
+            NewWellName = "AutoRecalcWell",
+            LogName = "AutoRecalcLog"
+        };
+
+        string csvPath = Path.Combine(Path.GetTempPath(), $"timelog_autorecalc_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(csvPath,
+                "DATETIME,DEPTH,HOLE_DEPTH,HKLD,RPM,TORQUE,PUMP_PRESS\n" +
+                "2024-05-01 10:00:00,1000.0,1000.0,150.0,60.0,2000.0,500.0\n" +
+                "2024-05-01 10:00:10,1001.0,1001.0,150.0,60.0,2000.0,500.0\n" +
+                "2024-05-01 10:00:20,1002.0,1002.0,150.0,60.0,2000.0,500.0\n");
+
+            await vm.ProcessFileAsync(csvPath);
+
+            // Execute SaveAsync (which automatically imports and triggers full well rig state recalculation)
+            await vm.SaveAsync();
+
+            // Verify progress reached 100% and completed status
+            Assert.Equal(100.0, vm.ImportProgressPercent);
+            Assert.Contains("completed", vm.ImportProgressStatus, StringComparison.OrdinalIgnoreCase);
+
+            // Verify well and timeLog created
+            var timeLogs = await _repo.GetTimeLogsAsync();
+            var timeLog = timeLogs.FirstOrDefault(l => l.nameWell == "AutoRecalcWell" || l.nameLog == "AutoRecalcLog");
+            Assert.NotNull(timeLog);
+            string tableName = timeLog.__dataTableName;
+            Assert.False(string.IsNullOrEmpty(tableName));
+
+            // Verify columns in SQLite table have RIG_STATE and RIG_STATE_COLOR
+            var columns = await _repo.GetTableColumnsAsync(tableName);
+            Assert.Contains("RIG_STATE", columns, StringComparer.OrdinalIgnoreCase);
+            Assert.Contains("RIG_STATE_COLOR", columns, StringComparer.OrdinalIgnoreCase);
+
+            // Verify rows in SQLite table have calculated rig states
+            var conn = _session.GetConnection();
+            var rows = (await conn.QueryAsync<dynamic>($"SELECT DATETIME, DEPTH, RIG_STATE, RIG_STATE_COLOR FROM [{tableName}] ORDER BY DATETIME ASC;")).AsList();
+            Assert.Equal(3, rows.Count);
+            foreach (var row in rows)
+            {
+                // RIG_STATE must be populated and not null
+                Assert.NotNull(row.RIG_STATE);
+                Assert.NotNull(row.RIG_STATE_COLOR);
+            }
+        }
+        finally
+        {
+            if (File.Exists(csvPath)) File.Delete(csvPath);
+        }
+    }
+
+    [Fact]
+    public async Task ImportTimelog_UpdateData_AutomaticallyRecalculatesRigState_ForFullWell()
+    {
+        // 1. Setup initial timelog with 2 rows
+        var vmInitial = new ImportDataViewModel(_session)
+        {
+            SuppressMessageBoxes = true,
+            TypeOfDataInput = ImportDataType.TimeLogData,
+            OperationType = OperationType.NewData,
+            NewWellName = "UpdateRecalcWell",
+            LogName = "UpdateRecalcLog"
+        };
+
+        string csvPath1 = Path.Combine(Path.GetTempPath(), $"timelog_update_initial_{Guid.NewGuid():N}.csv");
+        string csvPath2 = Path.Combine(Path.GetTempPath(), $"timelog_update_delta_{Guid.NewGuid():N}.csv");
+        try
+        {
+            File.WriteAllText(csvPath1,
+                "DATETIME,DEPTH,HOLE_DEPTH,HKLD,RPM,TORQUE,PUMP_PRESS\n" +
+                "2024-05-01 10:00:00,1000.0,1000.0,150.0,60.0,2000.0,500.0\n" +
+                "2024-05-01 10:00:10,1001.0,1001.0,150.0,60.0,2000.0,500.0\n");
+
+            await vmInitial.ProcessFileAsync(csvPath1);
+            await vmInitial.SaveAsync();
+
+            var timeLogs = await _repo.GetTimeLogsAsync();
+            var existingTimeLog = timeLogs.FirstOrDefault(l => l.nameWell == "UpdateRecalcWell");
+            Assert.NotNull(existingTimeLog);
+
+            // 2. Perform UpdateData on existing timelog
+            var vmUpdate = new ImportDataViewModel(_session)
+            {
+                SuppressMessageBoxes = true,
+                TypeOfDataInput = ImportDataType.TimeLogData,
+                OperationType = OperationType.UpdateData,
+                SelectedExistingTimeLog = existingTimeLog,
+                UpdateMethod = UpdateMethodType.DateTimeComaparision
+            };
+
+            File.WriteAllText(csvPath2,
+                "DATETIME,DEPTH,HOLE_DEPTH,HKLD,RPM,TORQUE,PUMP_PRESS\n" +
+                "2024-05-01 10:00:20,1002.0,1002.0,150.0,60.0,2000.0,500.0\n");
+
+            await vmUpdate.ProcessFileAsync(csvPath2);
+            await vmUpdate.SaveAsync();
+
+            Assert.Equal(100.0, vmUpdate.ImportProgressPercent);
+            Assert.Contains("completed", vmUpdate.ImportProgressStatus, StringComparison.OrdinalIgnoreCase);
+
+            // Verify rows in SQLite table have RIG_STATE for all 3 rows
+            var conn = _session.GetConnection();
+            var rows = (await conn.QueryAsync<dynamic>($"SELECT DATETIME, DEPTH, RIG_STATE FROM [{existingTimeLog.__dataTableName}] ORDER BY DATETIME ASC;")).AsList();
+            Assert.Equal(3, rows.Count);
+            foreach (var row in rows)
+            {
+                Assert.NotNull(row.RIG_STATE);
+            }
+        }
+        finally
+        {
+            if (File.Exists(csvPath1)) File.Delete(csvPath1);
+            if (File.Exists(csvPath2)) File.Delete(csvPath2);
+        }
+    }
 }
 
 
