@@ -11,4 +11,8 @@
     <ProjectReference Include="..\DrillIntel.DataService\DrillIntel.DataService.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="DataObjects\Models\BroomstickProcessor\" />
+  </ItemGroup>
+
 </Project>
