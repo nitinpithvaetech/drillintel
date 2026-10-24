@@ -550,7 +550,7 @@ CREATE TABLE IF NOT EXISTS VMX_COMMON_RIGSTATE_ITEMS (
 );
 
 -- ----------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS APP_BS_GLOBAL_PROFILE (
+CREATE TABLE IF NOT EXISTS VMX_BS_GLOBAL_PROFILE (
     ID                          TEXT NOT NULL,
     NAME                        TEXT NOT NULL,
     TYPE                        INTEGER NOT NULL,
@@ -619,7 +619,7 @@ CREATE TABLE IF NOT EXISTS APP_BS_GLOBAL_PROFILE (
     PRIMARY KEY (ID)
 );
 
-CREATE VIEW IF NOT EXISTS VMX_BS_GLOBAL_PROFILE AS SELECT * FROM APP_BS_GLOBAL_PROFILE;
+CREATE VIEW IF NOT EXISTS APP_BS_GLOBAL_PROFILE AS SELECT * FROM VMX_BS_GLOBAL_PROFILE;
 
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS VMX_AKPI_DRLG_CONNECTIONS (
@@ -1138,7 +1138,7 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
                 _session.Load(filePath);
                 _recentProjectsService?.AddOrUpdate(filePath);
 
-                // Ensure project database schema has APP_BS_GLOBAL_PROFILE and default seed
+                // Ensure project database schema has VMX_BS_GLOBAL_PROFILE and default seed
                 EnsureProjectSchemaUpToDate(_session.GetDataService());
 
                 return true;
@@ -1163,7 +1163,7 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
 
                 BroomstickProfile.EnsureTableExists(projectDataService);
 
-                var dt = projectDataService.GetTable("SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE;");
+                var dt = projectDataService.GetTable("SELECT COUNT(*) FROM VMX_BS_GLOBAL_PROFILE;");
                 if (dt != null && dt.Rows.Count > 0 && Convert.ToInt32(dt.Rows[0][0]) == 0)
                 {
                     CopyMasterBsGlobalProfilesToProject(projectDataService);

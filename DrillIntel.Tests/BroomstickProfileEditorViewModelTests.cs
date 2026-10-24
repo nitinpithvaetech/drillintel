@@ -122,7 +122,7 @@ public class BroomstickProfileEditorViewModelTests : IDisposable
         Assert.Equal(135.0, projectProfile.SlkPumpCutOff);
 
         // Verify only 1 entry exists in the project table
-        var dt = _projectDataService.GetTable("SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE");
+        var dt = _projectDataService.GetTable("SELECT COUNT(*) FROM VMX_BS_GLOBAL_PROFILE");
         Assert.Equal(1, Convert.ToInt32(dt.Rows[0][0]));
     }
 

@@ -145,6 +145,11 @@
                             <materialDesign:PackIcon Kind="CalculatorVariant" Foreground="#512DA8" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Recalculate Broomstick Points" Command="{Binding RecalculateBroomstickPointsCommand}" ToolTip="Recalculate all BroomStick points from the beginning of the well">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="Broom" Foreground="#E65100" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Generate KPIs">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="ChartLine" Foreground="#3F51B5" Width="32" Height="32" />

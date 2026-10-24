@@ -255,8 +255,9 @@ public class AppDatabaseServiceTests : IDisposable
                 projectSession.Load(_projectDbPath);
                 var projDs = projectSession.GetDataService();
 
-                // Project database schema has APP_BS_GLOBAL_PROFILE
-                Assert.True(projDs.TableExists("APP_BS_GLOBAL_PROFILE"));
+                // Project database schema has VMX_BS_GLOBAL_PROFILE as physical table
+                Assert.True(projDs.TableExists("VMX_BS_GLOBAL_PROFILE"));
+                Assert.True(appDs.TableExists("APP_BS_GLOBAL_PROFILE"));
 
                 // Copy master profiles to project as done in ProjectService.CreateNewProjectAsync
                 bool copied = BroomstickProfile.CopyMasterProfilesToProject(appDs, projDs, out string copyErr);
