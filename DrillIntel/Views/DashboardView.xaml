@@ -58,6 +58,22 @@
                     <materialDesign:PackIcon Kind="CalculatorVariantOutline" Width="18" Height="18" Foreground="#512DA8" />
                 </MenuItem.Icon>
             </MenuItem>
+            <MenuItem Header="Process Tag Creation" 
+                      Command="{Binding PlacementTarget.Tag.ProcessTagCreationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsLogNode, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="TagMultipleOutline" Width="18" Height="18" Foreground="#00897B" />
+                </MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Tag Graph Visualizer" 
+                      Command="{Binding PlacementTarget.Tag.ViewTagGraphCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                      Visibility="{Binding PlacementTarget.DataContext.IsLogNode, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BoolToVisibilityConverter}}">
+                <MenuItem.Icon>
+                    <materialDesign:PackIcon Kind="ChartTimelineVariantShimmer" Width="18" Height="18" Foreground="#3949AB" />
+                </MenuItem.Icon>
+            </MenuItem>
             <MenuItem Header="Sync data to Parent Timelog" 
                       Command="{Binding PlacementTarget.Tag.SyncDataToParentTimelogCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"

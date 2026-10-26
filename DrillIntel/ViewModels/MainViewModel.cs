@@ -299,6 +299,8 @@ public partial class MainViewModel : ObservableObject
         CloseProjectCommand.NotifyCanExecuteChanged();
         IdentifyRigStatesCommand.NotifyCanExecuteChanged();
         RecalculateRigStateCommand.NotifyCanExecuteChanged();
+        ProcessTagCreationCommand.NotifyCanExecuteChanged();
+        ViewTagGraphCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenProjectRigStateMasterCommand.NotifyCanExecuteChanged();
@@ -710,6 +712,132 @@ public partial class MainViewModel : ObservableObject
     private async Task RecalculateRigState()
     {
         await IdentifyRigStates();
+    }
+
+    public Func<ProcessTagCreationViewModel, bool?>? OpenProcessTagCreationDialogHandler { get; set; }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task ProcessTagCreation()
+    {
+        if (!_session.IsProjectOpen) return;
+
+        Well? well = null;
+        TimeLog? timeLog = null;
+
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (dashVm.SelectedNode?.Tag is Well w)
+            {
+                well = w;
+            }
+            else if (dashVm.SelectedWell != null)
+            {
+                well = dashVm.SelectedWell;
+            }
+        }
+
+        var repo = new WellDataRepository(_session);
+        if (well == null)
+        {
+            well = await repo.GetProjectWellAsync();
+        }
+
+        if (timeLog == null)
+        {
+            var timeLogs = await repo.GetTimeLogsAsync();
+            timeLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+        }
+
+        if (well == null && timeLog == null)
+        {
+            if (UserAlertHandler != null)
+            {
+                UserAlertHandler("No well or timelog found in the active project to process tag creation.", "Process Tag Creation");
+            }
+            else
+            {
+                MessageBox.Show("No well or timelog found in the active project to process tag creation.",
+                    "Process Tag Creation", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            return;
+        }
+
+        var vm = new ProcessTagCreationViewModel(_session, well, timeLog);
+        bool? result = false;
+
+        if (OpenProcessTagCreationDialogHandler != null)
+        {
+            result = OpenProcessTagCreationDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.ProcessTagCreationWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            _session.NotifyDataChanged();
+            if (CurrentViewModel is DashboardViewModel dashboard)
+            {
+                await dashboard.RefreshAsync();
+            }
+        }
+    }
+
+    public Func<TagVisualizerViewModel, bool?>? OpenTagVisualizerDialogHandler { get; set; }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task ViewTagGraph()
+    {
+        if (!_session.IsProjectOpen) return;
+
+        string? wellId = null;
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                wellId = tl.WellID;
+            }
+            else if (dashVm.SelectedNode?.Tag is Well w)
+            {
+                wellId = w.ObjectID;
+            }
+        }
+
+        var vm = new TagVisualizerViewModel(_session, wellId);
+        bool? result = false;
+
+        if (OpenTagVisualizerDialogHandler != null)
+        {
+            result = OpenTagVisualizerDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.TagVisualizerWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true || vm.HasUnsavedChanges)
+        {
+            _session.NotifyDataChanged();
+            if (CurrentViewModel is DashboardViewModel dashboard)
+            {
+                await dashboard.RefreshAsync();
+            }
+        }
     }
 
     private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;

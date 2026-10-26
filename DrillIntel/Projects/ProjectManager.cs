@@ -774,6 +774,27 @@ CREATE TABLE IF NOT EXISTS VMX_ADNL_HKLD_PLAN_DATA (
 );
 
 CREATE INDEX IF NOT EXISTS IX_VMX_ADNL_HKLD_PLAN_DATA_LOOKUP ON VMX_ADNL_HKLD_PLAN_DATA(WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_TYPE, DEPTH);
+
+-- ----------------------------------------------------------------------------
+-- VMX_PHASE_LIST — Phase/Activity tags (Rig Up, Drilling, CUC, Trip Out, Trip In, Casing)
+CREATE TABLE IF NOT EXISTS VMX_PHASE_LIST (
+    PHASE_INDEX    REAL NOT NULL,
+    WELL_ID        TEXT NOT NULL,
+    START_DATE     TEXT NOT NULL,
+    END_DATE       TEXT NOT NULL,
+    PHASE_ID       TEXT NOT NULL,
+    STEP_ID        TEXT NOT NULL,
+    EMPH_ID        TEXT NOT NULL,
+    NOTES          TEXT,
+    CREATED_BY     TEXT,
+    CREATED_DATE   TEXT,
+    MODIFIED_BY    TEXT,
+    MODIFIED_DATE  TEXT,
+    IS_OPEN        INTEGER DEFAULT 0,
+    PRIMARY KEY (PHASE_INDEX, WELL_ID)
+);
+
+CREATE INDEX IF NOT EXISTS IX_VMX_PHASE_LIST_WELL_START ON VMX_PHASE_LIST(WELL_ID, START_DATE);
 ";
     }
 
@@ -840,6 +861,7 @@ CREATE INDEX IF NOT EXISTS IX_VMX_ADNL_HKLD_PLAN_DATA_LOOKUP ON VMX_ADNL_HKLD_PL
             try
             {
                 EnsureDocTemplatesTable(dataService);
+                EnsurePhaseListTable(dataService);
             }
             catch
             {
@@ -934,6 +956,56 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
                 dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN DESCRIPTION TEXT;");
             if (!existingCols.Contains("IS_DEFAULT"))
                 dataService.ExecuteNonQuery("ALTER TABLE VMX_DOC_TEMPLATES ADD COLUMN IS_DEFAULT INTEGER NOT NULL DEFAULT 0;");
+        }
+
+        public static void EnsurePhaseListTable(IDataServiceDIntel dataService)
+        {
+            if (dataService == null) return;
+            try
+            {
+                dataService.ExecuteNonQuery(@"
+CREATE TABLE IF NOT EXISTS VMX_PHASE_LIST (
+    PHASE_INDEX    REAL NOT NULL,
+    WELL_ID        TEXT NOT NULL,
+    START_DATE     TEXT NOT NULL,
+    END_DATE       TEXT NOT NULL,
+    PHASE_ID       TEXT NOT NULL,
+    STEP_ID        TEXT NOT NULL,
+    EMPH_ID        TEXT NOT NULL,
+    NOTES          TEXT,
+    CREATED_BY     TEXT,
+    CREATED_DATE   TEXT,
+    MODIFIED_BY    TEXT,
+    MODIFIED_DATE  TEXT,
+    IS_OPEN        INTEGER DEFAULT 0,
+    PRIMARY KEY (PHASE_INDEX, WELL_ID)
+);");
+                dataService.ExecuteNonQuery("CREATE INDEX IF NOT EXISTS IX_VMX_PHASE_LIST_WELL_START ON VMX_PHASE_LIST(WELL_ID, START_DATE);");
+
+                var tableInfo = dataService.GetTable("PRAGMA table_info(VMX_PHASE_LIST);");
+                var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (tableInfo != null)
+                {
+                    foreach (System.Data.DataRow row in tableInfo.Rows)
+                    {
+                        existingCols.Add(row["name"]?.ToString() ?? "");
+                    }
+                }
+
+                if (!existingCols.Contains("NOTES"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN NOTES TEXT;");
+                if (!existingCols.Contains("CREATED_BY"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN CREATED_BY TEXT;");
+                if (!existingCols.Contains("CREATED_DATE"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN CREATED_DATE TEXT;");
+                if (!existingCols.Contains("MODIFIED_BY"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN MODIFIED_BY TEXT;");
+                if (!existingCols.Contains("MODIFIED_DATE"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN MODIFIED_DATE TEXT;");
+                if (!existingCols.Contains("IS_OPEN"))
+                    dataService.ExecuteNonQuery("ALTER TABLE VMX_PHASE_LIST ADD COLUMN IS_OPEN INTEGER DEFAULT 0;");
+            }
+            catch { }
         }
 
         public IDataServiceDIntel GetDataService()
@@ -1162,6 +1234,7 @@ CREATE TABLE IF NOT EXISTS VMX_DOC_TEMPLATES (
                 if (projectDataService == null) return;
 
                 BroomstickProfile.EnsureTableExists(projectDataService);
+                ProjectSession.EnsurePhaseListTable(projectDataService);
 
                 var dt = projectDataService.GetTable("SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE;");
                 if (dt != null && dt.Rows.Count > 0 && Convert.ToInt32(dt.Rows[0][0]) == 0)

@@ -674,6 +674,59 @@ public partial class DashboardViewModel : ObservableObject
         window.ShowDialog();
     }
 
+    [RelayCommand]
+    public void ProcessTagCreation(WellTreeNode? node)
+    {
+        var targetNode = node ?? SelectedNode;
+        if (_session == null || !_session.IsProjectOpen) return;
+
+        TimeLog? timeLog = null;
+        Well? well = SelectedWell;
+
+        if (targetNode?.Tag is TimeLog tl)
+        {
+            timeLog = tl;
+        }
+        else if (targetNode?.Tag is Well w)
+        {
+            well = w;
+        }
+
+        var vm = new ProcessTagCreationViewModel(_session, well, timeLog);
+        var window = new DrillIntel.Views.ProcessTagCreationWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        if (window.ShowDialog() == true)
+        {
+            _ = RefreshAsync();
+        }
+    }
+
+    [RelayCommand]
+    public void ViewTagGraph(WellTreeNode? node)
+    {
+        var targetNode = node ?? SelectedNode;
+        if (_session == null || !_session.IsProjectOpen) return;
+
+        string? wellId = null;
+        if (targetNode?.Tag is TimeLog tl) wellId = tl.WellID;
+        else if (targetNode?.Tag is Well w) wellId = w.ObjectID;
+        else if (SelectedWell != null) wellId = SelectedWell.ObjectID;
+
+        var vm = new TagVisualizerViewModel(_session, wellId);
+        var window = new DrillIntel.Views.TagVisualizerWindow
+        {
+            DataContext = vm,
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        if (window.ShowDialog() == true || vm.HasUnsavedChanges)
+        {
+            _ = RefreshAsync();
+        }
+    }
+
     public Func<SyncDataWithParentTimelogViewModel, bool?>? OpenSyncDataDialogHandler { get; set; }
 
     public bool CanSyncDataToParentTimelog(WellTreeNode? node)

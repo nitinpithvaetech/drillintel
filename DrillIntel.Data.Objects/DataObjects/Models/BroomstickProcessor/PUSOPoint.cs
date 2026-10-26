@@ -16,7 +16,19 @@ namespace VirtualTable
     /// </summary>
     public class VirtualTable
     {
-        private readonly DataTable? _table;
+        private DataTable? _table;
+
+        public IDataServiceDIntel? objDataService { get; set; }
+        public string FieldList { get; set; } = string.Empty;
+        public string KeyField { get; set; } = string.Empty;
+        public string KeyFieldFormatted { get; set; } = string.Empty;
+        public int FrameSize { get; set; } = 1000;
+        public string dataTableName { get; set; } = string.Empty;
+        public string Condition { get; set; } = string.Empty;
+        public string OrderBy { get; set; } = string.Empty;
+
+        public int RecordCount => _table?.Rows.Count ?? 0;
+        public DataTable? Table => _table;
 
         public VirtualTable()
         {
@@ -27,18 +39,89 @@ namespace VirtualTable
             _table = table;
         }
 
-        public virtual double getDoubleValue(int rowIndex, string columnName)
+        public virtual void loadData()
         {
-            if (_table == null || rowIndex < 0 || rowIndex >= _table.Rows.Count) return 0.0;
-            if (!_table.Columns.Contains(columnName)) return 0.0;
+            if (objDataService == null || string.IsNullOrWhiteSpace(dataTableName))
+            {
+                return;
+            }
+
+            try
+            {
+                string fields = string.IsNullOrWhiteSpace(FieldList) ? "*" : FieldList;
+                string sql = $"SELECT {fields} FROM [{dataTableName}]";
+
+                if (!string.IsNullOrWhiteSpace(Condition))
+                {
+                    sql += $" WHERE {Condition}";
+                }
+
+                if (!string.IsNullOrWhiteSpace(KeyField))
+                {
+                    sql += $" ORDER BY [{KeyField}] ASC";
+                }
+
+                _table = objDataService.GetTable(sql);
+            }
+            catch
+            {
+                _table = new DataTable();
+            }
+        }
+
+        public virtual double getDoubleValue(int rowIndex, string columnName, double defaultValue = 0.0)
+        {
+            if (_table == null || rowIndex < 0 || rowIndex >= _table.Rows.Count) return defaultValue;
+            if (!_table.Columns.Contains(columnName)) return defaultValue;
 
             object val = _table.Rows[rowIndex][columnName];
-            if (val == null || val == DBNull.Value) return 0.0;
+            if (val == null || val == DBNull.Value) return defaultValue;
 
             if (double.TryParse(val.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double result))
                 return result;
 
-            return 0.0;
+            if (double.TryParse(val.ToString(), out result))
+                return result;
+
+            return defaultValue;
+        }
+
+        public virtual double getDoubleValueWithNull(int rowIndex, string columnName, double defaultValue = -1.0)
+        {
+            if (_table == null || rowIndex < 0 || rowIndex >= _table.Rows.Count) return defaultValue;
+            if (!_table.Columns.Contains(columnName)) return defaultValue;
+
+            object val = _table.Rows[rowIndex][columnName];
+            if (val == null || val == DBNull.Value) return defaultValue;
+
+            string s = val.ToString()?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(s)) return defaultValue;
+
+            if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double result))
+                return result;
+
+            if (double.TryParse(s, out result))
+                return result;
+
+            return defaultValue;
+        }
+
+        public virtual DateTime getDateTimeValue(int rowIndex, string columnName, DateTime defaultValue = default)
+        {
+            if (_table == null || rowIndex < 0 || rowIndex >= _table.Rows.Count) return defaultValue;
+            if (!_table.Columns.Contains(columnName)) return defaultValue;
+
+            object val = _table.Rows[rowIndex][columnName];
+            return DrillIntel.Data.Objects.DataObjects.Models.DataService.checkNull(val, defaultValue);
+        }
+
+        public virtual string getStringValue(int rowIndex, string columnName, string defaultValue = "")
+        {
+            if (_table == null || rowIndex < 0 || rowIndex >= _table.Rows.Count) return defaultValue;
+            if (!_table.Columns.Contains(columnName)) return defaultValue;
+
+            object val = _table.Rows[rowIndex][columnName];
+            return DrillIntel.Data.Objects.DataObjects.Models.DataService.checkNull(val, defaultValue);
         }
     }
 }

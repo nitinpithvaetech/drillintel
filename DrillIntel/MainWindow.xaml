@@ -145,6 +145,16 @@
                             <materialDesign:PackIcon Kind="CalculatorVariant" Foreground="#512DA8" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Process Tag Creation" Command="{Binding ProcessTagCreationCommand}" ToolTip="Detect and create phase tags automatically for the active well">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="TagMultipleOutline" Foreground="#00897B" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
+                    <Fluent:Button Header="Tag Graph Visualizer" Command="{Binding ViewTagGraphCommand}" ToolTip="View and adjust phase tags on Depth vs DateTime graph">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartTimelineVariantShimmer" Foreground="#3949AB" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Generate KPIs">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="ChartLine" Foreground="#3F51B5" Width="32" Height="32" />
@@ -190,6 +200,20 @@
                                          ToolTip="Synchronize data to Parent Timelog (Requires a Timelog properly linked with another Timelog in Tab-3)">
                             <Fluent:MenuItem.Icon>
                                 <materialDesign:PackIcon Kind="Sync" Foreground="#0284C7" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Process Tag Creation" 
+                                         Command="{Binding ProcessTagCreationCommand}"
+                                         ToolTip="Automatically detect and create phase tags for the active well">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="TagMultipleOutline" Foreground="#00897B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Tag Graph Visualizer" 
+                                         Command="{Binding ViewTagGraphCommand}"
+                                         ToolTip="View and adjust phase tags on Depth vs DateTime graph">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ChartTimelineVariantShimmer" Foreground="#3949AB" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
                     </Fluent:DropDownButton>
