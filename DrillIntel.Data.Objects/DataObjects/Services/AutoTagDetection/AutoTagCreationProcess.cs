@@ -1,23 +1,21 @@
-using System;
-using System.Collections.Generic;
+
 using System.Data;
-using System.Data.Common;
+
 using System.Globalization;
 using System.IO;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using DrillIntel.Data;
+
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Data.Objects.DataObjects.Models.AutoTagDetection;
 using DrillIntel.Data.Objects.DataObjects.Models.Util;
-using DrillIntel.Data.Objects.DataObjects.Services;
-using VirtualTable;
+
+using DrillIntel.Data.Objects.Logger;
 
 namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
 {
     #region Supporting Interfaces & Helper Types
 
+    /* [COMMENTED OUT - Moved to DrillIntel.Data.Objects.Logger.ILog and DynamicLogger]
     /// <summary>
     /// Logging abstraction providing Debug, Info, Warn, and Error logging
     /// compatible with DrillIntel and legacy eVuMaxPro callers.
@@ -81,6 +79,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
             }
         }
     }
+    */
 
     /// <summary>
     /// Represents a phase tag definition used for tag categorization and casing run detection.
@@ -138,19 +137,19 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
 
     /// <summary>
     /// Legacy Well extension helper providing primary time log resolution.
-    /// </summary>
-    public static class WellEx
-    {
-        public static TimeLog? getPrimaryTimeLogWOPlan(ref IDataServiceDIntel objDataService, string wellID)
-        {
-            return AutoTagCreationProcess.GetPrimaryTimeLog(objDataService, wellID);
-        }
+    ///// </summary>
+    //public static class WellEx
+    //{
+    //    public static TimeLog? getPrimaryTimeLogWOPlan(ref IDataServiceDIntel objDataService, string wellID)
+    //    {
+    //        return AutoTagCreationProcess.GetPrimaryTimeLog(objDataService, wellID);
+    //    }
 
-        public static TimeLog? getPrimaryTimeLogWOPlan(IDataServiceDIntel objDataService, string wellID)
-        {
-            return AutoTagCreationProcess.GetPrimaryTimeLog(objDataService, wellID);
-        }
-    }
+    //    public static TimeLog? getPrimaryTimeLogWOPlan(IDataServiceDIntel objDataService, string wellID)
+    //    {
+    //        return AutoTagCreationProcess.GetPrimaryTimeLog(objDataService, wellID);
+    //    }
+    //}
 
     #endregion
 

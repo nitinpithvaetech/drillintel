@@ -49,8 +49,7 @@ namespace DrillIntel.Tests
                 "VMX_AKPI_DRLG_CONNECTIONS",
                 "VMX_BS_WELL_PROFILE",
                 "eVuMaxBroomstickProcessLog",
-                "eVuMaxBroomstickWarnings",
-                "eVuMaxTasks"
+                "eVuMaxBroomstickWarnings"
             };
 
             foreach (var tbl in expectedTables)

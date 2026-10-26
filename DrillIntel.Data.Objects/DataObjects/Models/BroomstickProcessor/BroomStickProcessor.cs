@@ -10,10 +10,12 @@ using System.Threading.Tasks;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor;
+using DrillIntel.Data.Objects.Logger;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
 {
     #region Logger Abstraction
+    /* [COMMENTED OUT - Replaced by DrillIntel.Data.Objects.Logger.ILog and DynamicLogger]
     public interface IBroomstickLogger
     {
         void Debug(string message);
@@ -55,63 +57,24 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
             System.Diagnostics.Debug.WriteLine($"[ERROR] {message}");
         }
     }
-    #endregion
+    */
 
-    #region Task Progress Abstraction
-    public static class VuMaxProTask
+    /// <summary>
+    /// Backward-compatibility interface bridging legacy broomstick callers to common ILog.
+    /// </summary>
+    public interface IBroomstickLogger : ILog
     {
-        public static void updateTaskProgress(ref IDataServiceDIntel objDataService, string taskID, double progress)
-        {
-            updateTaskProgress(objDataService, taskID, progress);
-        }
+    }
 
-        public static void updateTaskProgress(IDataServiceDIntel objDataService, string taskID, double progress)
+    public class DefaultBroomstickLogger : DynamicLogger, IBroomstickLogger
+    {
+        public DefaultBroomstickLogger(string name = "BroomStickProcessor", string? filePath = null)
+            : base(name, filePath)
         {
-            if (objDataService == null || string.IsNullOrWhiteSpace(taskID)) return;
-            try
-            {
-                double lnProgress = Math.Round(progress, 2);
-                if (lnProgress > 100) lnProgress = 100;
-
-                string strSQL = "UPDATE eVuMaxTasks SET [Progress] = @Progress WHERE [TaskId] = @TaskId";
-                var parameters = new Dictionary<string, object?>
-                {
-                    ["@Progress"] = lnProgress,
-                    ["@TaskId"] = taskID
-                };
-                objDataService.ExecuteNonQuery(strSQL, parameters);
-            }
-            catch
-            {
-            }
-        }
-
-        public static bool isTaskCancelled(ref IDataServiceDIntel objDataService, string taskID)
-        {
-            return isTaskCancelled(objDataService, taskID);
-        }
-
-        public static bool isTaskCancelled(IDataServiceDIntel objDataService, string taskID)
-        {
-            if (objDataService == null || string.IsNullOrWhiteSpace(taskID)) return false;
-            try
-            {
-                string strSQL = "SELECT [Cancelled] FROM eVuMaxTasks WHERE [TaskId] = @TaskId LIMIT 1";
-                var parameters = new Dictionary<string, object?> { ["@TaskId"] = taskID };
-                object? val = objDataService.GetValue(strSQL, parameters);
-                if (val != null && val != DBNull.Value)
-                {
-                    return Convert.ToInt32(val) == 1;
-                }
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
         }
     }
     #endregion
+
 
     /// <summary>
     /// BroomStickProcessor calculates Hookload and Torque broomstick points from time log connection data,
@@ -154,7 +117,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
         public bool RUN_HKLD_CHECK = true;
         #endregion
 
-        public IBroomstickLogger processLogger = new DefaultBroomstickLogger();
+        public ILog processLogger = new DynamicLogger("BroomStickProcessor");
 
         public BroomStickProcessor()
         {
@@ -165,7 +128,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
             string wellId,
             TimeLog? timeLog = null,
             BroomStickSetup? setup = null,
-            IBroomstickLogger? logger = null)
+            ILog? logger = null)
         {
             objDataService = dataService;
             WellID = wellId;
@@ -216,14 +179,6 @@ CREATE TABLE IF NOT EXISTS eVuMaxBroomstickProcessLog (
     ConnStartDate TEXT,
     ConnEndDate TEXT,
     ProcessLog BLOB
-);
-CREATE TABLE IF NOT EXISTS eVuMaxTasks (
-    TaskId TEXT PRIMARY KEY,
-    WellId TEXT,
-    TaskDescriptor TEXT,
-    Progress REAL,
-    Progresstext TEXT,
-    Cancelled INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS IDX_VMX_AKPI_DRLG_CONN ON VMX_AKPI_DRLG_CONNECTIONS(WELL_ID, FROM_DATE, DEPTH);
 CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_ID, TYPE);
@@ -465,11 +420,11 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
             {
                 EnsureTables(objDataService);
 
-                // Clear warnings 
-                //clearBroomstickWarnings();
-                //clearBroomstickLogs();
-
-                VuMaxProTask.updateTaskProgress(ref objDataService, this.TaskID, 1);
+                // Option A: Ensure processLogger is initialized to ProgramData/DrillIntel/logs/BroomStickProcessor/BroomStickProcessor_{date}.txt
+                if (processLogger == null)
+                {
+                    processLogger = new DynamicLogger("BroomStickProcessor");
+                }
 
                 processLogger?.Debug("Loading Broomstick Setup ");
 
@@ -527,7 +482,7 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
                 }
                 else
                 {
-                    processLogger?.Debug("No profile is attached to this well. Finding default profile ");
+                    processLogger?.Debug("Finding default profile ");
                     string defaultProfileID = "";
 
                     DataTable dataDefaultProfile = objDataService.GetTable("SELECT ID FROM VMX_BS_GLOBAL_PROFILE WHERE IS_DEFAULT=1 LIMIT 1");
@@ -842,14 +797,6 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
                     foreach (DataRow objRow in objDrlgConnections.Rows)
                     {
-                        if (!string.IsNullOrEmpty(TaskID) && VuMaxProTask.isTaskCancelled(ref objDataService, TaskID))
-                        {
-                            processLogger?.Debug("Cancellation requested, stopping early");
-                            string __sql1 = "DELETE FROM eVuMaxTasks WHERE [TaskId] = @TaskId";
-                            objDataService.ExecuteNonQuery(__sql1, new Dictionary<string, object?> { ["@TaskId"] = TaskID });
-                            return;
-                        }
-
                         DateTime connFromDate = DateTime.Parse(DataService.checkNull(objRow["FROM_DATE"], DateTime.MinValue).ToString()!);
                         DateTime connToDate = DateTime.Parse(DataService.checkNull(objRow["TO_DATE"], DateTime.MinValue).ToString()!);
                         double depth = DataService.checkNumericNull(objRow["DEPTH"]);
@@ -867,7 +814,6 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
                         if (progress > 100) progress = 100;
 
                         processLogger?.Debug("Progress: " + progress);
-                        VuMaxProTask.updateTaskProgress(ref objDataService, this.TaskID, progress);
                     }
 
                     // Finally group by depths
@@ -920,7 +866,7 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
                         double prevConnDepth = DataService.checkNumericNull(objDrlgConnections.Rows[i - 1]["DEPTH"]);
                         double currentConnDepth = DataService.checkNumericNull(objDrlgConnections.Rows[i]["DEPTH"]);
 
-                        string avgSql = "SELECT AVG(STOR) FROM " + __dataTableName + " WHERE DATETIME >= @FromDate AND DATETIME <= @ToDate AND RIG_STATE IN (0,1,19)";
+                        string avgSql = "SELECT AVG(STOR) FROM [" + __dataTableName + "] WHERE DATETIME >= @FromDate AND DATETIME <= @ToDate AND RIG_STATE IN (0,1,19)";
                         var avgParams = new Dictionary<string, object?>
                         {
                             ["@FromDate"] = prevConnEndDate.ToString("dd-MMM-yyyy HH:mm:ss"),
@@ -1440,8 +1386,8 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
                 double lnHoleDepth = 0d;
 
-                string query = "SELECT DATETIME,TIME_DURATION,DEPTH,HDTH,HKLD,RIG_STATE,STOR,CIRC,SPPA,RPM,BPOS FROM " + paramDataTableName +
-                               " WHERE DATETIME >= @ConnStartDate AND DATETIME <= @ConnEndDate ORDER BY DATETIME DESC";
+                string query = "SELECT DATETIME,TIME_DURATION,DEPTH,HDTH,HKLD,RIG_STATE,STOR,CIRC,SPPA,RPM,BPOS FROM [" + paramDataTableName +
+                               "] WHERE DATETIME >= @ConnStartDate AND DATETIME <= @ConnEndDate ORDER BY DATETIME DESC";
 
                 DataTable objData = objDataService.GetTable(query, new Dictionary<string, object?>
                 {

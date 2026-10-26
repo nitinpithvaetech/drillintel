@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
+using DrillIntel.Data.Objects.Logger;
 using DrillIntel.Projects;
 using LowLevelBroomstickProcessor = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.BroomStickProcessor;
 using IBroomstickLogger = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.IBroomstickLogger;
@@ -161,9 +162,41 @@ public class BroomstickProcessor : IBroomstickProcessor
 internal class BroomstickLoggerBridge : IBroomstickLogger
 {
     private readonly IAppLogger _logger;
-    public BroomstickLoggerBridge(IAppLogger logger) => _logger = logger;
-    public void Debug(string message) => _logger.LogInfo($"[DEBUG] {message}");
-    public void Info(string message) => _logger.LogInfo(message);
-    public void Warn(string message) => _logger.LogWarning(message);
-    public void Error(string message) => _logger.LogError(message);
+    private readonly ILog _fileLogger;
+
+    public BroomstickLoggerBridge(IAppLogger logger, ILog? fileLogger = null)
+    {
+        _logger = logger;
+        _fileLogger = fileLogger ?? new DynamicLogger("BroomStickProcessor");
+    }
+
+    public void Debug(string message)
+    {
+        _logger.LogInfo($"[DEBUG] {message}");
+        _fileLogger.Debug(message);
+    }
+
+    public void Info(string message)
+    {
+        _logger.LogInfo(message);
+        _fileLogger.Info(message);
+    }
+
+    public void Warn(string message)
+    {
+        _logger.LogWarning(message);
+        _fileLogger.Warn(message);
+    }
+
+    public void Error(string message)
+    {
+        _logger.LogError(message);
+        _fileLogger.Error(message);
+    }
+
+    public void Error(string message, Exception? ex)
+    {
+        _logger.LogError(message, ex);
+        _fileLogger.Error(message, ex);
+    }
 }

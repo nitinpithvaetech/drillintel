@@ -160,6 +160,11 @@
                             <materialDesign:PackIcon Kind="ChartTimelineVariantShimmer" Foreground="#3949AB" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Process Drilling Connections" Command="{Binding ProcessDrillingConnectionsCommand}" ToolTip="Process drilling connections of entire well and save it to the database">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="LinkVariant" Foreground="#00897B" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Generate KPIs">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="ChartLine" Foreground="#3F51B5" Width="32" Height="32" />
@@ -219,6 +224,13 @@
                                          ToolTip="View and adjust phase tags on Depth vs DateTime graph">
                             <Fluent:MenuItem.Icon>
                                 <materialDesign:PackIcon Kind="ChartTimelineVariantShimmer" Foreground="#3949AB" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Process Drilling Connections" 
+                                         Command="{Binding ProcessDrillingConnectionsCommand}"
+                                         ToolTip="Process drilling connections of entire well and save it to the database">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="LinkVariant" Foreground="#00897B" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
                     </Fluent:DropDownButton>

@@ -285,6 +285,99 @@ namespace DrillIntel.Tests
             var remaining = PUSOPoint.LoadPoints(_dataService, "WELL_SQLITE_TEST");
             Assert.Empty(remaining);
         }
+
+        [Fact]
+        public void SqlitePersistence_SaveAndLoadPoints_WithRpmAndRigStates_RoundTrip()
+        {
+            var points = new List<PUSOPoint>
+            {
+                new PUSOPoint(2450.0)
+                {
+                    Type = PUSOPoint.PointTypeRotate,
+                    Min = 100.0,
+                    Max = 180.0,
+                    Avg = 145.0,
+                    DynamicValue = 160.0,
+                    RPM = 60.5,
+                    RigStates = "10,12",
+                    PumpPressure = 2200.0,
+                    Circulation = 500.0,
+                    PumpStatus = PUSOPoint.pusoPumpStatus.PumpOn
+                }
+            };
+
+            bool saved = PUSOPoint.SavePoints(_dataService, "WELL_RPM_TEST", PUSOPoint.PointTypeRotate, points, "TestRPMUser");
+            Assert.True(saved);
+
+            var loaded = PUSOPoint.LoadPoints(_dataService, "WELL_RPM_TEST", PUSOPoint.PointTypeRotate);
+            Assert.Single(loaded);
+            Assert.Equal(2450.0, loaded[0].Depth);
+            Assert.Equal(60.5, loaded[0].RPM);
+            Assert.Equal("10,12", loaded[0].RigStates);
+            Assert.Equal(180.0, loaded[0].Max);
+        }
+
+        [Fact]
+        public void SqlitePersistence_PreExistingTableWithoutRpm_AutoMigratesAndSucceeds()
+        {
+            // Simulate legacy database where VMX_BROOMSTICK_POINTS was created without RPM and RIG_STATES
+            string legacyDbPath = Path.Combine(Path.GetTempPath(), $"puso_legacy_{Guid.NewGuid():N}.sqlite");
+            using (var ds = new DataServiceDIntel(legacyDbPath))
+            {
+                ds.ExecuteNonQuery(@"
+                    CREATE TABLE VMX_BROOMSTICK_POINTS (
+                        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        WELL_ID TEXT NOT NULL,
+                        DEPTH REAL,
+                        TYPE INTEGER,
+                        START_DATE TEXT,
+                        END_DATE TEXT,
+                        START_INDEX REAL,
+                        END_INDEX REAL,
+                        MIN REAL,
+                        MAX REAL,
+                        AVG REAL,
+                        AVG2 REAL,
+                        START_DEPTH REAL,
+                        END_DEPTH REAL,
+                        BLOCK_MOVEMENT REAL,
+                        MAX_INDEX REAL,
+                        DYNAMIC_VALUE REAL,
+                        DYNAMIC_TORQUE_VALUE REAL,
+                        CIRCULATION REAL,
+                        PUMP_PRESSURE REAL,
+                        USER_DYNAMIC_VALUE REAL,
+                        USER_STATIC_VALUE REAL,
+                        USER_VISIBLE INTEGER DEFAULT 1,
+                        PUMP_STATUS INTEGER DEFAULT 0,
+                        CREATED_BY TEXT,
+                        CREATED_DATE TEXT,
+                        MODIFIED_BY TEXT,
+                        MODIFIED_DATE TEXT
+                    );");
+
+                var pt = new PUSOPoint(3200.0)
+                {
+                    Type = PUSOPoint.PointTypePickUp,
+                    RPM = 75.0,
+                    RigStates = "1",
+                    Max = 200.0
+                };
+
+                // SavePoint must auto-migrate the table by adding RPM and RIG_STATES columns without throwing
+                bool saved = PUSOPoint.SavePoint(ds, "LEGACY_WELL", PUSOPoint.PointTypePickUp, pt);
+                Assert.True(saved);
+
+                var loaded = PUSOPoint.LoadPoints(ds, "LEGACY_WELL", PUSOPoint.PointTypePickUp);
+                Assert.Single(loaded);
+                Assert.Equal(3200.0, loaded[0].Depth);
+                Assert.Equal(75.0, loaded[0].RPM);
+                Assert.Equal("1", loaded[0].RigStates);
+            }
+
+            SqliteConnection.ClearAllPools();
+            try { if (File.Exists(legacyDbPath)) File.Delete(legacyDbPath); } catch { }
+        }
     }
 }
 

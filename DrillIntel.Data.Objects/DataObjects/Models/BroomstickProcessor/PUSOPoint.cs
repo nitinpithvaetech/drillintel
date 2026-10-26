@@ -1392,23 +1392,50 @@ CREATE TABLE IF NOT EXISTS VMX_BROOMSTICK_POINTS (
     CREATED_BY              TEXT,
     CREATED_DATE            TEXT,
     MODIFIED_BY             TEXT,
-    MODIFIED_DATE           TEXT
+    MODIFIED_DATE           TEXT,
+    RPM                     REAL,
+    RIG_STATES              TEXT
 );
 CREATE INDEX IF NOT EXISTS IDX_VMX_BROOMSTICK_POINTS_WELL ON VMX_BROOMSTICK_POINTS(WELL_ID);
 CREATE INDEX IF NOT EXISTS IDX_VMX_BROOMSTICK_POINTS_DEPTH ON VMX_BROOMSTICK_POINTS(WELL_ID, DEPTH, TYPE);
 ";
 
         /// <summary>
-        /// Ensures VMX_BROOMSTICK_POINTS table exists via IDataServiceDIntel.
+        /// Ensures VMX_BROOMSTICK_POINTS table exists via IDataServiceDIntel,
+        /// and applies column migrations (RPM, RIG_STATES) for pre-existing databases.
         /// </summary>
         public static void EnsureTableExists(IDataServiceDIntel? db)
         {
             if (db == null) return;
-            try { db.ExecuteNonQuery(CreateTableSql); } catch { }
+            try
+            {
+                db.ExecuteNonQuery(CreateTableSql);
+
+                var tableInfo = db.GetTable("PRAGMA table_info(VMX_BROOMSTICK_POINTS);");
+                var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (tableInfo != null)
+                {
+                    foreach (DataRow row in tableInfo.Rows)
+                    {
+                        existingCols.Add(row["name"]?.ToString() ?? "");
+                    }
+                }
+
+                if (!existingCols.Contains("RPM"))
+                {
+                    db.ExecuteNonQuery("ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RPM REAL;");
+                }
+                if (!existingCols.Contains("RIG_STATES"))
+                {
+                    db.ExecuteNonQuery("ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RIG_STATES TEXT;");
+                }
+            }
+            catch { }
         }
 
         /// <summary>
-        /// Ensures VMX_BROOMSTICK_POINTS table exists via direct DbConnection.
+        /// Ensures VMX_BROOMSTICK_POINTS table exists via direct DbConnection,
+        /// and applies column migrations (RPM, RIG_STATES) for pre-existing databases.
         /// </summary>
         public static void EnsureTableExists(DbConnection? conn, DbTransaction? transaction = null)
         {
@@ -1416,10 +1443,39 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BROOMSTICK_POINTS_DEPTH ON VMX_BROOMSTICK_POI
             try
             {
                 if (conn.State != ConnectionState.Open) conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.Transaction = transaction;
-                cmd.CommandText = CreateTableSql;
-                cmd.ExecuteNonQuery();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = transaction;
+                    cmd.CommandText = CreateTableSql;
+                    cmd.ExecuteNonQuery();
+                }
+
+                var existingCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                using (var infoCmd = conn.CreateCommand())
+                {
+                    infoCmd.Transaction = transaction;
+                    infoCmd.CommandText = "PRAGMA table_info(VMX_BROOMSTICK_POINTS);";
+                    using var reader = infoCmd.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        existingCols.Add(reader["name"]?.ToString() ?? "");
+                    }
+                }
+
+                if (!existingCols.Contains("RPM"))
+                {
+                    using var alterCmd = conn.CreateCommand();
+                    alterCmd.Transaction = transaction;
+                    alterCmd.CommandText = "ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RPM REAL;";
+                    alterCmd.ExecuteNonQuery();
+                }
+                if (!existingCols.Contains("RIG_STATES"))
+                {
+                    using var alterCmd = conn.CreateCommand();
+                    alterCmd.Transaction = transaction;
+                    alterCmd.CommandText = "ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RIG_STATES TEXT;";
+                    alterCmd.ExecuteNonQuery();
+                }
             }
             catch { }
         }
@@ -1446,13 +1502,13 @@ INSERT INTO VMX_BROOMSTICK_POINTS (
     MIN, MAX, AVG, AVG2, START_DEPTH, END_DEPTH, BLOCK_MOVEMENT, MAX_INDEX,
     DYNAMIC_VALUE, DYNAMIC_TORQUE_VALUE, CIRCULATION, PUMP_PRESSURE,
     USER_DYNAMIC_VALUE, USER_STATIC_VALUE, USER_VISIBLE, PUMP_STATUS,
-    CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE
+    CREATED_BY, CREATED_DATE, MODIFIED_BY, MODIFIED_DATE, RPM, RIG_STATES
 ) VALUES (
     @WELL_ID, @DEPTH, @TYPE, @START_DATE, @END_DATE, @START_INDEX, @END_INDEX,
     @MIN, @MAX, @AVG, @AVG2, @START_DEPTH, @END_DEPTH, @BLOCK_MOVEMENT, @MAX_INDEX,
     @DYNAMIC_VALUE, @DYNAMIC_TORQUE_VALUE, @CIRCULATION, @PUMP_PRESSURE,
     @USER_DYNAMIC_VALUE, @USER_STATIC_VALUE, @USER_VISIBLE, @PUMP_STATUS,
-    @CREATED_BY, @CREATED_DATE, @MODIFIED_BY, @MODIFIED_DATE
+    @CREATED_BY, @CREATED_DATE, @MODIFIED_BY, @MODIFIED_DATE, @RPM, @RIG_STATES
 );";
 
                 var p = point.ToParameters(wellId, pointType, userName);
@@ -1595,6 +1651,8 @@ INSERT INTO VMX_BROOMSTICK_POINTS (
             pt.UserStaticValue = GetDoubleSafe(row, table, "USER_STATIC_VALUE", 0.0);
             pt.UserVisible = GetIntSafe(row, table, "USER_VISIBLE", 1) == 1;
             pt.PumpStatus = (pusoPumpStatus)GetIntSafe(row, table, "PUMP_STATUS", 0);
+            pt.RPM = GetDoubleSafe(row, table, "RPM", 0.0);
+            pt.RigStates = GetStringSafe(row, table, "RIG_STATES", string.Empty);
 
             return pt;
         }
@@ -1635,7 +1693,9 @@ INSERT INTO VMX_BROOMSTICK_POINTS (
                 ["@CREATED_BY"] = user,
                 ["@CREATED_DATE"] = now,
                 ["@MODIFIED_BY"] = user,
-                ["@MODIFIED_DATE"] = now
+                ["@MODIFIED_DATE"] = now,
+                ["@RPM"] = RPM,
+                ["@RIG_STATES"] = RigStates ?? string.Empty
             };
         }
 

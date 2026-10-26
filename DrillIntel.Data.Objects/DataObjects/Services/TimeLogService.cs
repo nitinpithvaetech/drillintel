@@ -230,19 +230,19 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
                         // --- [NEW LOGIC (Conditional index creation only when column exists)] ---
                         if (objTimeLog.logCurves.ContainsKey("RIG_STATE"))
                         {
-                            strSQL = "CREATE INDEX IF NOT EXISTS IDX2_" + dataTableName + " ON [" + dataTableName + "](RIG_STATE);";
+                            strSQL = "CREATE INDEX IF NOT EXISTS [IDX2_" + dataTableName + "] ON [" + dataTableName + "](RIG_STATE);";
                             objDataService.ExecuteNonQuery(strSQL);
 
                             if (hasDateTimeCurve)
                             {
-                                strSQL = "CREATE INDEX IF NOT EXISTS IDX3_" + dataTableName + " ON [" + dataTableName + "](RIG_STATE,DATETIME);";
+                                strSQL = "CREATE INDEX IF NOT EXISTS [IDX3_" + dataTableName + "] ON [" + dataTableName + "](RIG_STATE,DATETIME);";
                                 objDataService.ExecuteNonQuery(strSQL);
                             }
                         }
 
                         if (objTimeLog.logCurves.ContainsKey("DEPTH"))
                         {
-                            strSQL = "CREATE INDEX IF NOT EXISTS IDX13_" + dataTableName + " ON [" + dataTableName + "](DEPTH);";
+                            strSQL = "CREATE INDEX IF NOT EXISTS [IDX13_" + dataTableName + "] ON [" + dataTableName + "](DEPTH);";
                             objDataService.ExecuteNonQuery(strSQL);
                         }
                         // ************************************************************************************************************
@@ -252,7 +252,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services
 
                         foreach (TimeLogIndex objItem in indexList.Values)
                         {
-                            strSQL = "CREATE INDEX IF NOT EXISTS IDX" + objItem.Prefix + "_" + dataTableName + " ON [" + dataTableName + "](" + objItem.Channels.Replace("'", "''") + ");";
+                            strSQL = "CREATE INDEX IF NOT EXISTS [IDX" + objItem.Prefix + "_" + dataTableName + "] ON [" + dataTableName + "](" + objItem.Channels.Replace("'", "''") + ");";
                             objDataService.ExecuteNonQuery(strSQL);
                         }
                     }

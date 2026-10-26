@@ -223,4 +223,50 @@ public class CalculateBroomstickPointsTests : IDisposable
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_BROOMSTICK_PRC_INFO';");
         Assert.Equal(1, tableCount);
     }
+
+    [Fact]
+    public async Task BroomstickDataService_EnsureTablesExistAsync_AutoMigratesPreExistingTableWithoutRpm()
+    {
+        string legacyDb = Path.Combine(Path.GetTempPath(), $"bs_legacy_{Guid.NewGuid():N}.sqlite");
+        using (var ds = new DataServiceDIntel(legacyDb))
+        {
+            // Create legacy VMX_BROOMSTICK_POINTS without RPM and RIG_STATES
+            ds.ExecuteNonQuery(@"
+                CREATE TABLE VMX_BROOMSTICK_POINTS (
+                    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                    WELL_ID TEXT NOT NULL,
+                    DEPTH REAL,
+                    TYPE INTEGER
+                );");
+
+            var dataService = new BroomstickDataService(ds, _logger);
+            await dataService.EnsureTablesExistAsync();
+
+            // Verify columns RPM and RIG_STATES were added
+            var table = ds.GetTable("PRAGMA table_info(VMX_BROOMSTICK_POINTS);");
+            var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (table != null)
+            {
+                foreach (System.Data.DataRow row in table.Rows)
+                {
+                    cols.Add(row["name"]?.ToString() ?? "");
+                }
+            }
+            Assert.Contains("RPM", cols);
+            Assert.Contains("RIG_STATES", cols);
+
+            // Verify insertion with RPM and RIG_STATES succeeds
+            bool inserted = ds.ExecuteNonQuery(@"
+                INSERT INTO VMX_BROOMSTICK_POINTS (WELL_ID, DEPTH, TYPE, RPM, RIG_STATES)
+                VALUES ('WELL_RPM_TEST', 1500.0, 2, 85.5, '10,12');");
+            Assert.True(inserted);
+
+            object? rpm = ds.GetValue("SELECT RPM FROM VMX_BROOMSTICK_POINTS WHERE WELL_ID='WELL_RPM_TEST';");
+            Assert.NotNull(rpm);
+            Assert.Equal(85.5, Convert.ToDouble(rpm));
+        }
+
+        SqliteConnection.ClearAllPools();
+        try { if (File.Exists(legacyDb)) File.Delete(legacyDb); } catch { }
+    }
 }

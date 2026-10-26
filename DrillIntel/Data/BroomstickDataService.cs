@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Dapper;
@@ -121,7 +122,9 @@ public class BroomstickDataService : IBroomstickDataService
                     CREATED_BY TEXT,
                     CREATED_DATE TEXT,
                     MODIFIED_BY TEXT,
-                    MODIFIED_DATE TEXT
+                    MODIFIED_DATE TEXT,
+                    RPM REAL,
+                    RIG_STATES TEXT
                 );
                 CREATE INDEX IF NOT EXISTS IDX_VMX_BROOMSTICK_POINTS_WELL ON VMX_BROOMSTICK_POINTS(WELL_ID);
                 CREATE INDEX IF NOT EXISTS IDX_VMX_BROOMSTICK_POINTS_DEPTH ON VMX_BROOMSTICK_POINTS(WELL_ID, DEPTH, TYPE);";
@@ -137,6 +140,20 @@ public class BroomstickDataService : IBroomstickDataService
 
             await connection.ExecuteAsync(new CommandDefinition(createPointsTableSql, cancellationToken: ct));
             await connection.ExecuteAsync(new CommandDefinition(createPrcInfoTableSql, cancellationToken: ct));
+
+            // Ensure backward compatibility if table existed previously without RPM or RIG_STATES
+            var existingCols = (await connection.QueryAsync<string>(
+                new CommandDefinition("SELECT name FROM pragma_table_info('VMX_BROOMSTICK_POINTS');", cancellationToken: ct)
+            )).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!existingCols.Contains("RPM"))
+            {
+                await connection.ExecuteAsync(new CommandDefinition("ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RPM REAL;", cancellationToken: ct));
+            }
+            if (!existingCols.Contains("RIG_STATES"))
+            {
+                await connection.ExecuteAsync(new CommandDefinition("ALTER TABLE VMX_BROOMSTICK_POINTS ADD COLUMN RIG_STATES TEXT;", cancellationToken: ct));
+            }
 
             _logger.LogInfo("Broomstick database tables verified / created successfully.");
         }
