@@ -39,6 +39,45 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
         public int DepthMovementTime = 1;
         public string RunNo = "";
 
+        public WellSectionPUSOSettings GetCopy()
+        {
+            var objNew = new WellSectionPUSOSettings
+            {
+                WellID = this.WellID,
+                SectionID = this.SectionID,
+                PUChannel = this.PUChannel,
+                PUPumpCutOff = this.PUPumpCutOff,
+                PURPMCutOff = this.PURPMCutOff,
+                PUMaxMovement = this.PUMaxMovement,
+                PUMinMovement = this.PUMinMovement,
+                PUDynMethod = this.PUDynMethod,
+                PUFilterMaxLocal = this.PUFilterMaxLocal,
+                SOChannel = this.SOChannel,
+                SOPumpCutOff = this.SOPumpCutOff,
+                SORPMCutOff = this.SORPMCutOff,
+                SOMaxMovement = this.SOMaxMovement,
+                SOMinMovement = this.SOMinMovement,
+                SODynMethod = this.SODynMethod,
+                SOFilterMaxLocal = this.SOFilterMaxLocal,
+                ROTChannel = this.ROTChannel,
+                ROTPumpCutOff = this.ROTPumpCutOff,
+                ROTMinRPM = this.ROTMinRPM,
+                ROTMaxRPM = this.ROTMaxRPM,
+                ROTTolerance = this.ROTTolerance,
+                ROTPoints = this.ROTPoints,
+                DepthMovementTime = this.DepthMovementTime,
+                RunNo = this.RunNo
+            };
+            return objNew;
+        }
+
+        public WellSectionPUSOSettings getCopy() => GetCopy();
+
+        public static WellSectionPUSOSettings loadSettings(
+            IDataServiceDIntel objDataService,
+            string paramWellID,
+            string paramSectionID) => LoadSettings(objDataService, paramWellID, paramSectionID);
+
         public static void SaveSettings(
             IDataServiceDIntel objDataService,
             WellSectionPUSOSettings objSettings)

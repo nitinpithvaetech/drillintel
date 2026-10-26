@@ -130,6 +130,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
         public bmMultiSelectMethod slackOffMultiPointMethod { get; set; } = bmMultiSelectMethod.Max;
         public bmMultiSelectMethod ROBMultiPointMethod { get; set; } = bmMultiSelectMethod.Max;
         public bool ShowMultiple { get; set; } = false;
+        public bool ShowMultiplePoints { get => ShowMultiple; set => ShowMultiple = value; }
 
         public string pickupRigStates { get; set; } = string.Empty;
         public string slackOffRigStates { get; set; } = string.Empty;

@@ -38,11 +38,23 @@ public partial class MainViewModel : ObservableObject
     public object? ActiveDocument { get; set; }
     public Action<string, string>? UserAlertHandler { get; set; }
 
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void RecalculateBroomstickPoints()
+    {
+        OnCalculateBroomstickPointsClicked();
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private void CalculateBroomstickPoints()
+    {
+        OnCalculateBroomstickPointsClicked();
+    }
+
     public void OnCalculateBroomstickPointsClicked()
     {
         if (ActiveDocument is DrillIntel.Models.HookloadDocument hookloadDoc)
         {
-            _ = hookloadDoc.CalculateBroomstickPointsAsync();
+            hookloadDoc.CalculateBroomstickPoints();
         }
         else
         {
@@ -52,8 +64,55 @@ public partial class MainViewModel : ObservableObject
             }
             else
             {
-                MessageBox.Show("Please select an active Hookload Document to calculate Broomstick points.", "Broomstick Calculation", MessageBoxButton.OK, MessageBoxImage.Information);
+                _ = ExecuteProjectWideBroomstickRecalculationAsync();
             }
+        }
+    }
+
+    private async Task ExecuteProjectWideBroomstickRecalculationAsync()
+    {
+        if (!_session.IsProjectOpen)
+        {
+            MessageBox.Show("Please open a project before recalculating Broomstick points.", "Broomstick Calculation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var confirm = MessageBox.Show(
+            DrillIntel.Models.HookloadDocument.ConfirmationMessage,
+            DrillIntel.Models.HookloadDocument.DialogTitle,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            var repo = new DrillIntel.Data.WellDataRepository(_session);
+            var well = await repo.GetProjectWellAsync();
+            var timeLogs = await repo.GetTimeLogsAsync();
+            var primaryTimeLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+            string wellId = well?.ObjectID ?? primaryTimeLog?.WellID ?? _session.ProjectName ?? "WELL_1";
+
+            var bsDataService = new DrillIntel.Data.BroomstickDataService(_session);
+            var bsProcessor = new DrillIntel.Services.BroomstickProcessor(bsDataService, _session);
+
+            await bsDataService.ClearBroomstickPointsAsync(wellId);
+            var result = await bsProcessor.RecalculatePointsAsync(wellId);
+
+            _session.NotifyDataChanged();
+
+            if (result.Success)
+            {
+                MessageBox.Show("Broomstick points recalculation completed successfully.", "Broomstick Calculation", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                MessageBox.Show($"Broomstick points recalculation completed with warning:\n{result.ErrorMessage}", "Broomstick Calculation", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Error calculating broomstick points:\n{ex.Message}", "Broomstick Calculation Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -303,6 +362,7 @@ public partial class MainViewModel : ObservableObject
         ViewTagGraphCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
+        OpenSystemSettingsCommand.NotifyCanExecuteChanged();
         OpenProjectRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenUnitMasterCommand.NotifyCanExecuteChanged();
         OpenWellEditorCommand.NotifyCanExecuteChanged();
@@ -315,6 +375,8 @@ public partial class MainViewModel : ObservableObject
         SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
         OpenProjectBroomstickSettingsCommand.NotifyCanExecuteChanged();
         OpenBroomstickSettingsCommand.NotifyCanExecuteChanged();
+        RecalculateBroomstickPointsCommand.NotifyCanExecuteChanged();
+        CalculateBroomstickPointsCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
 
         if (Application.Current?.Dispatcher != null)
@@ -494,6 +556,25 @@ public partial class MainViewModel : ObservableObject
     private void CloseProject()
     {
         _session.Close();
+    }
+
+    [RelayCommand]
+    private void OpenSystemSettings()
+    {
+        var appDb = _appDatabaseService ?? App.AppDatabaseService;
+        var dataService = appDb?.GetDataService();
+        if (dataService == null)
+        {
+            MessageBox.Show("Unable to access the Application Database.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        var vm = new EditSystemSettingsViewModel(dataService);
+        var window = new DrillIntel.Views.Common.EditSystemSettings(vm)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow
+        };
+        window.ShowDialog();
     }
 
     [RelayCommand]

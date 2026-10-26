@@ -255,8 +255,9 @@ public class AppDatabaseServiceTests : IDisposable
                 projectSession.Load(_projectDbPath);
                 var projDs = projectSession.GetDataService();
 
-                // Project database schema has APP_BS_GLOBAL_PROFILE
-                Assert.True(projDs.TableExists("APP_BS_GLOBAL_PROFILE"));
+                // Project database schema has VMX_BS_GLOBAL_PROFILE as physical table
+                Assert.True(projDs.TableExists("VMX_BS_GLOBAL_PROFILE"));
+                Assert.True(appDs.TableExists("APP_BS_GLOBAL_PROFILE"));
 
                 // Copy master profiles to project as done in ProjectService.CreateNewProjectAsync
                 bool copied = BroomstickProfile.CopyMasterProfilesToProject(appDs, projDs, out string copyErr);
@@ -293,5 +294,30 @@ public class AppDatabaseServiceTests : IDisposable
             }
         }
     }
-}
+    [Fact]
+    public void AppDatabase_SeedsAndPersists_SystemSettings_Successfully()
+    {
+        using var appDbService = new AppDatabaseService(_appDbPath, _templatePath);
+        appDbService.Initialize();
 
+        var ds = appDbService.GetDataService();
+        Assert.True(ds.TableExists("VMX_SETTINGS"));
+
+        // Test saving setting through SystemSettings model
+        var settings = new DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings();
+        settings.setSetting(DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.DigitSignificance, "4");
+        settings.setSetting("CustomAppSetting", "TestValue123");
+        bool saveSuccess = settings.SaveSettings(ds);
+        Assert.True(saveSuccess);
+
+        // Test loading back
+        var reloaded = new DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings();
+        bool loadSuccess = reloaded.LoadSettings(ds);
+        Assert.True(loadSuccess);
+        Assert.Equal("4", reloaded.getSetting(DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.DigitSignificance));
+        Assert.Equal("TestValue123", reloaded.getSetting("CustomAppSetting"));
+
+        // Verify compatibility view SystemSettings queries
+        Assert.True(ds.IsRecordExist("SELECT 1 FROM SystemSettings WHERE SETTING_ID = 'CustomAppSetting';"));
+    }
+}

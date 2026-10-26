@@ -1,15 +1,38 @@
 using System;
+using DrillIntel.Data;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models
 {
-    public class SystemSettings
+    /// <summary>
+    /// Type bridge maintaining backward compatibility with callers referencing
+    /// SystemSettings under the DrillIntel.Data.Objects.DataObjects.Models namespace.
+    /// Inherits from DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.
+    /// </summary>
+    public class SystemSettings : Common.SystemSettings
     {
-        public SystemSettings GetCopy() => new SystemSettings();
-
-        // --- [NEW LOGIC (LoadSettings stub for system settings initialization)] ---
-        public void LoadSettings(DrillIntel.Data.IDataServiceDIntel? objDataService)
+        public new SystemSettings GetCopy()
         {
-            // Settings initialization for SQLite if needed
+            var copy = new SystemSettings
+            {
+                LastError = this.LastError
+            };
+
+            if (this.settings != null)
+            {
+                foreach (var kvp in this.settings)
+                {
+                    copy.settings[kvp.Key] = new Common.SettingValue
+                    {
+                        SettingID = kvp.Value.SettingID,
+                        SettingName = kvp.Value.SettingName,
+                        Value = kvp.Value.Value,
+                        SettingType = kvp.Value.SettingType,
+                        NeedToSave = kvp.Value.NeedToSave
+                    };
+                }
+            }
+
+            return copy;
         }
     }
 }

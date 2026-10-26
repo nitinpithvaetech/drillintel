@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <Folder Include="DataObjects\Models\BroomstickProcessor\" />
+    <Folder Include="DataObjects\Services\Common\" />
   </ItemGroup>
 
 </Project>

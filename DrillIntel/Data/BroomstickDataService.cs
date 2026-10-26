@@ -29,6 +29,11 @@ public interface IBroomstickDataService
     /// Ensures that VMX_BROOMSTICK_POINTS and VMX_BROOMSTICK_PRC_INFO tables exist in the database.
     /// </summary>
     Task EnsureTablesExistAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the underlying or session IDataServiceDIntel instance if available.
+    /// </summary>
+    IDataServiceDIntel? GetDataService();
 }
 
 /// <summary>
@@ -54,6 +59,14 @@ public class BroomstickDataService : IBroomstickDataService
         _dataService = dataService ?? throw new ArgumentNullException(nameof(dataService));
         _session = null!;
         _logger = logger ?? new AppLogger(nameof(BroomstickDataService));
+    }
+
+    public IDataServiceDIntel? GetDataService()
+    {
+        if (_dataService != null) return _dataService;
+        if (_session != null && _session.IsProjectOpen)
+            return _session.GetDataService();
+        return null;
     }
 
     private IDataServiceDIntel GetEffectiveDataService()

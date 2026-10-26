@@ -430,6 +430,28 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         }
 
         // --- [NEW LOGIC (getDataTableName: queries DATA_TABLE_NAME from VMX_TIME_LOG)] ---
+        public string getDataTableName(IDataServiceDIntel objDataService)
+        {
+            if (!string.IsNullOrEmpty(__dataTableName)) return __dataTableName;
+            __dataTableName = getDataTableName(objDataService, this.WellID, this.WellboreID, this.ObjectID);
+            return __dataTableName;
+        }
+
+        public string getDataTableName(ref IDataServiceDIntel objDataService)
+        {
+            return getDataTableName(objDataService);
+        }
+
+        public double getFirstIndexOptimized(ref IDataServiceDIntel objDataService)
+        {
+            return getFirstIndexOptimized(objDataService);
+        }
+
+        public double getLastIndexOptimized(ref IDataServiceDIntel objDataService)
+        {
+            return getLastIndexOptimized(objDataService);
+        }
+
         public static string getDataTableName(IDataServiceDIntel objDataService, string WellID, string WellboreID, string LogID)
         {
             if (objDataService == null || string.IsNullOrWhiteSpace(LogID)) return "";

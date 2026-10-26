@@ -377,7 +377,23 @@ public class AppDatabaseSeedGeneratorTests
             ";
             cmd.ExecuteNonQuery();
 
-            // 9. Pragma optimize & VACUUM
+            // 10. VMX_SETTINGS and SystemSettings compatibility views
+            cmd.CommandText = @"
+                CREATE TABLE IF NOT EXISTS VMX_SETTINGS (
+                    SETTING_ID    TEXT PRIMARY KEY,
+                    SETTING_NAME  TEXT,
+                    SETTING_VALUE TEXT,
+                    SETTING_TYPE  TEXT,
+                    BINARY_VALUE  BLOB
+                );
+                CREATE VIEW IF NOT EXISTS SystemSettings AS SELECT * FROM VMX_SETTINGS;
+                CREATE VIEW IF NOT EXISTS APP_SETTINGS AS SELECT * FROM VMX_SETTINGS;
+            ";
+            cmd.ExecuteNonQuery();
+
+            DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.EnsureDefaultSettings(connection);
+
+            // 11. Pragma optimize & VACUUM
             cmd.CommandText = "VACUUM;";
             cmd.ExecuteNonQuery();
         }
@@ -420,6 +436,22 @@ public class AppDatabaseSeedGeneratorTests
             vCmd.CommandText = "SELECT COUNT(*) FROM VMX_BS_GLOBAL_PROFILE;";
             long bsViewCount = (long)vCmd.ExecuteScalar()!;
             Assert.True(bsViewCount >= 1);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_SETTINGS';";
+            long vmxSettingsTableCount = (long)vCmd.ExecuteScalar()!;
+            Assert.Equal(1, vmxSettingsTableCount);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='SystemSettings';";
+            long systemSettingsViewCount = (long)vCmd.ExecuteScalar()!;
+            Assert.Equal(1, systemSettingsViewCount);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='APP_SETTINGS';";
+            long appSettingsViewCount = (long)vCmd.ExecuteScalar()!;
+            Assert.Equal(1, appSettingsViewCount);
+
+            vCmd.CommandText = "SELECT COUNT(*) FROM VMX_SETTINGS;";
+            long vmxSettingsRowCount = (long)vCmd.ExecuteScalar()!;
+            Assert.True(vmxSettingsRowCount >= 41);
         }
     }
 }

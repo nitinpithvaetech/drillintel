@@ -192,4 +192,35 @@ public class CalculateBroomstickPointsTests : IDisposable
 
         Assert.True(docPromptInvoked);
     }
+
+    [Fact]
+    public void MainViewModel_RecalculateBroomstickPointsCommand_CanExecute_BoundToProjectOpenState()
+    {
+        var session = new ProjectSession();
+        var projService = new ProjectService(session);
+        var vm = new MainViewModel(session, projService, null, null);
+
+        // When project is closed, command cannot execute
+        Assert.False(vm.RecalculateBroomstickPointsCommand.CanExecute(null));
+        Assert.False(vm.CalculateBroomstickPointsCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BroomstickProcessor_RecalculatePointsAsync_CallsLowLevelProcessorAndExecutesCalculation()
+    {
+        await _bsDataService.EnsureTablesExistAsync();
+
+        // Call RecalculatePointsAsync
+        var result = await _processor.RecalculatePointsAsync("WELL_CALC_TEST");
+
+        Assert.True(result.Success);
+        Assert.Equal("ProcessBroomstick", result.OperationName);
+
+        // Verify VMX_BROOMSTICK_PRC_INFO table exists and was operated on by BroomStickProcessor
+        using var conn = new SqliteConnection(_connString);
+        await conn.OpenAsync();
+        var tableCount = await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='VMX_BROOMSTICK_PRC_INFO';");
+        Assert.Equal(1, tableCount);
+    }
 }

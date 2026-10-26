@@ -154,11 +154,31 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
             SaveSettings(objDataService, objSettings);
         }
 
+        
+        public static void EnsureTableExists(IDbConnection conn)
+        {
+            if (conn == null) return;
+            try
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS VMX_WELL_PUSO_SETTINGS (
+                        WELL_ID TEXT PRIMARY KEY,
+                        PU_CHANNEL TEXT, PU_PUMP_CUTOFF REAL, PU_RPM_CUTOFF REAL, PU_MAX_MOVEMENT REAL, PU_MIN_MOVEMENT REAL, PU_DYN_METHOD INTEGER, PU_FILTER_LOCAL_MAX INTEGER,
+                        SO_CHANNEL TEXT, SO_PUMP_CUTOFF REAL, SO_RPM_CUTOFF REAL, SO_MAX_MOVEMENT REAL, SO_MIN_MOVEMENT REAL, SO_DYN_METHOD INTEGER, SO_FILTER_LOCAL_MAX INTEGER,
+                        ROT_CHANNEL TEXT, ROT_PUMP_CUTOFF REAL, ROT_MIN_RPM REAL, ROT_MAX_RPM REAL, ROT_TOLERANCE REAL, ROT_POINTS INTEGER, DEPTH_MOVEMENT_TIME INTEGER,
+                        MODIFIED_BY TEXT, MODIFIED_DATE TEXT, RUN_NO TEXT
+                    );";
+                cmd.ExecuteNonQuery();
+            }
+            catch { }
+        }
         public static bool SaveSettings(IDbConnection conn, WellPUSOSettings objSettings, string user = "")
         {
             if (conn == null || objSettings == null) return false;
             try
             {
+                EnsureTableExists(conn);
                 using var cmd = conn.CreateCommand();
                 string safeWellId = objSettings.WellID.Replace("'", "''");
                 cmd.CommandText = $"DELETE FROM VMX_WELL_PUSO_SETTINGS WHERE WELL_ID='{safeWellId}';";

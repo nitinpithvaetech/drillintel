@@ -295,6 +295,18 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
         //    }
         //}
 
+        public static rigState loadWellRigStateSetup(ref IDataServiceDIntel objDataService, string wellId)
+        {
+            var setup = LoadCommonRigStateSetup(objDataService);
+            return setup ?? CreateDefault();
+        }
+
+        public static rigState loadWellRigStateSetup(IDataServiceDIntel objDataService, string wellId)
+        {
+            var setup = LoadCommonRigStateSetup(objDataService);
+            return setup ?? CreateDefault();
+        }
+
         public static rigState? LoadCommonRigStateSetup(IDataServiceDIntel objDataService)
         {
             return Services.RigStateService.LoadCommonRigStateSetup(objDataService);

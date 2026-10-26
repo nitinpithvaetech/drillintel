@@ -1,0 +1,717 @@
+<Window x:Class="DrillIntel.Views.Common.EditSystemSettings"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
+        xmlns:local="clr-namespace:DrillIntel.Views.Common"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=viewmodels:EditSystemSettingsViewModel, IsDesignTimeCreatable=True}"
+        Title="System Settings Editor"
+        Height="780" Width="1080"
+        MinHeight="650" MinWidth="900"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        Background="{DynamicResource MaterialDesignPaper}"
+        FontFamily="{DynamicResource MaterialDesignFont}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <Style x:Key="CategoryTabItem" TargetType="TabItem">
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="TabBorder"
+                                Background="Transparent"
+                                BorderThickness="0,0,3,0"
+                                BorderBrush="Transparent"
+                                Padding="{TemplateBinding Padding}"
+                                Margin="0,2">
+                            <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#1A673AB7" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#673AB7" />
+                                <Setter Property="TextElement.Foreground" Value="#673AB7" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="#0D673AB7" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SettingCard" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+
+        <Style x:Key="CardHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#673AB7" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style x:Key="KeyBadge" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="#64748B" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Header Bar -->
+            <RowDefinition Height="Auto" />
+            <!-- Main Content Area -->
+            <RowDefinition Height="*" />
+            <!-- Footer Action Bar -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 1. Header Bar -->
+        <Border Grid.Row="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="20,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="10" Background="#EDE9FE" Margin="0,0,14,0">
+                    <materialDesign:PackIcon Kind="Tune" Width="24" Height="24" Foreground="#673AB7" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="System Settings Editor" FontSize="18" FontWeight="Bold" Foreground="#1E293B" VerticalAlignment="Center" />
+                        <Border Background="#EDE9FE" CornerRadius="12" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <TextBlock Text="Global Master (VMX_SETTINGS)" FontSize="11" FontWeight="SemiBold" Foreground="#673AB7" />
+                        </Border>
+                    </StackPanel>
+                    <TextBlock Text="Application-level configuration, acquisition rates, network endpoints, and branding" FontSize="12" Foreground="#64748B" Margin="0,2,0,0" />
+                </StackPanel>
+
+                <!-- Storage Info Tag -->
+                <Border Grid.Column="2" Background="White" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Padding="10,6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="#10B981" Margin="0,0,6,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Storage: DrillIntelApp.sqlite" FontSize="11" FontFamily="Consolas" Foreground="#334155" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- 2. Main Tabbed Content -->
+        <TabControl Grid.Row="1" TabStripPlacement="Left" BorderThickness="0" Background="Transparent">
+
+            <!-- ============================================== -->
+            <!-- TAB 1: General & Paging -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="SettingsOutline" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="General &amp; Paging" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Computation, Precision &amp; Data Paging" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Configure decimal places, chart rendering optimizations, and telemetry data paging thresholds." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- Precision Card -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="DATA PRECISION &amp; DEPTH" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Digit Significance (Decimals):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DigitSignificance, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DigitSignificance" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Depth Offset (ft / m):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DepthOffset, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DepthOffset" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Separator Margin="0,8,0,10" Background="#F1F5F9" />
+
+                                <CheckBox Content="Ignore Negative Values" IsChecked="{Binding IgnoreNegative}" Margin="0,4" ToolTip="Key: IgnoreNegative" />
+                                <CheckBox Content="Do Not Perform Slide Cleanup" IsChecked="{Binding DoNotPerformSlideCleanup}" Margin="0,4" ToolTip="Key: DoNotPerformSlideCleanup" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Paging Card -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="RENDERING &amp; MEMORY PAGING" Style="{StaticResource CardHeader}" />
+
+                                <CheckBox Content="Optimize Display (Accelerated Rendering)" IsChecked="{Binding OptimizeDisplay}" Margin="0,4" ToolTip="Key: OptimizeDisplay" />
+                                <CheckBox Content="Use Data Paging (Recommended for large well logs)" IsChecked="{Binding UseDataPaging}" Margin="0,4" ToolTip="Key: UseDataPaging" />
+
+                                <Separator Margin="0,8,0,10" Background="#F1F5F9" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Data Page Size (Samples):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DataPageSize, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DataPageSize" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Page Overlap Size (Samples):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding OverlapSize, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: OverlapSize" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================== -->
+            <!-- TAB 2: Log Rates & Alarms -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="ClockOutline" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Log Rates &amp; Alarms" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Telemetry Frequencies &amp; Alarms" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Default acquisition sampling intervals and stall alarm watchdog limits." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- Sampling Frequencies -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="DEFAULT LOG FREQUENCIES" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Time Log Frequency (Seconds):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding TimeLogFrequency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: TimeLogFrequency" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Depth Log Frequency (ft / m):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DepthLogFrequency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DepthLogFrequency" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Trajectory Log Frequency (ft / m):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding TrajectoryFrequency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: TrajectoryFrequency" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Mud Log Frequency (ft / m):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding MudLogFrequency, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: MudLogFrequency" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Alarm Supervision -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="ALARM THRESHOLDS &amp; SUPERVISION" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Time Data Alarm Timeout (Minutes):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding TimeDataAlarmTime, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: TimeDataAlarmTime" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="280" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Depth Data Alarm Timeout (Minutes):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DepthDataAlarmTime, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DepthDataAlarmTime" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Separator Margin="0,8,0,10" Background="#F1F5F9" />
+
+                                <CheckBox Content="Enable Active Well Checking" IsChecked="{Binding WellCheckEnabled}" Margin="0,4" ToolTip="Key: WellCheckEnabled" />
+                                <CheckBox Content="Require Alarm Acknowledgement" IsChecked="{Binding AlarmAcknowledgement}" Margin="0,4" ToolTip="Key: AlarmAcknowledgement" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================== -->
+            <!-- TAB 3: Folders & Timezone -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="FolderOutline" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Folders &amp; Timezone" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Directories &amp; Operational Hours" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Local logging directory, WITSML transaction traces, and day/night shift intervals." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- Log Directory Card -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="LOG DIRECTORY &amp; AUDITING" Style="{StaticResource CardHeader}" />
+
+                                <TextBlock Text="Log File Folder Path:" Margin="0,0,0,4" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding LogFolder, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <Button Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Command="{Binding BrowseLogFolderCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" />
+                                </Grid>
+                                <TextBlock Text="Key: LogFolder" Style="{StaticResource KeyBadge}" Margin="0,4,0,10" />
+
+                                <CheckBox Content="Log All WITSML Server Transactions" IsChecked="{Binding LogWITSMLTransactions}" Margin="0,4" ToolTip="Key: LogWITSMLTransactions" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Timezone & Shifts -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="REGIONAL TIMEZONE &amp; SHIFT SCHEDULE" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="240" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Reference Time Zone:" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableTimeZones}" SelectedItem="{Binding TimeZone}" Style="{StaticResource MaterialDesignOutlinedComboBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: TimeZone" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="30" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Day Shift Hours (From / To):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DayTimeFrom, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="to" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="3" Text="{Binding DayTimeTo, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="4" Text="Keys: DayTimeFrom, DayTimeTo" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================== -->
+            <!-- TAB 4: D-Server & Network -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="ServerNetworkOutline" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="D-Server &amp; Network" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Telemetry D-Server &amp; Communications" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Realtime data server connection parameters, timeouts, and rig chat messaging." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- D-Server Settings -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="D-SERVER CONNECTION" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="260" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="D-Server IP / Hostname:" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DServerIP, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DServerIP" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Download Timeout (Sec):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DownloadTimeOut, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DownloadTimeOut" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Download Chunk Size (KB):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding DownloadChunkSize, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: DownloadChunkSize" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="260" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Support Contact Email:" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding SupportEmail, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: SupportEmail" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Realtime Rig Chat -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="REALTIME RIG CHAT SERVICE" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="260" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Chat Server Domain:" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding ChatServerDomain, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Key: ChatServerDomain" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="220" />
+                                        <ColumnDefinition Width="180" />
+                                        <ColumnDefinition Width="60" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Host &amp; Port:" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding ChatHostName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="2" Text="Port:" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="3" Text="{Binding ChatPort, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                    <TextBlock Grid.Column="4" Text="Keys: chatHostName, chatPort" Style="{StaticResource KeyBadge}" Margin="12,0,0,0" />
+                                </Grid>
+
+                                <Separator Margin="0,8,0,10" Background="#F1F5F9" />
+
+                                <CheckBox Content="Use SSL / TLS Encryption" IsChecked="{Binding ChatUseSSL}" Margin="0,4" ToolTip="Key: chatUseSSL" />
+                                <CheckBox Content="Resolve SRV DNS Records" IsChecked="{Binding ChatResolveSrvRecords}" Margin="0,4" ToolTip="Key: chatResolveSrvRecords" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================== -->
+            <!-- TAB 5: Audio & Notifications -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="VolumeHigh" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Audio &amp; Sounds" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Alarm Sound Notifications" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Audio alert playback files for critical alarms, warnings, and system remarks." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- Red Sound -->
+                        <Border Style="{StaticResource SettingCard}" BorderBrush="#FCA5A5" Background="#FEF2F2">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="CRITICAL ALARM AUDIO (RED)" FontWeight="Bold" Foreground="#DC2626" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="Key: SoundFileRed" Style="{StaticResource KeyBadge}" />
+                                </Grid>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding SoundFileRed, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" Background="White" />
+                                    <Button Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Command="{Binding BrowseSoundRedCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" />
+                                    <Button Grid.Column="2" Content="▶ Play" Margin="8,0,0,0" Command="{Binding PlaySoundRedCommand}" Background="#DC2626" Foreground="White" BorderThickness="0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Yellow Sound -->
+                        <Border Style="{StaticResource SettingCard}" BorderBrush="#FCD34D" Background="#FFFBEB">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="WARNING ALARM AUDIO (YELLOW)" FontWeight="Bold" Foreground="#D97706" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="Key: SoundFileYellow" Style="{StaticResource KeyBadge}" />
+                                </Grid>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding SoundFileYellow, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" Background="White" />
+                                    <Button Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Command="{Binding BrowseSoundYellowCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" />
+                                    <Button Grid.Column="2" Content="▶ Play" Margin="8,0,0,0" Command="{Binding PlaySoundYellowCommand}" Background="#D97706" Foreground="White" BorderThickness="0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Remarks Sound -->
+                        <Border Style="{StaticResource SettingCard}" BorderBrush="#93C5FD" Background="#EFF6FF">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="REMARKS / EVENT AUDIO" FontWeight="Bold" Foreground="#2563EB" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="Key: SoundFileRemarks" Style="{StaticResource KeyBadge}" />
+                                </Grid>
+
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding SoundFileRemarks, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" Background="White" />
+                                    <Button Grid.Column="1" Content="Browse..." Margin="8,0,0,0" Command="{Binding BrowseSoundRemarksCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" />
+                                    <Button Grid.Column="2" Content="▶ Play" Margin="8,0,0,0" Command="{Binding PlaySoundRemarksCommand}" Background="#2563EB" Foreground="White" BorderThickness="0" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================================== -->
+            <!-- TAB 6: Branding & Reports -->
+            <!-- ============================================== -->
+            <TabItem Style="{StaticResource CategoryTabItem}">
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="ImageOutline" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Branding &amp; Reports" VerticalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20">
+                    <StackPanel MaxWidth="900" HorizontalAlignment="Left">
+                        <TextBlock Text="Branding &amp; Export Print Layouts" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,4" />
+                        <TextBlock Text="Binary logo image storage in VMX_SETTINGS (BLOB), page sizes, and team document sharing." FontSize="12" Foreground="#64748B" Margin="0,0,0,16" />
+
+                        <!-- Logos Grid -->
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Primary Logo -->
+                            <Border Grid.Column="0" Style="{StaticResource SettingCard}" Margin="0">
+                                <StackPanel>
+                                    <TextBlock Text="PRIMARY COMPANY LOGO" Style="{StaticResource CardHeader}" />
+                                    <Border Height="90" BorderBrush="#E2E8F0" BorderThickness="2" CornerRadius="8" Background="#F8FAFC" Margin="0,0,0,8">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="ImageArea" Width="32" Height="32" Foreground="#94A3B8" HorizontalAlignment="Center" />
+                                            <TextBlock Text="{Binding CompanyLogoPath, TargetNullValue='No logo selected'}" FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="280" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Button Content="Change Logo..." Command="{Binding BrowseCompanyLogoCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="Key: CompanyLogo (BLOB)" Style="{StaticResource KeyBadge}" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Operator Logo -->
+                            <Border Grid.Column="2" Style="{StaticResource SettingCard}" Margin="0">
+                                <StackPanel>
+                                    <TextBlock Text="OPERATOR / CLIENT LOGO" Style="{StaticResource CardHeader}" />
+                                    <Border Height="90" BorderBrush="#E2E8F0" BorderThickness="2" CornerRadius="8" Background="#F8FAFC" Margin="0,0,0,8">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="ImageArea" Width="32" Height="32" Foreground="#94A3B8" HorizontalAlignment="Center" />
+                                            <TextBlock Text="{Binding CompanyLogo2Path, TargetNullValue='No logo selected'}" FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="280" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Button Content="Change Logo..." Command="{Binding BrowseCompanyLogo2Command}" Style="{StaticResource MaterialDesignOutlinedButton}" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="Key: CompanyLogo2 (BLOB)" Style="{StaticResource KeyBadge}" Margin="0,6,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <!-- Print Layout Card -->
+                        <Border Style="{StaticResource SettingCard}">
+                            <StackPanel>
+                                <TextBlock Text="PDF &amp; REPORT PRINT DEFAULTS" Style="{StaticResource CardHeader}" />
+
+                                <Grid Margin="0,4,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Page Size:" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailablePageSizes}" SelectedItem="{Binding PageSize}" Style="{StaticResource MaterialDesignOutlinedComboBox}" Padding="8,4" />
+
+                                    <TextBlock Grid.Column="3" Text="Orientation:" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="4" ItemsSource="{Binding AvailableOrientations}" SelectedItem="{Binding Orientation}" Style="{StaticResource MaterialDesignOutlinedComboBox}" Padding="8,4" />
+                                </Grid>
+
+                                <Grid Margin="0,8,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="130" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="Left Margin (mm):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="1" Text="{Binding LeftMargin, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+
+                                    <TextBlock Grid.Column="3" Text="Top Margin (mm):" VerticalAlignment="Center" />
+                                    <TextBox Grid.Column="4" Text="{Binding TopMargin, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource MaterialDesignOutlinedTextBox}" Padding="8,4" />
+                                </Grid>
+
+                                <Separator Margin="0,8,0,10" Background="#F1F5F9" />
+
+                                <CheckBox Content="Share Broomstick Profile Documents with Team" IsChecked="{Binding ShareBroomstickDocuments}" Margin="0,4" ToolTip="Key: ShareBroomstickDouments" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- 3. Footer Action Bar -->
+        <Border Grid.Row="2" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="20,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left action: Reset to Defaults -->
+                <Button Grid.Column="0" Content="Restore System Defaults" Command="{Binding RestoreDefaultsCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Height="36" />
+
+                <!-- Right actions: Cancel / Save -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Cancel" Command="{Binding CancelCommand}" Style="{StaticResource MaterialDesignOutlinedButton}" Height="36" Margin="0,0,12,0" />
+                    <Button Command="{Binding SaveCommand}" Height="36" Background="#673AB7" Foreground="White" BorderThickness="0" Padding="20,0" FontWeight="Bold">
+                        <Button.ContentTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Check" Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Save Settings" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </Button.ContentTemplate>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
+

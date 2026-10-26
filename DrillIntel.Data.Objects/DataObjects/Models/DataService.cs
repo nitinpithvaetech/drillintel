@@ -19,6 +19,11 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             return defaultValue;
         }
 
+        public static double checkNumericNull(object? value, double defaultValue = 0.0)
+        {
+            return checkNull(value, defaultValue);
+        }
+
         public static int checkNull(object? value, int defaultValue)
         {
             if (value == null || value == DBNull.Value) return defaultValue;

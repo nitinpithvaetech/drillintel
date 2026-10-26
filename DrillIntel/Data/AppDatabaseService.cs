@@ -105,6 +105,10 @@ public class AppDatabaseService : IAppDatabaseService
                 var defaultProfile = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProfile.CreateDefault();
                 DrillIntel.Data.Objects.DataObjects.Models.BroomstickProfile.SaveProfile(ds, defaultProfile, "SYSTEM", out _);
             }
+
+            // Ensure SystemSettings (VMX_SETTINGS) table exists in Application Database
+            DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.EnsureTableExists(ds);
+            DrillIntel.Data.Objects.DataObjects.Models.Common.SystemSettings.EnsureDefaultSettings(ds);
         }
     }
 

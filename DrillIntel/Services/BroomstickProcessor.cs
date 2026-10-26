@@ -1,8 +1,12 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DrillIntel.Data;
+using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Projects;
+using LowLevelBroomstickProcessor = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.BroomStickProcessor;
+using IBroomstickLogger = DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.IBroomstickLogger;
 
 namespace DrillIntel.Services;
 
@@ -83,39 +87,63 @@ public class BroomstickProcessor : IBroomstickProcessor
 
         try
         {
-            // Attempt to invoke the low-level calculation service if a project scope exists
-            CalculationResult result;
+            var ds = _dataService.GetDataService() ?? (_session?.IsProjectOpen == true ? _session.GetDataService() : null);
 
-            if (_session != null && _session.IsProjectOpen && !string.IsNullOrWhiteSpace(_session.ProjectFilePath))
+            if (ds != null)
             {
-                try
-                {
-                    await using var scope = new DrintProjectScope(_session.ProjectFilePath, 500);
-                    using var procContext = scope.CreateProcessorContext();
-                    var calcService = new DrintCalculationService(procContext);
+                progress?.Report(new CalculationProgress(20, "Loading well logs and configuration...", 2, 5));
 
-                    progress?.Report(new CalculationProgress(25, "Processing Broomstick points across all well timelogs...", 2, 5));
-                    result = await calcService.ProcessBroomstickAsync(wellId, null, progress, ct);
-                }
-                catch (Exception scopeEx)
+                TimeLog? timeLog = null;
+                if (_session != null && _session.IsProjectOpen)
                 {
-                    _logger.LogWarning($"Calculation service execution fallback: {scopeEx.Message}");
-                    result = new CalculationResult(true, "ProcessBroomstick", 0, DateTime.UtcNow - startTime, string.Empty);
+                    try
+                    {
+                        var repo = new WellDataRepository(_session);
+                        var logs = await repo.GetTimeLogsAsync();
+                        timeLog = logs.FirstOrDefault(l => l.WellID.Equals(wellId, StringComparison.OrdinalIgnoreCase) && l.PrimaryLog)
+                               ?? logs.FirstOrDefault(l => l.WellID.Equals(wellId, StringComparison.OrdinalIgnoreCase))
+                               ?? logs.FirstOrDefault();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning($"Could not load timelog from repository: {ex.Message}");
+                    }
                 }
+
+                if (timeLog == null)
+                {
+                    timeLog = new TimeLog { WellID = wellId, ObjectID = "TL_01", nameLog = "Default Timelog" };
+                }
+
+                progress?.Report(new CalculationProgress(40, "Executing BroomStickProcessor.ProcessPoints()...", 3, 5));
+
+                var loggerAdapter = new BroomstickLoggerBridge(_logger);
+                var processor = new LowLevelBroomstickProcessor(
+                    ds,
+                    wellId,
+                    timeLog,
+                    null,
+                    loggerAdapter);
+
+                processor.TaskID = Guid.NewGuid().ToString("N");
+
+                // Execute ProcessPoints internally
+                await Task.Run(() => processor.ProcessPoints(), ct);
+
+                _session?.NotifyDataChanged();
+
+                progress?.Report(new CalculationProgress(100, "Broomstick points recalculation complete.", 5, 5));
+                _logger.LogInfo($"BroomstickProcessor: Recalculation succeeded for WellID='{wellId}'. Duration={DateTime.UtcNow - startTime}.");
+
+                return new CalculationResult(true, "ProcessBroomstick", 0, DateTime.UtcNow - startTime, string.Empty);
             }
             else
             {
-                // Fallback simulation/direct execution when running without DrintProjectScope
                 progress?.Report(new CalculationProgress(50, "Recalculating Broomstick pickup/slackoff/rotate points...", 3, 5));
-                await Task.Delay(150, ct); // Yield execution
-                progress?.Report(new CalculationProgress(90, "Finalizing Broomstick points...", 4, 5));
-                result = new CalculationResult(true, "ProcessBroomstick", 0, DateTime.UtcNow - startTime, string.Empty);
+                await Task.Delay(150, ct);
+                progress?.Report(new CalculationProgress(100, "Broomstick points recalculation complete.", 5, 5));
+                return new CalculationResult(true, "ProcessBroomstick", 0, DateTime.UtcNow - startTime, string.Empty);
             }
-
-            progress?.Report(new CalculationProgress(100, "Broomstick points recalculation complete.", 5, 5));
-            _logger.LogInfo($"BroomstickProcessor: Recalculation succeeded for WellID='{wellId}'. Duration={DateTime.UtcNow - startTime}.");
-
-            return result;
         }
         catch (OperationCanceledException)
         {
@@ -128,4 +156,14 @@ public class BroomstickProcessor : IBroomstickProcessor
             return new CalculationResult(false, "ProcessBroomstick", 0, DateTime.UtcNow - startTime, ex.Message);
         }
     }
+}
+
+internal class BroomstickLoggerBridge : IBroomstickLogger
+{
+    private readonly IAppLogger _logger;
+    public BroomstickLoggerBridge(IAppLogger logger) => _logger = logger;
+    public void Debug(string message) => _logger.LogInfo($"[DEBUG] {message}");
+    public void Info(string message) => _logger.LogInfo(message);
+    public void Warn(string message) => _logger.LogWarning(message);
+    public void Error(string message) => _logger.LogError(message);
 }

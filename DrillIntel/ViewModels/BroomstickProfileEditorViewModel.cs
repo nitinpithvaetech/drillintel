@@ -350,14 +350,15 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
 
         try
         {
-            BroomstickProfile.EnsureTableExists(_dataService);
+            BroomstickProfile.EnsureTableExists(_dataService, IsProjectContext);
 
             // If in project context and project has no profile yet, copy from master app template if available
             if (IsProjectContext && _appDataService != null)
             {
                 try
                 {
-                    var dt = _dataService.GetTable("SELECT COUNT(*) FROM APP_BS_GLOBAL_PROFILE;");
+                    var targetTable = BroomstickProfile.GetTargetTableName(_dataService, IsProjectContext);
+                    var dt = _dataService.GetTable($"SELECT COUNT(*) FROM {targetTable};");
                     if (dt != null && dt.Rows.Count > 0 && Convert.ToInt32(dt.Rows[0][0]) == 0)
                     {
                         BroomstickProfile.CopyMasterProfilesToProject(_appDataService, _dataService, out _);
@@ -369,7 +370,7 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
                 }
             }
 
-            var p = BroomstickProfile.LoadSingleProfile(_dataService, out string err);
+            var p = BroomstickProfile.LoadSingleProfile(_dataService, out string err, IsProjectContext);
             _currentProfile = p ?? BroomstickProfile.CreateDefault();
             ApplyModelToProperties(_currentProfile);
         }
@@ -695,10 +696,10 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
 
         try
         {
-            BroomstickProfile.EnsureTableExists(_dataService);
+            BroomstickProfile.EnsureTableExists(_dataService, IsProjectContext);
             WritePropertiesToModel(_currentProfile);
 
-            bool ok = BroomstickProfile.SaveProfile(_dataService, _currentProfile, _userName, out string err);
+            bool ok = BroomstickProfile.SaveProfile(_dataService, _currentProfile, _userName, out string err, IsProjectContext);
             if (ok)
             {
                 SetStatus($"Broomstick profile saved successfully at {DateTime.Now:HH:mm:ss}.", false);
