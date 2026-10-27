@@ -69,11 +69,71 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
     private string _notes = string.Empty;
 
     [ObservableProperty]
-    private int _profileType = 0; // 0 = Broomstick Plot, 1 = Hookload/Torque Plot
+    private bool _isDefault = true;
+
+    [ObservableProperty]
+    private int _profileType = 0; // 0 = Broomstick Plot (Hookload), 1 = Hookload/Torque Plot (Torque)
+
+    public bool IsHookloadType
+    {
+        get => ProfileType == 0;
+        set
+        {
+            if (value)
+            {
+                ProfileType = 0;
+            }
+            OnPropertyChanged(nameof(IsHookloadType));
+            OnPropertyChanged(nameof(IsTorqueType));
+        }
+    }
+
+    public bool IsTorqueType
+    {
+        get => ProfileType == 1;
+        set
+        {
+            if (value)
+            {
+                ProfileType = 1;
+            }
+            OnPropertyChanged(nameof(IsHookloadType));
+            OnPropertyChanged(nameof(IsTorqueType));
+        }
+    }
+
+    partial void OnProfileTypeChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsHookloadType));
+        OnPropertyChanged(nameof(IsTorqueType));
+    }
 
     // Downsampling & Interval Filtering
     [ObservableProperty]
     private int _downSampleOn = 0; // 0 = By Depth, 1 = By Time
+
+    public bool IsDownSampleByDepth => DownSampleOn == 0;
+    public bool IsDownSampleByTime => DownSampleOn == 1;
+
+    partial void OnDownSampleOnChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsDownSampleByDepth));
+        OnPropertyChanged(nameof(IsDownSampleByTime));
+        OnPropertyChanged(nameof(DataPointsDepthLabel));
+    }
+
+    public string DataPointsDepthLabel =>
+        DownSampleOn == 0 && !string.IsNullOrWhiteSpace(DepthUnit)
+            ? $"Data Points per ({DepthUnit})"
+            : "Data Points per";
+
+    public string DepthIntervalLabel =>
+        !string.IsNullOrWhiteSpace(DepthUnit)
+            ? $"Depth Interval ({DepthUnit})"
+            : "Depth Interval";
+
+    public string HookloadMinLabel => "Min";
+    public string HookloadMaxLabel => "Max";
 
     [ObservableProperty]
     private int _dataPoints = 6;
@@ -387,6 +447,7 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
         ProfileName = string.IsNullOrWhiteSpace(p.Name) ? "Default Profile" : p.Name;
         Notes = p.Notes ?? string.Empty;
         ProfileType = p.Type;
+        IsDefault = p.IsDefault;
 
         // Downsampling & interval
         DownSampleOn = p.DownSampleOn;
@@ -395,11 +456,21 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
         DepthInterval = p.DepthInterval > 0 ? p.DepthInterval : 100.0;
         IntervalWindow = p.IntervalWindow > 0 ? p.IntervalWindow : 10.0;
 
-        // Parse GroupFunctions string: e.g. "MIN,MAX,AVG"
+        // Parse GroupFunctions string: e.g. "0,1,2" or "MIN,MAX,AVG"
         var gf = (p.GroupFunctions ?? string.Empty).ToUpperInvariant();
-        GroupFuncMin = string.IsNullOrEmpty(gf) || gf.Contains("MIN");
-        GroupFuncMax = string.IsNullOrEmpty(gf) || gf.Contains("MAX");
-        GroupFuncAvg = string.IsNullOrEmpty(gf) || gf.Contains("AVG");
+        var tokens = gf.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+        if (tokens.Count == 0)
+        {
+            GroupFuncMin = true;
+            GroupFuncMax = true;
+            GroupFuncAvg = true;
+        }
+        else
+        {
+            GroupFuncMin = tokens.Contains("0") || tokens.Contains("MIN");
+            GroupFuncMax = tokens.Contains("1") || tokens.Contains("MAX");
+            GroupFuncAvg = tokens.Contains("2") || tokens.Contains("AVG");
+        }
 
         // Filtering
         FilterByRange = p.FilterByRange;
@@ -503,9 +574,9 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
     private string BuildGroupFunctionsString()
     {
         var list = new List<string>();
-        if (GroupFuncMin) list.Add("MIN");
-        if (GroupFuncMax) list.Add("MAX");
-        if (GroupFuncAvg) list.Add("AVG");
+        if (GroupFuncMin) list.Add("0");
+        if (GroupFuncMax) list.Add("1");
+        if (GroupFuncAvg) list.Add("2");
         return string.Join(",", list);
     }
 
@@ -606,7 +677,7 @@ public partial class BroomstickProfileEditorViewModel : ObservableObject
         p.Name = !string.IsNullOrWhiteSpace(ProfileName) ? ProfileName.Trim() : "Default Profile";
         p.Notes = Notes ?? string.Empty;
         p.Type = ProfileType;
-        p.IsDefault = true;
+        p.IsDefault = IsDefault;
 
         p.DownSampleOn = DownSampleOn;
         p.DataPoints = DataPoints;

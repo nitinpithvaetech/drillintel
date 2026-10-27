@@ -7,176 +7,139 @@
         xmlns:converters="clr-namespace:DrillIntel.Converters"
         mc:Ignorable="d"
         Title="Process and Save Drilling Connections" 
-        Height="420" Width="720"
+        Height="500" Width="740"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        Background="#0E1116"
-        Foreground="#E2E8F0">
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{DynamicResource MaterialDesignFont}">
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-
-        <!-- Green outlined action button style matching screenshot -->
-        <Style x:Key="GreenActionButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#10B981" />
-            <Setter Property="BorderBrush" Value="#059669" />
-            <Setter Property="BorderThickness" Value="1.5" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Padding" Value="14,6" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="{TemplateBinding BorderThickness}" 
-                                CornerRadius="4" 
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#10059669" />
-                                <Setter Property="Foreground" Value="#34D399" />
-                                <Setter Property="BorderBrush" Value="#10B981" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#25059669" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#334155" />
-                                <Setter Property="Foreground" Value="#64748B" />
-                                <Setter Property="Cursor" Value="Arrow" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- Neutral cancel action button style -->
-        <Style x:Key="NeutralActionButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="#94A3B8" />
-            <Setter Property="BorderBrush" Value="#334155" />
-            <Setter Property="BorderThickness" Value="1.5" />
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Padding" Value="14,6" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                BorderThickness="{TemplateBinding BorderThickness}" 
-                                CornerRadius="4" 
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#15FFFFFF" />
-                                <Setter Property="Foreground" Value="#E2E8F0" />
-                                <Setter Property="BorderBrush" Value="#64748B" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="border" Property="BorderBrush" Value="#1E293B" />
-                                <Setter Property="Foreground" Value="#475569" />
-                                <Setter Property="Cursor" Value="Arrow" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
 
-    <Grid Margin="24">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
+            <!-- 0: Header Banner -->
             <RowDefinition Height="Auto" />
+            <!-- 1: Info Box -->
             <RowDefinition Height="Auto" />
+            <!-- 2: Parameters GroupBox -->
+            <RowDefinition Height="Auto" />
+            <!-- 3: Status & Progress -->
             <RowDefinition Height="*" />
+            <!-- 4: Bottom Action Bar -->
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Title -->
-        <TextBlock Grid.Row="0" Text="Process and Save Drilling Connections" 
-                   FontSize="18" FontWeight="Bold" Foreground="#F8FAFC" Margin="0,0,0,16" />
-
-        <!-- Info Box -->
-        <Border Grid.Row="1" Background="#0C2534" BorderBrush="#0E3D52" BorderThickness="1" CornerRadius="6" Padding="14,10" Margin="0,0,0,20">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <materialDesign:PackIcon Kind="InformationOutline" Width="20" Height="20" Foreground="#38BDF8" VerticalAlignment="Center" Margin="0,0,10,0" />
-                <TextBlock Text="This function allows processing drilling connections of entire well and save it to the database." 
-                           Foreground="#BAE6FD" FontSize="13" FontWeight="Normal" VerticalAlignment="Center" />
-            </StackPanel>
+        <!-- 0: Header Banner -->
+        <Border Grid.Row="0" Background="#F4F3F8" CornerRadius="8" Padding="14,12" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                
+                <materialDesign:PackIcon Grid.Column="0" Kind="AxisZRotateClockwise" Width="36" Height="36" 
+                                        Foreground="{DynamicResource PrimaryHueMidBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Process and Save Drilling Connections" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                        <TextBlock Text="Well: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding WellName}" FontWeight="Bold" Foreground="#212121" FontSize="12" Margin="0,0,16,0" />
+                        <TextBlock Text="Log: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding LogName}" Foreground="#212121" FontSize="12" Margin="0,0,16,0" />
+                        <TextBlock Text="Existing Connections: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding ExistingConnectionsCount}" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- Main Options Area -->
-        <StackPanel Grid.Row="2" VerticalAlignment="Top">
-            <!-- Option 1: Skip connections more than X min -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,16">
-                <CheckBox IsChecked="{Binding SkipConnectionsMoreThan}" 
-                          IsEnabled="{Binding CanStart}"
-                          Foreground="#E2E8F0" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock Text="Skip drilling connections having time more than" 
-                           Foreground="#CBD5E1" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <Border Background="#161B22" BorderBrush="#334155" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
-                    <TextBox Text="{Binding SkipMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                             IsEnabled="{Binding CanStart}"
-                             Foreground="#F8FAFC" Background="Transparent" BorderThickness="0" 
-                             Width="42" TextAlignment="Center" FontSize="13" FontWeight="Bold" />
-                </Border>
-                <TextBlock Text="min" Foreground="#CBD5E1" FontSize="13" VerticalAlignment="Center" />
-            </StackPanel>
+        <!-- 1: Info Box -->
+        <Border Grid.Row="1" Background="#E8F4FD" BorderBrush="#B6E0FE" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <materialDesign:PackIcon Kind="InformationOutline" Width="18" Height="18" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Grid.Column="1" 
+                           Text="This function allows processing drilling connections of entire well and save it to the database." 
+                           Foreground="#0369A1" FontSize="12" FontWeight="Normal" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </Grid>
+        </Border>
 
-            <!-- Option 2: Day Time Hours From -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,16">
-                <TextBlock Text="Day Time Hours From" Foreground="#94A3B8" FontSize="13" VerticalAlignment="Center" Margin="0,0,14,0" />
-                
-                <Border Background="#161B22" BorderBrush="#334155" BorderThickness="1" CornerRadius="4" Padding="10,4">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="From " Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBox Text="{Binding DayTimeHoursFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+        <!-- 2: Parameters GroupBox -->
+        <GroupBox Grid.Row="2" Header="Connection Parameters" materialDesign:ElevationAssist.Elevation="Dp1" Padding="14,12" Margin="0,0,0,14">
+            <StackPanel>
+                <!-- Option 1: Skip connections more than X min -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <CheckBox IsChecked="{Binding SkipConnectionsMoreThan}" 
+                              IsEnabled="{Binding CanStart}"
+                              VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="Skip drilling connections having time more than" 
+                               Foreground="{DynamicResource MaterialDesignBody}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                        <TextBox Text="{Binding SkipMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                  IsEnabled="{Binding CanStart}"
-                                 Foreground="#F8FAFC" Background="Transparent" BorderThickness="0" 
-                                 Width="55" FontSize="13" FontWeight="SemiBold" TextAlignment="Center" />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+                                 Foreground="{DynamicResource MaterialDesignBody}" Background="Transparent" BorderThickness="0" 
+                                 Width="44" TextAlignment="Center" FontSize="13" FontWeight="Bold" VerticalContentAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="min" Foreground="#616161" FontSize="13" VerticalAlignment="Center" />
+                </StackPanel>
 
-            <!-- Option 3: Overwrite existing connection information -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,20">
-                <CheckBox IsChecked="{Binding OverwriteExisting}" 
-                          IsEnabled="{Binding CanStart}"
-                          Foreground="#E2E8F0" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <TextBlock Text="Overwrite existing connection information" 
-                           Foreground="#94A3B8" FontSize="13" VerticalAlignment="Center" />
-            </StackPanel>
+                <!-- Option 2: Day Time Hours From -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <TextBlock Text="Day Time Hours From" Foreground="#616161" FontSize="13" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    
+                    <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="From " Foreground="#757575" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox Text="{Binding DayTimeHoursFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     IsEnabled="{Binding CanStart}"
+                                     Foreground="{DynamicResource MaterialDesignBody}" Background="Transparent" BorderThickness="0" 
+                                     Width="55" FontSize="13" FontWeight="SemiBold" TextAlignment="Center" VerticalContentAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
 
-            <!-- Status and Progress Display -->
-            <StackPanel Margin="0,0,0,10">
+                <!-- Option 3: Overwrite existing connection information -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <CheckBox IsChecked="{Binding OverwriteExisting}" 
+                              IsEnabled="{Binding CanStart}"
+                              VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="Overwrite existing connection information" 
+                               Foreground="{DynamicResource MaterialDesignBody}" FontSize="13" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 3: Progress and Status Area -->
+        <Border Grid.Row="3" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,16">
+            <StackPanel VerticalAlignment="Center">
+                <!-- Status Message -->
                 <DockPanel LastChildFill="False" Margin="0,0,0,6">
-                    <TextBlock DockPanel.Dock="Left" Text="{Binding ProgressStatus}" FontSize="12" Foreground="#94A3B8" TextTrimming="CharacterEllipsis" />
-                    <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressPercent, StringFormat='{}{0:F0}%'}" FontSize="12" FontWeight="Bold" Foreground="#10B981" 
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding ProgressStatus}" FontSize="12" FontWeight="Medium" Foreground="#424242" TextTrimming="CharacterEllipsis" />
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressPercent, StringFormat='{}{0:F0}%'}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" 
                                Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
                 </DockPanel>
 
-                <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="6" 
-                             Foreground="#10B981" Background="#1E293B" BorderThickness="0"
+                <!-- Progress Bar -->
+                <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="8" 
+                             Foreground="{DynamicResource PrimaryHueMidBrush}" Background="#E0E0E0" BorderThickness="0"
                              materialDesign:TransitionAssist.DisableTransitions="True"
                              Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
 
-                <TextBlock Text="{Binding ErrorMessage}" Foreground="#EF4444" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" 
+                <!-- Error message if any -->
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#D32F2F" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" 
                            Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
             </StackPanel>
-        </StackPanel>
+        </Border>
 
-        <!-- Bottom Action Buttons Bar -->
-        <Grid Grid.Row="3" Margin="0,8,0,0">
+        <!-- 4: Bottom Action Buttons Bar -->
+        <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -187,21 +150,23 @@
                 <!-- Start Button -->
                 <Button Command="{Binding StartCommand}" 
                         IsEnabled="{Binding CanStart}"
-                        Style="{StaticResource GreenActionButtonStyle}" 
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Height="36" Padding="16,0"
                         Margin="0,0,10,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="Play" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Start" VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="Play" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Start" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
 
                 <!-- Cancel Button -->
                 <Button Command="{Binding CancelCommand}" 
                         IsEnabled="{Binding CanCancel}"
-                        Style="{StaticResource NeutralActionButtonStyle}" 
+                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                        Height="36" Padding="14,0"
                         Margin="0,0,10,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="Close" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <materialDesign:PackIcon Kind="Close" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="Cancel" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -209,9 +174,11 @@
                 <!-- Clear DB Entries Button -->
                 <Button Command="{Binding ClearDbEntriesCommand}" 
                         IsEnabled="{Binding CanStart}"
-                        Style="{StaticResource GreenActionButtonStyle}">
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Foreground="#C62828" BorderBrush="#EF9A9A"
+                        Height="36" Padding="14,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="BackupRestore" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <materialDesign:PackIcon Kind="DeleteOutline" Width="18" Height="18" Foreground="#C62828" VerticalAlignment="Center" Margin="0,0,6,0" />
                         <TextBlock Text="Clear DB Entries" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -219,7 +186,8 @@
 
             <!-- Right Button: Close -->
             <Button Grid.Column="1" Command="{Binding CloseCommand}" 
-                    Style="{StaticResource GreenActionButtonStyle}">
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Height="36" Padding="16,0" MinWidth="90">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <materialDesign:PackIcon Kind="Close" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBlock Text="Close" VerticalAlignment="Center" />

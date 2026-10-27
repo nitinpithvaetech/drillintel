@@ -46,6 +46,40 @@
             <Setter Property="Foreground" Value="#757575" />
             <Setter Property="FontWeight" Value="Medium" />
         </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBodyLight}" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+
+        <Style x:Key="OutlinedInput" TargetType="TextBox" BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="materialDesign:TextFieldAssist.TextFieldCornerRadius" Value="6" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+        </Style>
+
+        <Style x:Key="OutlinedCombo" TargetType="ComboBox" BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="materialDesign:TextFieldAssist.TextFieldCornerRadius" Value="6" />
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="False" />
+        </Style>
+
+        <Style x:Key="OutlinedBox" TargetType="Border">
+            <Setter Property="Height" Value="38" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}" />
+            <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
     </UserControl.Resources>
 
     <Grid Margin="18">
@@ -143,7 +177,7 @@
         <!-- 2. Main Content Tabs -->
         <TabControl Grid.Row="2" materialDesign:ColorZoneAssist.Mode="Standard">
 
-            <!-- TAB 1: General & Downsampling -->
+            <!-- TAB 1: General & Sampling (Filter Criteria) -->
             <TabItem>
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal">
@@ -153,119 +187,207 @@
                 </TabItem.Header>
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0,8,6,8">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                    <StackPanel Margin="4">
+                        <!-- TOP CARD: Profile Identity -->
+                        <materialDesign:Card Style="{StaticResource ParamCard}" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="Profile Identity" Style="{StaticResource SectionTitle}" />
 
-                        <!-- Left Column: Profile Info & Sampling -->
-                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                            <!-- Basic Profile Information -->
-                            <materialDesign:Card Style="{StaticResource ParamCard}">
-                                <StackPanel>
-                                    <TextBlock Text="Profile Identity &amp; Type" Style="{StaticResource SectionTitle}" />
-                                    <TextBox materialDesign:HintAssist.Hint="Configuration Name" Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" />
-                                    
-                                    <ComboBox materialDesign:HintAssist.Hint="Plot Type" SelectedIndex="{Binding ProfileType}" Margin="0,0,0,12">
-                                        <ComboBoxItem Content="Broomstick Plot" />
-                                        <ComboBoxItem Content="Hookload / Torque Plot" />
-                                    </ComboBox>
+                                <!-- Is Default Checkbox -->
+                                <CheckBox Content="Is Default" IsChecked="{Binding IsDefault}" FontWeight="SemiBold" Margin="0,0,0,14" />
 
-                                    <TextBox materialDesign:HintAssist.Hint="Notes / Description" Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
-                                             TextWrapping="Wrap" AcceptsReturn="True" Height="60" VerticalScrollBarVisibility="Auto" />
-                                </StackPanel>
-                            </materialDesign:Card>
+                                <!-- 3-Column Identity Row -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" MaxWidth="360" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" MaxWidth="360" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                            <!-- Downsampling Settings -->
-                            <materialDesign:Card Style="{StaticResource ParamCard}">
-                                <StackPanel>
-                                    <TextBlock Text="Downsampling &amp; Grouping" Style="{StaticResource SectionTitle}" />
-                                    
-                                    <Grid Margin="0,0,0,12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <ComboBox materialDesign:HintAssist.Hint="Downsample Method" SelectedIndex="{Binding DownSampleOn}" Margin="0,0,6,0">
-                                            <ComboBoxItem Content="By Measured Depth" />
-                                            <ComboBoxItem Content="By Time Interval" />
-                                        </ComboBox>
-                                        <TextBox Grid.Column="1" materialDesign:HintAssist.Hint="Data Points" Text="{Binding DataPoints}" Margin="6,0,0,0" />
-                                    </Grid>
-
-                                    <!-- Depth Parameters (when DownSampleOn == 0) -->
-                                    <Grid Margin="0,0,0,12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Depth Interval" Text="{Binding DepthInterval}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding DepthUnit}" Style="{StaticResource UnitText}" Margin="4,0,12,0" />
-                                        <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Interval Window" Text="{Binding IntervalWindow}" />
-                                        <TextBlock Grid.Column="3" Text="%" Style="{StaticResource UnitText}" />
-                                    </Grid>
-
-                                    <!-- Group Functions -->
-                                    <TextBlock Text="Calculated Group Functions:" FontSize="12" Foreground="#616161" Margin="0,4,0,6" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                        <CheckBox Content="Minimum" IsChecked="{Binding GroupFuncMin}" Margin="0,0,18,0" />
-                                        <CheckBox Content="Maximum" IsChecked="{Binding GroupFuncMax}" Margin="0,0,18,0" />
-                                        <CheckBox Content="Average" IsChecked="{Binding GroupFuncAvg}" />
+                                    <!-- Column 1: Profile Name -->
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock Text="Profile Name" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
                                     </StackPanel>
-                                </StackPanel>
-                            </materialDesign:Card>
-                        </StackPanel>
 
-                        <!-- Right Column: Filter Rules & Display Options -->
-                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                            <!-- Filter Rules Card -->
-                            <materialDesign:Card Style="{StaticResource ParamCard}">
-                                <StackPanel>
-                                    <TextBlock Text="Filtering &amp; Range Limits" Style="{StaticResource SectionTitle}" />
+                                    <!-- Column 2: Profile Type (Two adjacent selection boxes matching React) -->
+                                    <StackPanel Grid.Column="2">
+                                        <TextBlock Text="Profile Type" Style="{StaticResource FieldLabel}" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="10" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Style="{StaticResource OutlinedBox}" Cursor="Hand">
+                                                <CheckBox Content="Hookload" IsChecked="{Binding IsHookloadType}"
+                                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                                            </Border>
+                                            <Border Grid.Column="2" Style="{StaticResource OutlinedBox}" Cursor="Hand">
+                                                <CheckBox Content="Torque" IsChecked="{Binding IsTorqueType}"
+                                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
 
-                                    <!-- Hookload Range Filter -->
-                                    <CheckBox Content="Filter by Hookload Range" IsChecked="{Binding FilterByRange}" Margin="0,0,0,8" />
-                                    <Grid Margin="0,0,0,12" IsEnabled="{Binding FilterByRange}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Min Hookload" Text="{Binding MinHookload}" />
-                                        <TextBlock Grid.Column="1" Text="{Binding HookloadUnit}" Style="{StaticResource UnitText}" Margin="4,0,12,0" />
-                                        <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Max Hookload" Text="{Binding MaxHookload}" />
-                                        <TextBlock Grid.Column="3" Text="{Binding HookloadUnit}" Style="{StaticResource UnitText}" />
-                                    </Grid>
+                                    <!-- Column 3: Notes -->
+                                    <StackPanel Grid.Column="4">
+                                        <TextBlock Text="Notes" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </materialDesign:Card>
 
-                                    <!-- Depth Range Filter -->
-                                    <CheckBox Content="Filter by Depth Interval" IsChecked="{Binding FilterByInterval}" Margin="0,0,0,12" />
+                        <!-- MAIN CARD: Filter Criteria & Sampling (Directly matching React BroomstickHkldMgr.tsx) -->
+                        <materialDesign:Card Style="{StaticResource ParamCard}">
+                            <StackPanel>
+                                <TextBlock Text="Filter Criteria" Style="{StaticResource SectionTitle}" />
 
-                                    <ComboBox materialDesign:HintAssist.Hint="Points to Plot" SelectedIndex="{Binding PointsToPlot}" Margin="0,0,0,12">
-                                        <ComboBoxItem Content="Dynamic Points Only" />
-                                        <ComboBoxItem Content="Static Points Only" />
-                                        <ComboBoxItem Content="Both Dynamic &amp; Static" />
-                                    </ComboBox>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" MaxWidth="360" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" MaxWidth="360" />
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" MaxWidth="360" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                                    <!-- Show Depth Track & Width (VB: chkShowDepthTrack & txtDepthTrackWidth) -->
-                                    <Grid Margin="0,4,0,4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox Content="Show Depth Track" IsChecked="{Binding ShowDepthTrack}" VerticalAlignment="Center" />
-                                        <StackPanel Grid.Column="1" Orientation="Horizontal" IsEnabled="{Binding ShowDepthTrack}">
-                                            <TextBox Width="80" materialDesign:HintAssist.Hint="Track Width" Text="{Binding TrackWidth}" />
-                                            <TextBlock Text="px" Style="{StaticResource UnitText}" />
-                                        </StackPanel>
-                                    </Grid>
-                                </StackPanel>
-                            </materialDesign:Card>
-                        </StackPanel>
-                    </Grid>
+                                    <Grid.RowDefinitions>
+                                        <!-- Row 0: Down Sample Data On & Data Points per (and Minutes if By Time) -->
+                                        <RowDefinition Height="Auto" />
+                                        <!-- Row 1: Filter Headers -->
+                                        <RowDefinition Height="Auto" />
+                                        <!-- Row 2: Filter Inputs (Min, Max, Depth Interval) -->
+                                        <RowDefinition Height="Auto" />
+                                        <!-- Row 3: Group Function, Track Width, Interval Window -->
+                                        <RowDefinition Height="Auto" />
+                                        <!-- Row 4: Show Depth Track & Points To Plot -->
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- ROW 0: Down Sample Data On & Data Points -->
+                                    <!-- Col 0: Down Sample Data On -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,20">
+                                        <TextBlock Text="Down Sample Data On" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox SelectedIndex="{Binding DownSampleOn}" Style="{StaticResource OutlinedCombo}">
+                                            <ComboBoxItem Content="By Depth" />
+                                            <ComboBoxItem Content="By Time" />
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Col 2: Data Points per -->
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,20">
+                                        <TextBlock Text="{Binding DataPointsDepthLabel}" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding DataPoints, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- Col 4: Minutes (visible only when DownSampleOn == 1 / By Time) -->
+                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="0,0,0,20"
+                                                Visibility="{Binding IsDownSampleByTime, Converter={StaticResource BoolToVisibilityConverter}}">
+                                        <TextBlock Text="Minutes" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding TimePeriod, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- ROW 1: Filter Headers -->
+                                    <!-- Col 0: Filter By Data Range Header Checkbox -->
+                                    <CheckBox Grid.Row="1" Grid.Column="0"
+                                              Content="Filter By Data Range"
+                                              IsChecked="{Binding FilterByRange}"
+                                              FontWeight="SemiBold"
+                                              Margin="0,0,0,10" />
+
+                                    <!-- Col 4: Filter By Depth Intervals Header Checkbox (aligned above Depth Interval) -->
+                                    <CheckBox Grid.Row="1" Grid.Column="4"
+                                              Content="Filter By Depth Intervals"
+                                              IsChecked="{Binding FilterByInterval}"
+                                              FontWeight="SemiBold"
+                                              Margin="0,0,0,10" />
+
+                                    <!-- ROW 2: Filter Inputs -->
+                                    <!-- Col 0: Min (under Filter By Data Range) -->
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,0,20" IsEnabled="{Binding FilterByRange}">
+                                        <TextBlock Text="{Binding HookloadMinLabel}" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding MinHookload, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- Col 2: Max (under Filter By Data Range) -->
+                                    <StackPanel Grid.Row="2" Grid.Column="2" Margin="0,0,0,20" IsEnabled="{Binding FilterByRange}">
+                                        <TextBlock Text="{Binding HookloadMaxLabel}" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding MaxHookload, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- Col 4: Depth Interval (under Filter By Depth Intervals) -->
+                                    <StackPanel Grid.Row="2" Grid.Column="4" Margin="0,0,0,20" IsEnabled="{Binding FilterByInterval}">
+                                        <TextBlock Text="{Binding DepthIntervalLabel}" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding DepthInterval, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- ROW 3: Group Function, Track Width, Interval Window -->
+                                    <!-- Col 0: Group function -->
+                                    <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,0,20">
+                                        <TextBlock Text="Group function" Style="{StaticResource FieldLabel}" />
+                                        <Border Style="{StaticResource OutlinedBox}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox Grid.Column="0" Content="Min" IsChecked="{Binding GroupFuncMin}"
+                                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                                                <CheckBox Grid.Column="1" Content="Max" IsChecked="{Binding GroupFuncMax}"
+                                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                                                <CheckBox Grid.Column="2" Content="Avg" IsChecked="{Binding GroupFuncAvg}"
+                                                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- Col 2: Depth Track Width Pixels -->
+                                    <StackPanel Grid.Row="3" Grid.Column="2" Margin="0,0,0,20">
+                                        <TextBlock Text="Depth Track Width Pixels" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding TrackWidth, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}" />
+                                    </StackPanel>
+
+                                    <!-- Col 4: Filter Data Points Outside -->
+                                    <StackPanel Grid.Row="3" Grid.Column="4" Margin="0,0,0,20">
+                                        <TextBlock Text="Filter Data Points Outside" Style="{StaticResource FieldLabel}" />
+                                        <TextBox Text="{Binding IntervalWindow, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource OutlinedInput}"
+                                                 ToolTip="Filter data points outside this interval window (% mean)" />
+                                    </StackPanel>
+
+                                    <!-- ROW 4: Show Depth Track & Points To Plot -->
+                                    <!-- Col 0: Show Depth Track Checkbox -->
+                                    <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,0,6">
+                                        <CheckBox Content="Show Depth Track"
+                                                  IsChecked="{Binding ShowDepthTrack}"
+                                                  FontWeight="SemiBold"
+                                                  VerticalAlignment="Center"
+                                                  Margin="0,26,0,0" />
+                                    </StackPanel>
+
+                                    <!-- Col 2: Points To Plot ComboBox -->
+                                    <StackPanel Grid.Row="4" Grid.Column="2" Margin="0,0,0,6">
+                                        <TextBlock Text="Points To Plot" Style="{StaticResource FieldLabel}" />
+                                        <ComboBox SelectedIndex="{Binding PointsToPlot}" Style="{StaticResource OutlinedCombo}">
+                                            <ComboBoxItem Content="Dynamic" />
+                                            <ComboBoxItem Content="Static" />
+                                            <ComboBoxItem Content="Both" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
