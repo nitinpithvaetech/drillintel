@@ -1,4 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using DrillIntel.ViewModels.Broomstick;
+using DrillIntel.Views.Broomstick;
 using CommunityToolkit.Mvvm.Input;
 using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
@@ -151,6 +153,8 @@ public partial class MainViewModel : ObservableObject
         {
             newDb.PropertyChanged += OnDashboardPropertyChanged;
         }
+        OpenBroomstickWorkspaceCommand.NotifyCanExecuteChanged();
+        ManageBroomstickTemplatesCommand.NotifyCanExecuteChanged();
         SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
     }
@@ -159,7 +163,9 @@ public partial class MainViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(DashboardViewModel.SelectedNode))
         {
-            SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
+            OpenBroomstickWorkspaceCommand.NotifyCanExecuteChanged();
+        ManageBroomstickTemplatesCommand.NotifyCanExecuteChanged();
+        SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(CanSyncDataToParentTimelog));
         }
     }
@@ -374,6 +380,8 @@ public partial class MainViewModel : ObservableObject
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
+        OpenBroomstickWorkspaceCommand.NotifyCanExecuteChanged();
+        ManageBroomstickTemplatesCommand.NotifyCanExecuteChanged();
         SyncDataToParentTimelogCommand.NotifyCanExecuteChanged();
         OpenProjectBroomstickSettingsCommand.NotifyCanExecuteChanged();
         OpenBroomstickSettingsCommand.NotifyCanExecuteChanged();
@@ -1056,6 +1064,69 @@ public partial class MainViewModel : ObservableObject
         _activeWorkspaceWindow = window;
         window.Closed += (s, e) => _activeWorkspaceWindow = null;
         window.Show();
+
+        if (triggerNew)
+        {
+            await workspaceVm.NewDocumentAsync();
+        }
+    }
+
+    private BroomstickWorkspaceWindow? _activeBroomstickWorkspaceWindow;
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenBroomstickWorkspace()
+    {
+        await ShowBroomstickWorkspaceAsync(triggerNew: false);
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task ManageBroomstickTemplates()
+    {
+        if (!_session.IsProjectOpen) return;
+        var repo = new BroomstickTemplateRepository(_session);
+        var mgrVm = new BroomstickDocumentManagerViewModel(repo, _session);
+        await mgrVm.InitializeAsync();
+        var dlg = new BroomstickDocumentManagerDialog(mgrVm)
+        {
+            Owner = Application.Current?.MainWindow
+        };
+        dlg.ShowDialog();
+    }
+
+    private async Task ShowBroomstickWorkspaceAsync(bool triggerNew)
+    {
+        if (!_session.IsProjectOpen) return;
+
+        if (_activeBroomstickWorkspaceWindow != null && _activeBroomstickWorkspaceWindow.IsLoaded)
+        {
+            _activeBroomstickWorkspaceWindow.Activate();
+            if (_activeBroomstickWorkspaceWindow.WindowState == WindowState.Minimized)
+            {
+                _activeBroomstickWorkspaceWindow.WindowState = WindowState.Normal;
+            }
+            if (triggerNew && _activeBroomstickWorkspaceWindow.DataContext is BroomstickWorkspaceViewModel existingVm)
+            {
+                await existingVm.NewDocumentAsync();
+            }
+            return;
+        }
+
+        var repo = new BroomstickTemplateRepository(_session);
+        var bsDataService = new BroomstickDataService(_session);
+
+        var workspaceVm = new BroomstickWorkspaceViewModel(_session, repo, bsDataService);
+        var window = new BroomstickWorkspaceWindow
+        {
+            DataContext = workspaceVm,
+            Owner = Application.Current?.MainWindow
+        };
+
+        _activeBroomstickWorkspaceWindow = window;
+        window.Closed += (s, e) => _activeBroomstickWorkspaceWindow = null;
+        window.Show();
+
+        // Perform async data loading while workspace window is already shown
+        await workspaceVm.InitializeAsync();
 
         if (triggerNew)
         {

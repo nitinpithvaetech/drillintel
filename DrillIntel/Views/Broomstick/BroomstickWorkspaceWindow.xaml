@@ -1,0 +1,20 @@
+<Window x:Class="DrillIntel.Views.Broomstick.BroomstickWorkspaceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="clr-namespace:DrillIntel.Views.Broomstick"
+        xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels.Broomstick"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=viewmodels:BroomstickWorkspaceViewModel}"
+        Title="Broomstick Document Workspace" 
+        Height="900" Width="1440"
+        MinHeight="600" MinWidth="900"
+        WindowState="Maximized"
+        WindowStartupLocation="CenterScreen"
+        Background="#0B0E14">
+    <Grid>
+        <views:BroomstickWorkspaceView />
+    </Grid>
+</Window>
+

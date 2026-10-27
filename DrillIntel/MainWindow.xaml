@@ -195,6 +195,25 @@
                         </Fluent:MenuItem>
                     </Fluent:SplitButton>
                 </Fluent:RibbonGroupBox>
+                <Fluent:RibbonGroupBox Header="Broomstick">
+                    <Fluent:SplitButton Header="Broomstick Workspace" 
+                                        Command="{Binding OpenBroomstickWorkspaceCommand}" 
+                                        ToolTip="Open the Broomstick Document Workspace (TreeView + Multi-Tab Chart view).">
+                        <Fluent:SplitButton.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartScatterPlot" Foreground="#4F46E5" Width="32" Height="32" />
+                        </Fluent:SplitButton.LargeIcon>
+                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenBroomstickWorkspaceCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#4F46E5" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Manage Templates (Tree)..." Command="{Binding ManageBroomstickTemplatesCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FileTree" Foreground="#F59E0B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                    </Fluent:SplitButton>
+                </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Functions">
                     <Fluent:DropDownButton Header="Functions" 
                                            ToolTip="Processing Functions">
