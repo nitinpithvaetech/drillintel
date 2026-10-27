@@ -192,38 +192,6 @@ public partial class BroomstickDocumentManagerViewModel : ObservableObject
                 }
             }
 
-            // 4. If table was empty, seed default template
-            if (templates.Count == 0)
-            {
-                var doc = new BroomstickDocument
-                {
-                    DocumentName = "Broomstick Template 1",
-                    WellId = _currentWellId,
-                    WellboreId = _currentWellboreId,
-                    LogId = _currentLogId,
-                    PlanId = !string.IsNullOrWhiteSpace(_currentPlanId) ? _currentPlanId : "DEFAULT_PLAN",
-                    ProfileId = "Default Profile"
-                };
-                var item = new BroomstickTemplateItem
-                {
-                    TemplateId = doc.TemplateId,
-                    DocumentName = doc.DocumentName,
-                    WellId = doc.WellId,
-                    WellboreId = doc.WellboreId,
-                    LogId = doc.LogId,
-                    PlanId = doc.PlanId,
-                    ProfileId = doc.ProfileId,
-                    TemplateData = doc.SerializeToBlob(),
-                    IsDefault = true,
-                    CreatedBy = Environment.UserName,
-                    CreatedDate = DateTime.Now,
-                    ModifiedBy = Environment.UserName,
-                    ModifiedDate = DateTime.Now
-                };
-                await _repository.SaveTemplateAsync(item);
-                templates.Add(item);
-            }
-
             AllDocumentNodes.Clear();
             foreach (var tpl in templates)
             {
