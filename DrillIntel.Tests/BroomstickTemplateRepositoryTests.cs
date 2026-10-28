@@ -155,5 +155,22 @@ public class BroomstickTemplateRepositoryTests : IDisposable
         Assert.False(await _repo.TemplateNameExistsAsync("WELL-100", "production string", excludeTemplateId: "tpl-abc"));
         Assert.False(await _repo.TemplateNameExistsAsync("WELL-100", "Unknown Name"));
     }
+
+    [Fact]
+    public async Task GetTemplateByIdAsync_WhenTemplateDataIsTextJson_DoesNotThrow()
+    {
+        await _repo.EnsureTableAsync();
+        var conn = _session.GetConnection();
+
+        // Simulate SQLite record where TEMPLATE_DATA was stored as JSON text
+        await Dapper.SqlMapper.ExecuteAsync(conn, @"
+            INSERT INTO VMX_BROOMSTICK_TEMPLATES (TEMPLATE_ID, DOCUMENT_NAME, WELL_ID, TEMPLATE_DATA, IS_DEFAULT)
+            VALUES ('tpl-json-text', 'Json Doc', 'W-JSON', '{""TemplateId"":""tpl-json-text"",""DocumentName"":""Json Doc""}', 1);");
+
+        var item = await _repo.GetTemplateByIdAsync("tpl-json-text");
+        Assert.NotNull(item);
+        Assert.Equal("tpl-json-text", item.TemplateId);
+        Assert.NotNull(item.TemplateData);
+    }
 }
 

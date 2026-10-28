@@ -1090,10 +1090,13 @@ public partial class MainViewModel : ObservableObject
         {
             Owner = Application.Current?.MainWindow
         };
-        dlg.ShowDialog();
+        if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(mgrVm.SelectedTemplateIdToOpen))
+        {
+            await ShowBroomstickWorkspaceAsync(triggerNew: false, targetTemplateId: mgrVm.SelectedTemplateIdToOpen);
+        }
     }
 
-    private async Task ShowBroomstickWorkspaceAsync(bool triggerNew)
+    private async Task ShowBroomstickWorkspaceAsync(bool triggerNew, string? targetTemplateId = null)
     {
         if (!_session.IsProjectOpen) return;
 
@@ -1104,9 +1107,16 @@ public partial class MainViewModel : ObservableObject
             {
                 _activeBroomstickWorkspaceWindow.WindowState = WindowState.Normal;
             }
-            if (triggerNew && _activeBroomstickWorkspaceWindow.DataContext is BroomstickWorkspaceViewModel existingVm)
+            if (_activeBroomstickWorkspaceWindow.DataContext is BroomstickWorkspaceViewModel existingVm)
             {
-                await existingVm.NewDocumentAsync();
+                if (triggerNew)
+                {
+                    await existingVm.NewDocumentAsync();
+                }
+                else if (!string.IsNullOrWhiteSpace(targetTemplateId))
+                {
+                    await existingVm.OpenTemplateByIdAsync(targetTemplateId);
+                }
             }
             return;
         }
@@ -1131,6 +1141,10 @@ public partial class MainViewModel : ObservableObject
         if (triggerNew)
         {
             await workspaceVm.NewDocumentAsync();
+        }
+        else if (!string.IsNullOrWhiteSpace(targetTemplateId))
+        {
+            await workspaceVm.OpenTemplateByIdAsync(targetTemplateId);
         }
     }
 

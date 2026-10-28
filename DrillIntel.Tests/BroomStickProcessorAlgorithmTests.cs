@@ -47,7 +47,7 @@ namespace DrillIntel.Tests
                 "VMX_BROOMSTICK_POINTS",
                 "VMX_BROOMSTICK_PRC_INFO",
                 "VMX_AKPI_DRLG_CONNECTIONS",
-                "VMX_BS_WELL_PROFILE",
+                "VMX_BS_GLOBAL_PROFILE",
                 "eVuMaxBroomstickProcessLog",
                 "eVuMaxBroomstickWarnings"
             };
@@ -233,6 +233,47 @@ namespace DrillIntel.Tests
             cmd.CommandText = "SELECT COUNT(*) FROM VMX_BROOMSTICK_PRC_INFO WHERE WELL_ID='TEST_EMPTY_WELL';";
             long prcCount = Convert.ToInt64(cmd.ExecuteScalar());
             Assert.True(prcCount >= 0);
+        }
+
+        [Fact]
+        public void ProcessPoints_WhenProjectHasVmxBsGlobalProfile_LoadsProfileWithoutWellProfileTable()
+        {
+            BroomStickProcessor.EnsureTables(_dataService);
+            BroomstickProfile.EnsureTableExists(_dataService, isProjectDatabase: true);
+
+            // Insert single project profile into VMX_BS_GLOBAL_PROFILE (IS_DEFAULT = 0 to verify fallback works)
+            var profile = new BroomstickProfile
+            {
+                ID = "DEFAULT-BS-PROFILE-001",
+                Name = "Default Profile",
+                PkupPumpChannel = "SPPA",
+                PkupPumpCutOff = 99,
+                PkupRPMCutOff = 12,
+                PkupMinMovement = 5,
+                PkupMaxMovment = 70,
+                IsDefault = false
+            };
+            BroomstickProfile.SaveProfile(_dataService, profile, "SYSTEM", out _, isProjectDatabase: true);
+
+            var timeLog = new TimeLog
+            {
+                WellID = "WELL_TEST_PROJECT",
+                ObjectID = "TL_01",
+                nameLog = "Main Timelog"
+            };
+
+            var processor = new BroomStickProcessor(_dataService, "WELL_TEST_PROJECT", timeLog);
+            processor.TaskID = "TASK_P01";
+
+            // Act - ProcessPoints should load the profile from VMX_BS_GLOBAL_PROFILE and not abort with missing profile
+            processor.ProcessPoints();
+
+            // Verify setup was populated from the profile in VMX_BS_GLOBAL_PROFILE
+            Assert.Equal("SPPA", processor._objSetup.pickupPumpMnemonic);
+            Assert.Equal(99.0, processor._objSetup.pickupCutOffValue);
+            Assert.Equal(12.0, processor._objSetup.pickupRPMCutOff);
+            Assert.Equal(5, processor._objSetup.pickupMinBlockMovement);
+            Assert.Equal(70, processor._objSetup.pickupMaxBlockMovement);
         }
     }
 }

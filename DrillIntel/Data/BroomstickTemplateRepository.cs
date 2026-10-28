@@ -79,6 +79,14 @@ CREATE INDEX IF NOT EXISTS IX_VMX_BS_TEMPLATES_NAME ON VMX_BROOMSTICK_TEMPLATES(
         await EnsureTableAsync(conn);
     }
 
+    private static byte[]? ExtractBytes(object? val)
+    {
+        if (val == null || val is DBNull) return null;
+        if (val is byte[] b) return b;
+        if (val is string s) return System.Text.Encoding.UTF8.GetBytes(s);
+        return null;
+    }
+
     public async Task<List<BroomstickTemplateItem>> GetTemplatesAsync(string wellId, string? logId = null)
     {
         var conn = GetConnection();
@@ -122,7 +130,7 @@ CREATE INDEX IF NOT EXISTS IX_VMX_BS_TEMPLATES_NAME ON VMX_BROOMSTICK_TEMPLATES(
                 PlanId = (string?)r.PlanId,
                 ProfileId = (string?)r.ProfileId,
                 Description = (string?)r.Description,
-                TemplateData = (byte[]?)r.TemplateData,
+                TemplateData = ExtractBytes(r.TemplateData),
                 IsDefault = Convert.ToInt32(r.IsDefault ?? 0) == 1,
                 CreatedBy = (string?)r.CreatedBy,
                 ModifiedBy = (string?)r.ModifiedBy
@@ -180,7 +188,7 @@ CREATE INDEX IF NOT EXISTS IX_VMX_BS_TEMPLATES_NAME ON VMX_BROOMSTICK_TEMPLATES(
                 PlanId = (string?)r.PlanId,
                 ProfileId = (string?)r.ProfileId,
                 Description = (string?)r.Description,
-                TemplateData = (byte[]?)r.TemplateData,
+                TemplateData = ExtractBytes(r.TemplateData),
                 IsDefault = Convert.ToInt32(r.IsDefault ?? 0) == 1,
                 CreatedBy = (string?)r.CreatedBy,
                 ModifiedBy = (string?)r.ModifiedBy
@@ -236,7 +244,7 @@ CREATE INDEX IF NOT EXISTS IX_VMX_BS_TEMPLATES_NAME ON VMX_BROOMSTICK_TEMPLATES(
             PlanId = (string?)r.PlanId,
             ProfileId = (string?)r.ProfileId,
             Description = (string?)r.Description,
-            TemplateData = (byte[]?)r.TemplateData,
+            TemplateData = ExtractBytes(r.TemplateData),
             IsDefault = Convert.ToInt32(r.IsDefault ?? 0) == 1,
             CreatedBy = (string?)r.CreatedBy,
             ModifiedBy = (string?)r.ModifiedBy

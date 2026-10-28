@@ -162,11 +162,6 @@ CREATE TABLE IF NOT EXISTS VMX_BROOMSTICK_PRC_INFO (
     TYPE INTEGER NOT NULL,
     PRC_LAST_DATE TEXT
 );
-CREATE TABLE IF NOT EXISTS VMX_BS_WELL_PROFILE (
-    WELL_ID TEXT NOT NULL PRIMARY KEY,
-    BS_PROFILE_ID TEXT,
-    HKLD_PROFILE_ID TEXT
-);
 CREATE TABLE IF NOT EXISTS eVuMaxBroomstickWarnings (
     ID TEXT PRIMARY KEY,
     WellId TEXT NOT NULL,
@@ -443,14 +438,15 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
                 objRigState = rigState.loadWellRigStateSetup(ref objDataService, WellID);
 
-                // First load PUSO Settings for the well
+                // First load PUSO Settings for the well from project profile (VMX_BS_GLOBAL_PROFILE)
                 WellPUSOSettings objPUSOSettings = null!;
 
-                // First retrieve the BS Profile associated with the well
-                BroomstickProfile? objBSProfile = BroomstickProfile.getWellBSProfile(objDataService, WellID);
+                processLogger?.Debug("Loading project Broomstick profile from VMX_BS_GLOBAL_PROFILE...");
+                BroomstickProfile? objBSProfile = BroomstickProfile.LoadSingleProfile(objDataService, out lastError, isProjectDatabase: true);
 
                 if (objBSProfile != null)
                 {
+                    processLogger?.Debug($"Broomstick profile loaded: '{objBSProfile.Name}' (ID: {objBSProfile.ID}). Using profile settings ...");
                     objPUSOSettings = new WellPUSOSettings();
                     objPUSOSettings.WellID = WellID;
                     objPUSOSettings.RunNo = "";
@@ -482,83 +478,9 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
                 }
                 else
                 {
-                    processLogger?.Debug("Finding default profile ");
-                    string defaultProfileID = "";
-
-                    DataTable dataDefaultProfile = objDataService.GetTable("SELECT ID FROM VMX_BS_GLOBAL_PROFILE WHERE IS_DEFAULT=1 LIMIT 1");
-                    if (dataDefaultProfile != null && dataDefaultProfile.Rows.Count > 0)
-                    {
-                        defaultProfileID = dataDefaultProfile.Rows[0]["ID"].ToString() ?? "";
-                        dataDefaultProfile.Dispose();
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(defaultProfileID))
-                    {
-                        processLogger?.Debug("Default profile found. Using the default profile settings ...");
-                        BroomstickProfile? objDefaultProfile = BroomstickProfile.loadProfile(objDataService, defaultProfileID, ref lastError);
-
-                        if (objDefaultProfile != null)
-                        {
-                            objPUSOSettings = new WellPUSOSettings();
-                            objPUSOSettings.WellID = WellID;
-                            objPUSOSettings.RunNo = "";
-                            objPUSOSettings.DepthMovementTime = objDefaultProfile.TimeThreshold;
-                            objPUSOSettings.ROTPoints = (int)objDefaultProfile.RotPoints;
-                            objPUSOSettings.ROTTolerance = objDefaultProfile.RotChange;
-                            objPUSOSettings.ROTMaxRPM = objDefaultProfile.RotMaxRPM;
-                            objPUSOSettings.ROTMinRPM = objDefaultProfile.RotMinRPM;
-                            objPUSOSettings.ROTPumpCutOff = objDefaultProfile.RotPumpCutOff;
-                            objPUSOSettings.ROTChannel = objDefaultProfile.RotPumpChannel;
-                            objPUSOSettings.SOFilterMaxLocal = objDefaultProfile.SlkLocalMax;
-                            objPUSOSettings.SODynMethod = objDefaultProfile.SlkDynamicMethod;
-                            objPUSOSettings.SOMinMovement = objDefaultProfile.SlkMinMovement;
-                            objPUSOSettings.SOMaxMovement = objDefaultProfile.SlkMaxMovment;
-                            objPUSOSettings.SORPMCutOff = objDefaultProfile.SlkRPMCutOff;
-                            objPUSOSettings.SOPumpCutOff = objDefaultProfile.SlkPumpCutOff;
-                            objPUSOSettings.SOChannel = objDefaultProfile.SlkPumpChannel;
-                            objPUSOSettings.PUFilterMaxLocal = objDefaultProfile.PkupLocalMax;
-                            objPUSOSettings.PUDynMethod = objDefaultProfile.PkupDynamicMethod;
-                            objPUSOSettings.PUMinMovement = objDefaultProfile.PkupMinMovement;
-                            objPUSOSettings.PUMaxMovement = objDefaultProfile.PkupMaxMovment;
-                            objPUSOSettings.PURPMCutOff = objDefaultProfile.PkupRPMCutOff;
-                            objPUSOSettings.PUPumpCutOff = objDefaultProfile.PkupPumpCutOff;
-                            objPUSOSettings.PUChannel = objDefaultProfile.PkupPumpChannel;
-
-                            _objSetup.pickupRigStates = objDefaultProfile.PkupRigStates;
-                            _objSetup.slackOffRigStates = objDefaultProfile.SlkRigStates;
-                            _objSetup.rotateRigStates = objDefaultProfile.RotRigStates;
-
-                            string strloadSQL = "SELECT COUNT(*) FROM VMX_BS_WELL_PROFILE WHERE WELL_ID = @WellID";
-                            double rowCount = Convert.ToDouble(objDataService.GetValue(strloadSQL, new Dictionary<string, object?> { ["@WellID"] = WellID }) ?? 0);
-
-                            if (rowCount == 0)
-                            {
-                                string strInsertSQL = "INSERT INTO VMX_BS_WELL_PROFILE (WELL_ID,BS_PROFILE_ID,HKLD_PROFILE_ID) VALUES(@WELL_ID,@BS_PROFILE_ID,@HKLD_PROFILE_ID)";
-                                objDataService.ExecuteNonQuery(strInsertSQL, new Dictionary<string, object?>
-                                {
-                                    ["@WELL_ID"] = WellID,
-                                    ["@BS_PROFILE_ID"] = defaultProfileID,
-                                    ["@HKLD_PROFILE_ID"] = defaultProfileID
-                                });
-                            }
-                            else
-                            {
-                                string strUpdateSQL = "UPDATE VMX_BS_WELL_PROFILE SET BS_PROFILE_ID = @BS_PROFILE_ID, HKLD_PROFILE_ID = @HKLD_PROFILE_ID WHERE WELL_ID = @WELL_ID";
-                                objDataService.ExecuteNonQuery(strUpdateSQL, new Dictionary<string, object?>
-                                {
-                                    ["@WELL_ID"] = WellID,
-                                    ["@BS_PROFILE_ID"] = defaultProfileID,
-                                    ["@HKLD_PROFILE_ID"] = defaultProfileID
-                                });
-                            }
-                        }
-                    }
-                    else
-                    {
-                        processLogger?.Debug("No default profile found, aborting the process ");
-                        addBroomstickWarnings("Broomstick Profile is not assigned to the well and no default profile found. Please assign the profile to the well to detect broomstick points");
-                        return;
-                    }
+                    processLogger?.Debug("No default profile found, aborting the process ");
+                    addBroomstickWarnings("Broomstick Profile is not found in the project database. Please ensure a profile exists in VMX_BS_GLOBAL_PROFILE to detect broomstick points");
+                    return;
                 }
 
                 if (objPUSOSettings != null)

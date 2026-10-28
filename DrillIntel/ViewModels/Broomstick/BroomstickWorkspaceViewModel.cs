@@ -100,8 +100,13 @@ public partial class BroomstickWorkspaceViewModel : ObservableObject
         };
     }
 
+    private bool _isInitialized;
+
     public async Task InitializeAsync()
     {
+        if (_isInitialized) return;
+        _isInitialized = true;
+
         IsLoading = true;
         StatusMessage = "Loading Broomstick documents...";
         try
@@ -118,10 +123,17 @@ public partial class BroomstickWorkspaceViewModel : ObservableObject
                 }
             }
         }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
         finally
         {
             IsLoading = false;
-            StatusMessage = "Ready";
+            if (StatusMessage == "Loading Broomstick documents...")
+            {
+                StatusMessage = "Ready";
+            }
         }
     }
 
@@ -366,31 +378,70 @@ public partial class BroomstickWorkspaceViewModel : ObservableObject
     {
         if (node == null) return;
 
-        // Check if tab already open
-        var existing = OpenDocuments.FirstOrDefault(d => d.CurrentTemplateId == node.TemplateId);
+        try
+        {
+            // Check if tab already open
+            var existing = OpenDocuments.FirstOrDefault(d => d.CurrentTemplateId == node.TemplateId);
+            if (existing != null)
+            {
+                ActiveDocument = existing;
+                return;
+            }
+
+            // Load document
+            var item = await _templateRepo.GetTemplateByIdAsync(node.TemplateId);
+            if (item == null) return;
+
+            var doc = BroomstickDocument.DeserializeFromBlob(item.TemplateData) ?? new BroomstickDocument();
+            doc.TemplateId = item.TemplateId;
+            doc.DocumentName = item.DocumentName;
+            doc.WellId = !string.IsNullOrWhiteSpace(item.WellId) ? item.WellId : doc.WellId;
+            doc.WellboreId = !string.IsNullOrWhiteSpace(item.WellboreId) ? item.WellboreId : doc.WellboreId;
+            doc.LogId = !string.IsNullOrWhiteSpace(item.LogId) ? item.LogId : doc.LogId;
+            doc.PlanId = !string.IsNullOrWhiteSpace(item.PlanId) ? item.PlanId : doc.PlanId;
+            doc.ProfileId = !string.IsNullOrWhiteSpace(item.ProfileId) ? item.ProfileId : doc.ProfileId;
+            doc.IsDefault = item.IsDefault;
+
+            var docVm = new BroomstickDocumentViewModel(_session, _templateRepo, _broomstickDataService, doc);
+            WireDialogHandlers(docVm);
+            await docVm.InitializeAsync();
+
+            OpenDocuments.Add(docVm);
+            ActiveDocument = docVm;
+            StatusMessage = $"Opened document '{doc.DocumentName}'.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Failed to open document '{node.DocumentName}': {ex.Message}";
+        }
+    }
+
+    public async Task OpenTemplateByIdAsync(string templateId)
+    {
+        if (string.IsNullOrWhiteSpace(templateId)) return;
+
+        var existing = OpenDocuments.FirstOrDefault(d => d.CurrentTemplateId == templateId);
         if (existing != null)
         {
             ActiveDocument = existing;
             return;
         }
 
-        // Load document
-        var item = await _templateRepo.GetTemplateByIdAsync(node.TemplateId);
-        if (item == null) return;
-
-        var doc = BroomstickDocument.DeserializeFromBlob(item.TemplateData) ?? new BroomstickDocument();
-        doc.TemplateId = item.TemplateId;
-        doc.DocumentName = item.DocumentName;
-        doc.WellId = item.WellId;
-        doc.PlanId = item.PlanId ?? "";
-        doc.IsDefault = item.IsDefault;
-
-        var docVm = new BroomstickDocumentViewModel(_session, _templateRepo, _broomstickDataService, doc);
-        WireDialogHandlers(docVm);
-        await docVm.InitializeAsync();
-
-        OpenDocuments.Add(docVm);
-        ActiveDocument = docVm;
+        var node = AllDocumentNodes.FirstOrDefault(n => n.TemplateId == templateId);
+        if (node != null)
+        {
+            SelectedTreeNode = node;
+            await OpenDocumentNodeAsync(node);
+        }
+        else
+        {
+            var item = await _templateRepo.GetTemplateByIdAsync(templateId);
+            if (item != null)
+            {
+                var docNode = new BroomstickDocumentTreeNode(item);
+                await OpenDocumentNodeAsync(docNode);
+            }
+        }
     }
 
     private void WireDialogHandlers(BroomstickDocumentViewModel docVm)
@@ -407,7 +458,12 @@ public partial class BroomstickWorkspaceViewModel : ObservableObject
         {
             var dlg = new BroomstickDocumentManagerDialog(mgrVm);
             if (Application.Current?.MainWindow != null) dlg.Owner = Application.Current.MainWindow;
-            return dlg.ShowDialog();
+            var res = dlg.ShowDialog();
+            if (res == true && !string.IsNullOrWhiteSpace(mgrVm.SelectedTemplateIdToOpen))
+            {
+                _ = OpenTemplateByIdAsync(mgrVm.SelectedTemplateIdToOpen);
+            }
+            return res;
         };
 
         docVm.OpenDataSelectorDialogHandler = (dataVm) =>

@@ -503,26 +503,15 @@ WHERE ID = @ID;";
         }
 
         /// <summary>
-        /// Retrieves the BroomstickProfile associated with the well from the Project database.
-        /// Loads from VMX_BS_GLOBAL_PROFILE.
+        /// Retrieves the BroomstickProfile associated with the project from VMX_BS_GLOBAL_PROFILE.
+        /// (Note: VMX_BS_WELL_PROFILE is not used; project settings are stored in VMX_BS_GLOBAL_PROFILE).
         /// </summary>
         public static BroomstickProfile? getWellBSProfile(IDataServiceDIntel db, string wellID)
         {
             try
             {
-                if (db == null || string.IsNullOrWhiteSpace(wellID)) return null;
-                string sql = "SELECT BS_PROFILE_ID FROM VMX_BS_WELL_PROFILE WHERE WELL_ID = @WellID";
-                var dt = db.GetTable(sql, new Dictionary<string, object?> { ["@WellID"] = wellID.Trim() });
-                if (dt != null && dt.Rows.Count > 0)
-                {
-                    string profileID = Convert.ToString(dt.Rows[0]["BS_PROFILE_ID"]) ?? "";
-                    if (!string.IsNullOrWhiteSpace(profileID))
-                    {
-                        string lastError = "";
-                        return LoadProfile(db, profileID, out lastError);
-                    }
-                }
-                return null;
+                if (db == null) return null;
+                return LoadSingleProfile(db, out _, isProjectDatabase: true);
             }
             catch
             {

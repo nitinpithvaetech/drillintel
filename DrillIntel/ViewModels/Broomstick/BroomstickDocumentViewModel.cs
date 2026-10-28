@@ -84,13 +84,37 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
     partial void OnSelectedPlanChanged(AdnlHookloadPlan? value)
     {
-        if (value != null && value.PlanID != Document.PlanId)
+        if (value != null)
         {
             Document.PlanId = value.PlanID;
-            Document.BroomstickPlanData = value;
-            IsDirty = true;
-            ChartNeedsRepaint?.Invoke();
+            _ = LoadFullPlanDataAsync(value.PlanID);
         }
+    }
+
+    public async Task LoadFullPlanDataAsync(string? planId)
+    {
+        if (string.IsNullOrWhiteSpace(planId))
+        {
+            Document.BroomstickPlanData = null;
+            ChartNeedsRepaint?.Invoke();
+            return;
+        }
+
+        var ds = _session.IsProjectOpen ? _session.GetDataService() : _dataService?.GetDataService();
+        if (ds != null)
+        {
+            try
+            {
+                var fullPlan = await Task.Run(() => AdnlHookloadPlan.loadObject(ds, WellId, WellboreId, LogId, planId));
+                Document.BroomstickPlanData = fullPlan;
+            }
+            catch
+            {
+                Document.BroomstickPlanData = null;
+            }
+        }
+        IsDirty = true;
+        ChartNeedsRepaint?.Invoke();
     }
 
     // Chart Display Settings
@@ -297,6 +321,11 @@ public partial class BroomstickDocumentViewModel : ObservableObject
                 else
                 {
                     SelectedPlan = AvailablePlans.FirstOrDefault();
+                }
+
+                if (SelectedPlan != null)
+                {
+                    await LoadFullPlanDataAsync(SelectedPlan.PlanID);
                 }
 
                 // 2. Load calculated points from VMX_BROOMSTICK_POINTS

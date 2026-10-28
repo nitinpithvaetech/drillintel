@@ -33,10 +33,32 @@ public partial class BroomstickWorkspaceView : UserControl
 
     private async void OnTreeViewMouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (ViewModel != null && ViewModel.SelectedTreeNode != null)
+        if (ViewModel == null) return;
+
+        var targetNode = ViewModel.SelectedTreeNode;
+        if (targetNode == null && e.OriginalSource is DependencyObject dep)
         {
-            await ViewModel.OpenDocumentNodeCommand.ExecuteAsync(ViewModel.SelectedTreeNode);
+            var treeItem = FindVisualParent<TreeViewItem>(dep);
+            if (treeItem?.DataContext is BroomstickDocumentTreeNode docNode)
+            {
+                targetNode = docNode;
+            }
         }
+
+        if (targetNode != null)
+        {
+            await ViewModel.OpenDocumentNodeAsync(targetNode);
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent) return parent;
+            child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+        }
+        return null;
     }
 }
 
