@@ -107,7 +107,7 @@
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="28" />
                                                 </Grid.ColumnDefinitions>
-                                                
+
                                                 <!-- Right Arrow Section with separator -->
                                                 <Border x:Name="ArrowBox" 
                                                         Grid.Column="1" 
@@ -326,10 +326,10 @@
 
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Select Plan:" FontSize="11.5" FontWeight="Bold" Foreground="#334155" VerticalAlignment="Center" Margin="0,0,10,0" />
-                            <ComboBox Style="{StaticResource BroomstickPlanComboBoxStyle}"
+                            <ComboBox Style="{x:Null}"
                                       ItemsSource="{Binding AvailablePlans}" 
                                       SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
-                                      Width="650" MinWidth="550" MaxWidth="900" Height="30" FontSize="11.5" 
+                                      Width="320" MinWidth="320" MaxWidth="900" Height="30" FontSize="11.5" 
                                       VerticalContentAlignment="Center" Margin="0,0,14,0">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
@@ -433,7 +433,7 @@
                 <!-- Left: Preset Dropdown -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Preset Range:" Style="{StaticResource BarLabel}" />
-                    <ComboBox ItemsSource="{Binding RangePresets}" 
+                    <ComboBox Style="{x:Null}" ItemsSource="{Binding RangePresets}" 
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
                               Width="160" Height="28" VerticalContentAlignment="Center" FontSize="11" />
                 </StackPanel>
@@ -540,3 +540,5 @@
         </Border>
     </Grid>
 </UserControl>
+
+
