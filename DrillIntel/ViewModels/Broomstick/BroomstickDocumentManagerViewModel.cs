@@ -76,6 +76,17 @@ public partial class BroomstickDocumentManagerViewModel : ObservableObject
         _session = session;
         _wellDataRepo = wellDataRepo ?? (session != null ? new WellDataRepository(session) : null);
         _currentWellId = currentWellId ?? string.Empty;
+
+        ConfirmDeleteHandler = (title, message) =>
+        {
+            var activeWindow = System.Windows.Application.Current?.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive) 
+                               ?? System.Windows.Application.Current?.MainWindow;
+            if (activeWindow != null)
+            {
+                return System.Windows.MessageBox.Show(activeWindow, message, title, System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes;
+            }
+            return System.Windows.MessageBox.Show(message, title, System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning) == System.Windows.MessageBoxResult.Yes;
+        };
     }
 
     public BroomstickDocumentManagerViewModel(IBroomstickTemplateRepository repository, string currentWellId)
@@ -115,7 +126,18 @@ public partial class BroomstickDocumentManagerViewModel : ObservableObject
                 try
                 {
                     var plans = await Task.Run(() =>
-                        AdnlHookloadPlan.getAllPlans(_session.GetDataService(), _currentWellId, _currentWellboreId, _currentLogId));
+                    {
+                        var pList = AdnlHookloadPlan.GetMainPlanHeaders(_session.GetDataService(), _currentWellId, _currentWellboreId, _currentLogId);
+                        if ((pList == null || pList.Count == 0) && !string.IsNullOrWhiteSpace(_currentWellId))
+                        {
+                            pList = AdnlHookloadPlan.GetMainPlanHeaders(_session.GetDataService(), _currentWellId, null, null);
+                        }
+                        if (pList == null || pList.Count == 0)
+                        {
+                            pList = AdnlHookloadPlan.GetMainPlanHeaders(_session.GetDataService(), null, null, null);
+                        }
+                        return pList;
+                    });
                     if (plans != null && plans.Count > 0)
                     {
                         var first = plans.FirstOrDefault();
@@ -484,9 +506,22 @@ public partial class BroomstickDocumentManagerViewModel : ObservableObject
         if (!confirm) return;
 
         string deletedName = SelectedDocumentNode.DocumentName;
+        bool wasDefault = SelectedDocumentNode.IsDefault;
+        string wellId = SelectedDocumentNode.WellId;
         await _repository.DeleteTemplateAsync(SelectedDocumentNode.TemplateId);
 
         AllDocumentNodes.Remove(SelectedDocumentNode);
+
+        if (wasDefault && AllDocumentNodes.Count > 0)
+        {
+            var newDefault = AllDocumentNodes.FirstOrDefault(n => n.WellId == wellId) ?? AllDocumentNodes.FirstOrDefault();
+            if (newDefault != null)
+            {
+                newDefault.IsDefault = true;
+                await _repository.SetDefaultTemplateAsync(newDefault.TemplateId, newDefault.WellId);
+            }
+        }
+
         BuildTreeHierarchy();
         SelectedDocumentNode = AllDocumentNodes.FirstOrDefault(n => n.IsDefault) ?? AllDocumentNodes.FirstOrDefault();
         StatusMessage = $"Deleted template '{deletedName}'";

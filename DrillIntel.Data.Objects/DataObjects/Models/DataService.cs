@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace DrillIntel.Data.Objects.DataObjects.Models
 {
@@ -57,6 +58,14 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                 return parsed;
             if (DateTime.TryParse(str, out parsed))
                 return parsed;
+
+            if (str.Contains("Sept", StringComparison.OrdinalIgnoreCase))
+            {
+                string norm = Regex.Replace(str, @"\bSept\b", "Sep", RegexOptions.IgnoreCase);
+                if (DateTime.TryParse(norm, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed) || DateTime.TryParse(norm, out parsed))
+                    return parsed;
+            }
+
             if (double.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out double oaDate))
             {
                 try { return DateTime.FromOADate(oaDate); } catch { }

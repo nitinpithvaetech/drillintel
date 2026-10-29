@@ -98,15 +98,15 @@ public partial class BroomstickDocumentTreeNode : ObservableObject
 
     public string WellDisplay => !string.IsNullOrWhiteSpace(WellName)
         ? (!string.IsNullOrWhiteSpace(WellId) && !string.Equals(WellId, WellName, StringComparison.OrdinalIgnoreCase) ? $"{WellName} ({WellId})" : WellName)
-        : (!string.IsNullOrWhiteSpace(WellId) ? WellId : "(None)");
+        : (!string.IsNullOrWhiteSpace(WellId) ? WellId : "(Active Project Well)");
 
-    public string LogDisplay => !string.IsNullOrWhiteSpace(LogId) ? LogId : "(None)";
+    public string LogDisplay => !string.IsNullOrWhiteSpace(LogId) ? LogId : "(Active Primary Log)";
 
     public string PlanDisplay => !string.IsNullOrWhiteSpace(PlanName)
         ? (!string.IsNullOrWhiteSpace(PlanId) && !string.Equals(PlanId, PlanName, StringComparison.OrdinalIgnoreCase) ? $"{PlanName} ({PlanId})" : PlanName)
-        : (!string.IsNullOrWhiteSpace(PlanId) ? PlanId : "(None)");
+        : (!string.IsNullOrWhiteSpace(PlanId) && PlanId != "DEFAULT_PLAN" ? PlanId : "(Active Project Plan)");
 
-    public string ProfileDisplay => !string.IsNullOrWhiteSpace(ProfileId) ? ProfileId : "(Default Profile)";
+    public string ProfileDisplay => !string.IsNullOrWhiteSpace(ProfileId) ? ProfileId : "Default Profile";
 
     public BroomstickDocumentTreeNode(BroomstickTemplateItem model)
     {

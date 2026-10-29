@@ -12,7 +12,7 @@
         MinHeight="600" MinWidth="900"
         WindowState="Maximized"
         WindowStartupLocation="CenterScreen"
-        Background="#0B0E14">
+        Background="{DynamicResource MaterialDesignPaper}">
     <Grid>
         <views:BroomstickWorkspaceView />
     </Grid>

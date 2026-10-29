@@ -11,25 +11,29 @@
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=viewmodels:BroomstickDocumentViewModel}"
              d:DesignHeight="850" d:DesignWidth="1200"
-             Background="#0B0E14"
-             TextElement.Foreground="#E2E8F0"
+             Background="{DynamicResource MaterialDesignPaper}"
+             TextElement.Foreground="{DynamicResource MaterialDesignBody}"
              FontFamily="{DynamicResource MaterialDesignFont}">
 
     <UserControl.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
 
-        <!-- Dark Theme Popup Brushes for MaterialDesign Popups & Cards -->
-        <SolidColorBrush x:Key="MaterialDesignPaper" Color="#181E2B" />
-        <SolidColorBrush x:Key="MaterialDesignCardBackground" Color="#181E2B" />
-        <SolidColorBrush x:Key="MaterialDesignBody" Color="#F8FAFC" />
-        <SolidColorBrush x:Key="MaterialDesignToolTipBackground" Color="#1E293B" />
+        <Style x:Key="BarLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#555555" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+        </Style>
 
-        <!-- High-Contrast Dark ComboBoxItem Style -->
+        <!-- Clean Modern Light ComboBoxItem Style -->
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="#181E2B" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Padding" Value="10,6" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -40,16 +44,18 @@
                                 Background="{TemplateBinding Background}"
                                 BorderThickness="0"
                                 Padding="{TemplateBinding Padding}"
+                                CornerRadius="3"
+                                Margin="2,1"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left" />
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left" TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#2A3447" />
-                                <Setter Property="Foreground" Value="#38BDF8" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EFF6FF" />
+                                <Setter Property="Foreground" Value="#1976D2" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#4F46E5" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1976D2" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
                             </Trigger>
                             <MultiTrigger>
@@ -57,9 +63,112 @@
                                     <Condition Property="IsSelected" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#4338CA" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1565C0" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
                             </MultiTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Clean Modern Light ComboBox Style with Crisp White Dropdown Popup -->
+        <Style TargetType="ComboBox">
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <!-- ToggleButton for dropdown open/close -->
+                            <ToggleButton x:Name="ToggleButton" 
+                                          Focusable="False" 
+                                          IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" 
+                                          ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Border" 
+                                                Background="{TemplateBinding Background}" 
+                                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                                CornerRadius="4">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="22" />
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="Arrow" 
+                                                      Grid.Column="1" 
+                                                      HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center" 
+                                                      Data="M 0 0 L 4 4 L 8 0 Z" 
+                                                      Fill="#64748B" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="#1976D2" />
+                                                <Setter TargetName="Arrow" Property="Fill" Value="#1976D2" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <!-- Selected item content displayed in the closed combobox box -->
+                            <ContentPresenter x:Name="ContentSite" 
+                                              IsHitTestVisible="False" 
+                                              Content="{TemplateBinding SelectionBoxItem}" 
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
+                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" 
+                                              Margin="8,3,24,3" 
+                                              VerticalAlignment="Center" 
+                                              HorizontalAlignment="Left"
+                                              TextElement.Foreground="#1E293B"
+                                              TextElement.FontWeight="SemiBold" />
+
+                            <!-- Dropdown Popup with Solid White Background and Subtle Shadow -->
+                            <Popup x:Name="Popup" 
+                                   Placement="Bottom" 
+                                   IsOpen="{TemplateBinding IsDropDownOpen}" 
+                                   AllowsTransparency="True" 
+                                   Focusable="False" 
+                                   PopupAnimation="Slide">
+                                <Grid x:Name="DropDown" 
+                                      SnapsToDevicePixels="True" 
+                                      MinWidth="{TemplateBinding ActualWidth}" 
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border x:Name="DropDownBorder" 
+                                            Background="#FFFFFF" 
+                                            BorderBrush="#CBD5E1" 
+                                            BorderThickness="1" 
+                                            CornerRadius="4" 
+                                            Margin="0,2,0,0">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.15" Color="#000000" />
+                                        </Border.Effect>
+                                        <ScrollViewer Margin="2,4" SnapsToDevicePixels="True">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="DropDownBorder" Property="MinHeight" Value="50" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#94A3B8" />
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -69,61 +178,40 @@
 
     <Grid Margin="10">
         <Grid.RowDefinitions>
-            <!-- 0: Control Header (Select Plan, V / % / U, Actions) -->
+            <!-- 0: Control Header (Select Plan, Actions) -->
             <RowDefinition Height="Auto" />
             <!-- 1: TeeChart Plot Canvas with Floating Legend & Hover Tooltip -->
             <RowDefinition Height="*" />
-            <!-- 2: Sub-chart Bar (Formation Top, Section, View Casing) -->
+            <!-- 2: Navigation & Range Filter Control Bar (Above dataSelector TrackBar) -->
             <RowDefinition Height="Auto" />
-            <!-- 3: Navigation & Range Filter Control Bar (Above dataSelector TrackBar) -->
+            <!-- 3: Data Selector Range TrackBar Scroller -->
             <RowDefinition Height="Auto" />
-            <!-- 4: Data Selector Range TrackBar Scroller -->
-            <RowDefinition Height="Auto" />
-            <!-- 5: Bottom Status Bar -->
+            <!-- 4: Bottom Status Bar -->
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 0: Control Header Bar (Matching Image 1) -->
-        <Border Grid.Row="0" Background="#121620" BorderBrush="#232B3A" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+        <!-- 0: Control Header Bar -->
+        <Border Grid.Row="0" Background="#F4F3F8" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <!-- Left: Title, Plan Selector, V/%/U buttons -->
+                    <!-- Left: Title, Plan Selector -->
                     <ColumnDefinition Width="*" />
                     <!-- Right: Actions & Tools -->
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Left Group -->
+                <!-- Left Group: Title and Plan Selector -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Combined Broomstick Plot" FontSize="13.5" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center" Margin="0,0,16,0" />
+                    <materialDesign:PackIcon Kind="ChartScatterPlot" Width="20" Height="20" Foreground="#512DA8" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="Combined Broomstick Plot" FontSize="13.5" FontWeight="Bold" Foreground="#311B92" VerticalAlignment="Center" Margin="0,0,16,0" />
 
-                    <!-- Select Plan Dropdown -->
-                    <TextBlock Text="Select Plan:" FontSize="11" FontWeight="SemiBold" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <!-- Select Plan Dropdown (Crisp White Background) -->
+                    <TextBlock Text="Select Plan:" FontSize="11" FontWeight="SemiBold" Foreground="#555555" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <ComboBox ItemsSource="{Binding AvailablePlans}" 
                               SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
                               DisplayMemberPath="Name"
-                              Width="220" Height="28" FontSize="11" 
-                              Background="#181E2B" Foreground="#FFFFFF" BorderBrush="#333F54"
+                              Width="260" Height="28" FontSize="11" 
                               VerticalContentAlignment="Center" Margin="0,0,12,0" />
-
-                    <!-- Quick Toggles [ ] [V] [%] [U] from reference screen -->
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
-                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" Width="28" Height="28" Padding="0" Margin="0,0,2,0" ToolTip="Overview Extents">
-                            <materialDesign:PackIcon Kind="CropSquare" Width="14" Height="14" Foreground="#94A3B8" />
-                        </Button>
-                        <ToggleButton IsChecked="{Binding InvertDepthAxis, Mode=TwoWay}" 
-                                      Style="{StaticResource MaterialDesignActionToggleButton}"
-                                      Width="28" Height="28" Padding="0" Margin="0,0,2,0" 
-                                      ToolTip="Invert Depth Axis (0 at Top / Bottom)">
-                            <TextBlock Text="V" FontSize="11" FontWeight="Bold" />
-                        </ToggleButton>
-                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" Width="28" Height="28" Padding="0" Margin="0,0,2,0" ToolTip="Percentage Drag">
-                            <TextBlock Text="%" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" />
-                        </Button>
-                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" Width="28" Height="28" Padding="0" ToolTip="Toggle Unit (klbs / Tonnes)">
-                            <TextBlock Text="U" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" />
-                        </Button>
-                    </StackPanel>
                 </StackPanel>
 
                 <!-- Right Action Tools -->
@@ -145,15 +233,27 @@
                             Height="28" Padding="10,0" Margin="0,0,6,0"
                             ToolTip="Open Data Selector &amp; Field Mapping Window">
                         <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" Foreground="#38BDF8" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
                             <TextBlock Text="Data Selector" FontSize="10.5" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Calculate Points Button -->
+                    <Button Command="{Binding RecalculatePointsCommand}" 
+                            Style="{StaticResource MaterialDesignRaisedButton}" 
+                            Background="#059669" Foreground="White"
+                            Height="28" Padding="10,0" Margin="0,0,6,0"
+                            ToolTip="Recalculate Broomstick Points from Well Log">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Calculator" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <TextBlock Text="Calculate Points" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
 
                     <!-- Setup & Filter Dialog -->
                     <Button Command="{Binding OpenSetupCommand}" 
                             Style="{StaticResource MaterialDesignRaisedButton}" 
-                            Background="#4F46E5" Foreground="White"
+                            Background="#512DA8" Foreground="White"
                             Height="28" Padding="10,0" Margin="0,0,6,0"
                             ToolTip="Open Broomstick Setup &amp; Filter Criteria">
                         <StackPanel Orientation="Horizontal">
@@ -168,7 +268,7 @@
                             Height="28" Padding="10,0" Margin="0,0,6,0"
                             ToolTip="Open Broomstick Template Manager">
                         <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="FileTree" Width="14" Height="14" Foreground="#F59E0B" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <materialDesign:PackIcon Kind="FileTree" Width="14" Height="14" Foreground="#D97706" VerticalAlignment="Center" Margin="0,0,4,0" />
                             <TextBlock Text="Templates" FontSize="10.5" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
@@ -193,45 +293,48 @@
         </Border>
 
         <!-- 1: TeeChart Plot Canvas & Legend -->
-        <Border Grid.Row="1" Background="#000000" BorderBrush="#1E2430" BorderThickness="1" CornerRadius="6,6,0,0" ClipToBounds="True">
+        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Margin="0,0,0,6" ClipToBounds="True">
             <Grid x:Name="ChartContainer">
                 <teechart:TChart x:Name="ChartControl" />
 
-                <!-- Floating Legend Panel on Top-Right (Matching Image 1) -->
-                <Border Background="#161C28" BorderBrush="#2E384D" BorderThickness="1" 
-                        CornerRadius="4" Padding="10,8" Margin="0,16,16,0"
+                <!-- Floating Legend Panel on Top-Right -->
+                <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" 
+                        CornerRadius="6" Padding="10,8" Margin="0,16,16,0"
                         HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Opacity="0.94" MaxHeight="450">
+                        Opacity="0.96" MaxHeight="450">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.18" Color="#000000" />
+                    </Border.Effect>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel MinWidth="190">
                             <!-- Theoretical Pick up Curves -->
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.2 OHFF" Foreground="#00E5FF" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.25 OHFF" Foreground="#00E5FF" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.3 OHFF" Foreground="#00E5FF" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.35 OHFF" Foreground="#00E5FF" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.4 OHFF" Foreground="#00E5FF" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsPlan02Visible, Mode=TwoWay}" Content="{Binding Plan02LegendText}" Foreground="#0097A7" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsPlan025Visible, Mode=TwoWay}" Content="{Binding Plan025LegendText}" Foreground="#0288D1" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsPlan03Visible, Mode=TwoWay}" Content="{Binding Plan03LegendText}" Foreground="#1976D2" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsPlan035Visible, Mode=TwoWay}" Content="{Binding Plan035LegendText}" Foreground="#1565C0" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsPlan04Visible, Mode=TwoWay}" Content="{Binding Plan04LegendText}" Foreground="#0D47A1" FontSize="10" Margin="0,1" />
 
                             <!-- Casing Pick up -->
-                            <CheckBox IsChecked="True" Content="Casing - Pick up" Foreground="#B3B8FF" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsCasingPuVisible, Mode=TwoWay}" Content="Casing - Pick up" Foreground="#7B1FA2" FontSize="10" Margin="0,1" />
 
-                            <!-- Theoretical Rotate (White) -->
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.3 OHFF" Foreground="#FFFFFF" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
+                            <!-- Theoretical Rotate (Charcoal on White) -->
+                            <CheckBox IsChecked="{Binding IsRotTheoryVisible, Mode=TwoWay}" Content="{Binding RotTheoryLegendText}" Foreground="#212121" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
 
                             <!-- Casing Slack off -->
-                            <CheckBox IsChecked="True" Content="Casing - Slack off" Foreground="#4DD0E1" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsCasingSoVisible, Mode=TwoWay}" Content="Casing - Slack off" Foreground="#D84315" FontSize="10" Margin="0,1" />
 
                             <!-- Theoretical Slack Off Curves -->
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.2 OHFF" Foreground="#00E676" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.25 OHFF" Foreground="#00E676" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.3 OHFF" Foreground="#00E676" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.35 OHFF" Foreground="#00E676" FontSize="10" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="8.5&quot; Hookload Drilling 0.4 OHFF" Foreground="#00E676" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsSo02Visible, Mode=TwoWay}" Content="{Binding So02LegendText}" Foreground="#4CAF50" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsSo025Visible, Mode=TwoWay}" Content="{Binding So025LegendText}" Foreground="#43A047" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsSo03Visible, Mode=TwoWay}" Content="{Binding So03LegendText}" Foreground="#388E3C" FontSize="10" FontWeight="SemiBold" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsSo035Visible, Mode=TwoWay}" Content="{Binding So035LegendText}" Foreground="#2E7D32" FontSize="10" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsSo04Visible, Mode=TwoWay}" Content="{Binding So04LegendText}" Foreground="#1B5E20" FontSize="10" Margin="0,1" />
 
                             <!-- Actual Calculated Scatter Points -->
-                            <Border Height="1" Background="#263042" Margin="0,4,0,4" />
-                            <CheckBox IsChecked="True" Content="Pick up" Foreground="#E91E63" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="Slack Off" Foreground="#2979FF" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
-                            <CheckBox IsChecked="True" Content="Rotate" Foreground="#FF9800" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
+                            <Border Height="1" Background="#E2E8F0" Margin="0,4,0,4" />
+                            <CheckBox IsChecked="{Binding IsActualPuVisible, Mode=TwoWay}" Content="Pick up" Foreground="#E11D48" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsActualSoVisible, Mode=TwoWay}" Content="Slack Off" Foreground="#2563EB" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
+                            <CheckBox IsChecked="{Binding IsActualRotVisible, Mode=TwoWay}" Content="Rotate" Foreground="#D97706" FontWeight="Bold" FontSize="10.5" Margin="0,1" />
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
@@ -240,58 +343,29 @@
                 <Canvas x:Name="TooltipCanvas" IsHitTestVisible="False">
                     <Border x:Name="SeriesTooltipCard" 
                             Visibility="{Binding IsHoverVisible, Converter={StaticResource BoolToVisibilityConverter}}"
-                            Background="#161C28" BorderBrush="#3B455C" BorderThickness="1" 
-                            CornerRadius="4" Padding="10,8" MinWidth="180">
+                            Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" 
+                            CornerRadius="6" Padding="10,8" MinWidth="180">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.18" Color="#000000" />
+                        </Border.Effect>
                         <StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                 <Border Width="8" Height="8" Background="{Binding HoverColorHex}" CornerRadius="2" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Text="{Binding HoverTypeText}" FontWeight="Bold" FontSize="11.5" Foreground="#F8FAFC" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding HoverTypeText}" FontWeight="Bold" FontSize="11.5" Foreground="#0F172A" VerticalAlignment="Center" />
                             </StackPanel>
-                            <Border Height="1" Background="#2B354A" Margin="0,0,0,4" />
-                            <TextBlock Text="{Binding HoverDepthText, StringFormat='{}Depth: {0}'}" FontSize="10.5" Foreground="#CBD5E1" />
-                            <TextBlock Text="{Binding HoverWeightText, StringFormat='{}Weight: {0}'}" FontSize="10.5" Foreground="#E2E8F0" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding HoverRigStateText, StringFormat='{}Rig State: {0}'}" FontSize="10.5" Foreground="#10B981" />
-                            <TextBlock Text="{Binding HoverDateTimeText, StringFormat='{}Time: {0}'}" FontSize="9.5" Foreground="#94A3B8" />
+                            <Border Height="1" Background="#E2E8F0" Margin="0,0,0,4" />
+                            <TextBlock Text="{Binding HoverDepthText, StringFormat='{}Depth: {0}'}" FontSize="10.5" Foreground="#475569" />
+                            <TextBlock Text="{Binding HoverWeightText, StringFormat='{}Weight: {0}'}" FontSize="10.5" Foreground="#0F172A" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding HoverRigStateText, StringFormat='{}Rig State: {0}'}" FontSize="10.5" Foreground="#15803D" />
+                            <TextBlock Text="{Binding HoverDateTimeText, StringFormat='{}Time: {0}'}" FontSize="9.5" Foreground="#64748B" />
                         </StackPanel>
                     </Border>
                 </Canvas>
             </Grid>
         </Border>
 
-        <!-- 2: Sub-chart Bar (Highlight Formation Top, Section, View Casing) -->
-        <Border Grid.Row="2" Background="#121620" BorderBrush="#1E2430" BorderThickness="1,0,1,1" Padding="12,6">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <CheckBox IsChecked="{Binding HighlightFormationTop, Mode=TwoWay}" 
-                              Content="Highlight Formation Top" 
-                              Foreground="#E2E8F0" FontSize="11" Margin="0,0,24,0" />
-
-                    <TextBlock Text="Section" FontSize="11" Foreground="#E2E8F0" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ToggleButton IsChecked="{Binding Section, Mode=TwoWay}" 
-                                  Style="{StaticResource MaterialDesignSwitchToggleButton}" 
-                                  Margin="0,0,24,0" />
-
-                    <TextBlock Text="View Casing" FontSize="11" Foreground="#E2E8F0" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <ToggleButton IsChecked="{Binding ViewCasing, Mode=TwoWay}" 
-                                  Style="{StaticResource MaterialDesignSwitchToggleButton}" 
-                                  Margin="0,0,8,0" />
-                    <materialDesign:PackIcon Kind="InformationOutline" Width="14" Height="14" Foreground="#94A3B8" VerticalAlignment="Center" ToolTip="Casing and liner intervals" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Plotted Points: " FontSize="11" Foreground="#94A3B8" />
-                    <TextBlock Text="{Binding LoadedPointsCount, StringFormat='{}{0:N0}'}" FontWeight="Bold" FontSize="11" Foreground="#10B981" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- 3: Navigation & Range Filter Control Bar (Above dataSelector TrackBar) -->
-        <Border Grid.Row="3" Background="#161C28" BorderBrush="#263042" BorderThickness="1,0,1,1" Padding="12,6" Margin="0,0,0,2">
+        <!-- 2: Navigation & Date Range Control Bar (Above dataSelector TrackBar) -->
+        <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="10,6" Margin="0,0,0,4">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -300,35 +374,34 @@
 
                 <!-- Left: Preset Dropdown -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Preset Range:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="Preset Range:" Style="{StaticResource BarLabel}" />
                     <ComboBox ItemsSource="{Binding RangePresets}" 
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              Width="130" Height="26" VerticalContentAlignment="Center" FontSize="11"
-                              Background="#1E2430" Foreground="#F1F5F9" BorderBrush="#3B455C" />
+                              Width="140" Height="28" VerticalContentAlignment="Center" FontSize="11" />
                 </StackPanel>
 
                 <!-- Center/Right: From - To Single Text DateTime Boxes & Apply Button -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <!-- TimeLog Controls: Single Text DateTime Boxes -->
                     <StackPanel Orientation="Horizontal" Visibility="{Binding IsTimeLog, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <TextBlock Text="From:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="12,0,4,0" />
-                        <Border Background="#1E2430" BorderBrush="#3B455C" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                        <TextBlock Text="From:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                             <TextBox Text="{Binding FromDateTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                      materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
                                      BorderThickness="0" Background="Transparent"
-                                     Foreground="#F8FAFC"
-                                     Width="135" Height="22" FontSize="11" FontWeight="SemiBold"
+                                     Foreground="#1E293B"
+                                     Width="135" Height="24" FontSize="11" FontWeight="SemiBold"
                                      VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                                      ToolTip="Enter Start Date &amp; Time (dd-MM-yyyy HH:mm)" />
                         </Border>
 
-                        <TextBlock Text="To:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="12,0,4,0" />
-                        <Border Background="#1E2430" BorderBrush="#3B455C" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                        <TextBlock Text="To:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
                             <TextBox Text="{Binding ToDateTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                      materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
                                      BorderThickness="0" Background="Transparent"
-                                     Foreground="#F8FAFC"
-                                     Width="135" Height="22" FontSize="11" FontWeight="SemiBold"
+                                     Foreground="#1E293B"
+                                     Width="135" Height="24" FontSize="11" FontWeight="SemiBold"
                                      VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
                                      ToolTip="Enter End Date &amp; Time (dd-MM-yyyy HH:mm)" />
                         </Border>
@@ -336,20 +409,31 @@
 
                     <!-- DepthLog Controls -->
                     <StackPanel Orientation="Horizontal" Visibility="{Binding IsTimeLog, Converter={StaticResource InverseBoolToVisibilityConverter}}">
-                        <TextBlock Text="From Depth:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="12,0,4,0" />
-                        <TextBox Text="{Binding FromDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                 Width="75" Height="26" FontSize="11" VerticalContentAlignment="Center" 
-                                 Background="#1E2430" Foreground="#F1F5F9" BorderBrush="#3B455C" />
-                        <TextBlock Text="To Depth:" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" Margin="12,0,4,0" />
-                        <TextBox Text="{Binding ToDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                 Width="75" Height="26" FontSize="11" VerticalContentAlignment="Center" 
-                                 Background="#1E2430" Foreground="#F1F5F9" BorderBrush="#3B455C" />
+                        <TextBlock Text="From Depth:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                            <TextBox Text="{Binding FromDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
+                                     BorderThickness="0" Background="Transparent"
+                                     Foreground="#1E293B"
+                                     Width="75" Height="24" FontSize="11" FontWeight="SemiBold"
+                                     VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                        </Border>
+
+                        <TextBlock Text="To Depth:" Style="{StaticResource BarLabel}" Margin="12,0,4,0" />
+                        <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                            <TextBox Text="{Binding ToDepth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     materialDesign:TextFieldAssist.UnderlineBrush="Transparent"
+                                     BorderThickness="0" Background="Transparent"
+                                     Foreground="#1E293B"
+                                     Width="75" Height="24" FontSize="11" FontWeight="SemiBold"
+                                     VerticalContentAlignment="Center" HorizontalContentAlignment="Center" />
+                        </Border>
                     </StackPanel>
 
                     <Button Command="{Binding ApplyRangeFilterCommand}" 
                             Style="{StaticResource MaterialDesignRaisedButton}" 
                             Background="#1976D2" Foreground="White"
-                            Height="26" Padding="12,0" Margin="10,0,0,0"
+                            Height="28" Padding="14,0" Margin="10,0,0,0"
                             ToolTip="Query and filter Broomstick plot for this window">
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="Check" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -360,8 +444,8 @@
             </Grid>
         </Border>
 
-        <!-- 4: Data Selector Range TrackBar Scroller -->
-        <controls:RangeTrackBarControl Grid.Row="4" Margin="0,4,0,4"
+        <!-- 3: Data Selector Range TrackBar Scroller -->
+        <controls:RangeTrackBarControl Grid.Row="3" Margin="0,0,0,4"
                                        Minimum="{Binding TrackBarMin}"
                                        Maximum="{Binding TrackBarMax}"
                                        SelectionStart="{Binding TrackBarSelectionStart, Mode=TwoWay}"
@@ -372,8 +456,8 @@
                                        OverviewStroke="{Binding TrackBarOverviewBrush}"
                                        RangeChanged="OnRangeTrackBarChanged" />
 
-        <!-- 5: Bottom Status Bar -->
-        <Border Grid.Row="5" Background="#0C0F17" BorderBrush="#1C2433" BorderThickness="1" CornerRadius="0,0,4,4" Padding="12,5">
+        <!-- 4: Bottom Status Bar -->
+        <Border Grid.Row="4" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -381,18 +465,20 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Plan: " FontSize="10.5" Foreground="#94A3B8" />
-                    <TextBlock Text="{Binding SelectedPlan.Name, FallbackValue='(None)'}" FontSize="10.5" FontWeight="Bold" Foreground="#38BDF8" Margin="0,0,16,0" />
+                    <TextBlock Text="Plan: " FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                    <TextBlock Text="{Binding SelectedPlan.Name, FallbackValue='(None)'}" FontSize="11" FontWeight="Bold" Foreground="#1976D2" Margin="0,0,16,0" />
 
-                    <TextBlock Text="Well: " FontSize="10.5" Foreground="#94A3B8" />
-                    <TextBlock Text="{Binding WellId, FallbackValue='(None)'}" FontSize="10.5" FontWeight="SemiBold" Foreground="#F8FAFC" Margin="0,0,16,0" />
+                    <TextBlock Text="Well: " FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                    <TextBlock Text="{Binding WellId, FallbackValue='(None)'}" FontSize="11" FontWeight="Bold" Foreground="#1E293B" Margin="0,0,16,0" />
 
-                    <TextBlock Text="{Binding StatusMessage}" FontSize="10.5" FontStyle="Italic" Foreground="#94A3B8" />
+                    <TextBlock Text="Plotted Points: " FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                    <TextBlock Text="{Binding LoadedPointsCount, StringFormat='{}{0:N0}'}" FontSize="11" FontWeight="Bold" Foreground="#16A34A" Margin="0,0,16,0" />
+
+                    <TextBlock Text="{Binding StatusMessage}" FontSize="11" FontStyle="Italic" Foreground="#64748B" />
                 </StackPanel>
 
-                <TextBlock Grid.Column="1" Text="TeeChart WPF • Broomstick Engine" FontSize="10.5" Foreground="#64748B" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="TeeChart WPF • Broomstick Engine" FontSize="11" Foreground="#94A3B8" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>
 </UserControl>
-

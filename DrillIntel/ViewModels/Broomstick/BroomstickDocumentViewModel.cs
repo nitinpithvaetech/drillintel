@@ -1,289 +1,1105 @@
 using System;
+
 using System.Collections.Generic;
+
 using System.Collections.ObjectModel;
+
 using System.Data;
+
 using System.Globalization;
+
 using System.Linq;
+
 using System.Threading.Tasks;
+
 using System.Windows;
+
 using System.Windows.Media;
+
 using CommunityToolkit.Mvvm.ComponentModel;
+
 using CommunityToolkit.Mvvm.Input;
+
 using DrillIntel.Data;
+
 using DrillIntel.Data.Objects.DataObjects.Models;
+
 using DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor;
+
 using DrillIntel.Models.Broomstick;
+
 using DrillIntel.Models.TChart;
+
 using DrillIntel.Projects;
+
 using DrillIntel.Services.Charting;
+
 using DrillIntel.Views;
+
+
 
 namespace DrillIntel.ViewModels.Broomstick;
 
+
+
 /// <summary>
+
 /// Master ViewModel for the Broomstick Document view.
+
 /// Coordinates the BroomstickDocument model, TeeChart rendering, theoretical plan curves,
+
 /// actual calculated points, BroomstickProfile filtering, and the bottom DataSelector (RangeTrackBarControl).
+
 /// By default, plots DEPTH vs datetime in the DataSelector identical to RigStateDocument.
+
 /// </summary>
+
 public partial class BroomstickDocumentViewModel : ObservableObject
+
 {
+
     private readonly ProjectSession _session;
+
     private readonly IBroomstickTemplateRepository _templateRepo;
+
     private readonly IBroomstickDataService? _dataService;
+
     private readonly IChartDataService _chartDataService;
+
     private readonly IWellDataRepository _wellDataRepo;
+
+
 
     public event Action? ChartNeedsRepaint;
 
+
+
     // UI Dialog Handlers
+
     public Func<BroomstickDocumentViewModel, bool?>? OpenSetupDialogHandler { get; set; }
+
     public Func<BroomstickDocumentManagerViewModel, bool?>? OpenTemplateManagerDialogHandler { get; set; }
+
     public Func<DataSelectorViewModel, bool?>? OpenDataSelectorDialogHandler { get; set; }
+
     public Func<string, string?>? PromptSaveAsHandler { get; set; }
 
+
+
     // Master Domain Model
+
     public BroomstickDocument Document { get; private set; }
 
+
+
     [ObservableProperty]
+
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
+
     private string _documentName = "8.5\" Hookload Drilling";
 
-    [ObservableProperty]
-    private string _currentTemplateId = string.Empty;
+
 
     [ObservableProperty]
+
+    private string _currentTemplateId = string.Empty;
+
+
+
+    [ObservableProperty]
+
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
+
     private bool _isDirty;
+
+
 
     public string WindowTitle => $"Broomstick Document — {DocumentName}{(IsDirty ? " *" : "")}";
 
+
+
     [ObservableProperty]
+
     private string _wellId = string.Empty;
 
+
+
     [ObservableProperty]
+
     private string _wellName = string.Empty;
 
+
+
     [ObservableProperty]
+
     private string _wellboreId = string.Empty;
 
+
+
     [ObservableProperty]
+
     private string _logId = string.Empty;
 
+
+
     [ObservableProperty]
+
     private string _statusMessage = "Ready";
 
+
+
     [ObservableProperty]
+
     private int _loadedPointsCount;
 
+
+
     // Available Theoretical Plans for this Well
+
     public ObservableCollection<AdnlHookloadPlan> AvailablePlans { get; } = new();
 
+
+
+    private bool _isInitializingPlans;
+
+    private readonly SemaphoreSlim _planLoadLock = new(1, 1);
+
+
+
     [ObservableProperty]
+
     private AdnlHookloadPlan? _selectedPlan;
 
+
+
     partial void OnSelectedPlanChanged(AdnlHookloadPlan? value)
+
     {
+
+        if (_isInitializingPlans) return;
+
         if (value != null)
+
         {
+
             Document.PlanId = value.PlanID;
+
             _ = LoadFullPlanDataAsync(value.PlanID);
+
         }
+
     }
 
-    public async Task LoadFullPlanDataAsync(string? planId)
+
+
+    public async Task LoadFullPlanDataAsync(string? mainPlanKey)
+
     {
-        if (string.IsNullOrWhiteSpace(planId))
+
+        await _planLoadLock.WaitAsync();
+
+        try
+
         {
-            Document.BroomstickPlanData = null;
+
+            if (string.IsNullOrWhiteSpace(mainPlanKey))
+
+            {
+
+                Document.BroomstickPlanData = null;
+
+                Document.AssociatedPlans.Clear();
+
+                UpdateLegendTitles();
+
+                ChartNeedsRepaint?.Invoke();
+
+                return;
+
+            }
+
+
+
+            var ds = _session.IsProjectOpen ? _session.GetDataService() : _dataService?.GetDataService();
+
+            if (ds != null)
+
+            {
+
+                try
+
+                {
+
+                    var associated = await Task.Run(() =>
+
+                    {
+
+                        var resultList = new List<AdnlHookloadPlan>();
+
+                        string safeKey = mainPlanKey.Replace("'", "''");
+
+
+
+                        // 1. Query child plans under this RUN_NO or main plan prefix
+
+                        string sql = $"SELECT DISTINCT PLAN_ID, PLAN_NAME, RUN_NO FROM VMX_ADNL_HKLD_PLAN WHERE RUN_NO='{safeKey}' OR PLAN_NAME LIKE '{safeKey}%' OR PLAN_ID='{safeKey}'";
+
+                        if (!string.IsNullOrWhiteSpace(WellId))
+
+                        {
+
+                            sql += $" AND WELL_ID='{WellId.Replace("'", "''")}'";
+
+                        }
+
+                        sql += " ORDER BY PLAN_NAME";
+
+
+
+                        DataTable dt = ds.GetTable(sql);
+
+                        if ((dt == null || dt.Rows == null || dt.Rows.Count == 0) && !string.IsNullOrWhiteSpace(WellId))
+
+                        {
+
+                            // Fallback without WellId filter
+
+                            sql = $"SELECT DISTINCT PLAN_ID, PLAN_NAME, RUN_NO FROM VMX_ADNL_HKLD_PLAN WHERE RUN_NO='{safeKey}' OR PLAN_NAME LIKE '{safeKey}%' OR PLAN_ID='{safeKey}' ORDER BY PLAN_NAME";
+
+                            dt = ds.GetTable(sql);
+
+                        }
+
+
+
+                        if (dt != null && dt.Rows != null && dt.Rows.Count > 0)
+
+                        {
+
+                            foreach (DataRow row in dt.Rows)
+
+                            {
+
+                                string cPlanId = DataService.checkNull(row["PLAN_ID"], "");
+
+                                if (!string.IsNullOrEmpty(cPlanId))
+
+                                {
+
+                                    var loaded = AdnlHookloadPlan.loadObject(ds, WellId, WellboreId, LogId, cPlanId);
+
+                                    if (loaded != null && (loaded.pickup?.Count > 0 || loaded.slackoff?.Count > 0 || loaded.rotate?.Count > 0))
+
+                                    {
+
+                                        resultList.Add(loaded);
+
+                                    }
+
+                                }
+
+                            }
+
+                        }
+
+
+
+                        // Fallback 1: in-memory main key match across all plans for this well
+                        if (resultList.Count == 0)
+                        {
+                            string allSql = string.IsNullOrWhiteSpace(WellId)
+                                ? "SELECT DISTINCT PLAN_ID, PLAN_NAME, RUN_NO FROM VMX_ADNL_HKLD_PLAN"
+                                : $"SELECT DISTINCT PLAN_ID, PLAN_NAME, RUN_NO FROM VMX_ADNL_HKLD_PLAN WHERE WELL_ID='{WellId.Replace("'", "''")}'";
+                            DataTable allDt = ds.GetTable(allSql);
+                            if (allDt != null && allDt.Rows != null)
+                            {
+                                foreach (DataRow r in allDt.Rows)
+                                {
+                                    string pName = DataService.checkNull(r["PLAN_NAME"], "");
+                                    string rNo = DataService.checkNull(r["RUN_NO"], "");
+                                    string pId = DataService.checkNull(r["PLAN_ID"], "");
+                                    if (string.Equals(AdnlHookloadPlan.ExtractMainPlanKey(pName, rNo), mainPlanKey, StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        var loaded = AdnlHookloadPlan.loadObject(ds, WellId, WellboreId, LogId, pId);
+                                        if (loaded != null && (loaded.pickup?.Count > 0 || loaded.slackoff?.Count > 0 || loaded.rotate?.Count > 0))
+                                        {
+                                            resultList.Add(loaded);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback 2: If no associated child plans found, load mainPlanKey directly
+                        if (resultList.Count == 0)
+                        {
+                            var direct = AdnlHookloadPlan.loadObject(ds, WellId, WellboreId, LogId, mainPlanKey);
+                            if (direct != null)
+                            {
+                                resultList.Add(direct);
+                            }
+                        }
+
+                        return resultList;
+                    });
+
+                    Document.AssociatedPlans = associated;
+                    Document.BroomstickPlanData = associated.FirstOrDefault(p => (p.RunNo != null && p.RunNo.Contains("0.3")) || (p.Name != null && p.Name.Contains("0.3"))) ?? associated.FirstOrDefault();
+
+                    Document.PlanId = mainPlanKey;
+
+                }
+
+                catch
+
+                {
+
+                }
+
+            }
+
+            UpdateLegendTitles();
+
+            IsDirty = true;
+
             ChartNeedsRepaint?.Invoke();
-            return;
+
         }
 
-        var ds = _session.IsProjectOpen ? _session.GetDataService() : _dataService?.GetDataService();
-        if (ds != null)
+        finally
+
         {
-            try
+
+            _planLoadLock.Release();
+
+        }
+
+    }
+
+
+
+    // Dynamic Legend Titles
+
+    [ObservableProperty]
+
+    private string _plan02LegendText = "8.5\" Hookload Drilling 0.2 OHFF";
+
+    [ObservableProperty]
+
+    private string _plan025LegendText = "8.5\" Hookload Drilling 0.25 OHFF";
+
+    [ObservableProperty]
+
+    private string _plan03LegendText = "8.5\" Hookload Drilling 0.3 OHFF";
+
+    [ObservableProperty]
+
+    private string _plan035LegendText = "8.5\" Hookload Drilling 0.35 OHFF";
+
+    [ObservableProperty]
+
+    private string _plan04LegendText = "8.5\" Hookload Drilling 0.4 OHFF";
+
+    [ObservableProperty]
+
+    private string _rotTheoryLegendText = "8.5\" Hookload Drilling 0.3 OHFF";
+
+    [ObservableProperty]
+
+    private string _so02LegendText = "8.5\" Hookload Drilling 0.2 OHFF";
+
+    [ObservableProperty]
+
+    private string _so025LegendText = "8.5\" Hookload Drilling 0.25 OHFF";
+
+    [ObservableProperty]
+
+    private string _so03LegendText = "8.5\" Hookload Drilling 0.3 OHFF";
+
+    [ObservableProperty]
+
+    private string _so035LegendText = "8.5\" Hookload Drilling 0.35 OHFF";
+
+    [ObservableProperty]
+
+    private string _so04LegendText = "8.5\" Hookload Drilling 0.4 OHFF";
+
+
+
+    public void UpdateLegendTitles()
+    {
+        string baseName = !string.IsNullOrWhiteSpace(SelectedPlan?.Name) 
+            ? SelectedPlan.Name 
+            : (!string.IsNullOrWhiteSpace(Document.BroomstickPlanData?.Name) 
+                ? Document.BroomstickPlanData.Name 
+                : (!string.IsNullOrWhiteSpace(DocumentName) ? DocumentName : "8.5\" Hookload Drilling"));
+
+        baseName = AdnlHookloadPlan.ExtractMainPlanKey(baseName, "");
+
+        if (Document.AssociatedPlans?.Count >= 2)
+        {
+            var plans = Document.AssociatedPlans
+                .OrderBy(p => AdnlHookloadPlan.ExtractFrictionFactor(p))
+                .ToList();
+
+            string FormatLabel(AdnlHookloadPlan p, string fallbackFf)
             {
-                var fullPlan = await Task.Run(() => AdnlHookloadPlan.loadObject(ds, WellId, WellboreId, LogId, planId));
-                Document.BroomstickPlanData = fullPlan;
+                if (!string.IsNullOrWhiteSpace(p.RunNo) && System.Text.RegularExpressions.Regex.IsMatch(p.RunNo, @"0\.\d+"))
+                    return $"{baseName} {p.RunNo.Trim()}";
+                if (!string.IsNullOrWhiteSpace(p.Name) && System.Text.RegularExpressions.Regex.IsMatch(p.Name, @"0\.\d+"))
+                    return p.Name.Trim();
+                return $"{baseName} {fallbackFf}";
             }
-            catch
+
+            if (plans.Count >= 5)
             {
-                Document.BroomstickPlanData = null;
+                Plan02LegendText = FormatLabel(plans[0], "0.2 OHFF");
+                Plan025LegendText = FormatLabel(plans[1], "0.25 OHFF");
+                Plan03LegendText = FormatLabel(plans[2], "0.3 OHFF");
+                Plan035LegendText = FormatLabel(plans[3], "0.35 OHFF");
+                Plan04LegendText = FormatLabel(plans[4], "0.4 OHFF");
+
+                RotTheoryLegendText = $"{baseName} 0.3 OHFF";
+
+                So02LegendText = FormatLabel(plans[0], "0.2 OHFF");
+                So025LegendText = FormatLabel(plans[1], "0.25 OHFF");
+                So03LegendText = FormatLabel(plans[2], "0.3 OHFF");
+                So035LegendText = FormatLabel(plans[3], "0.35 OHFF");
+                So04LegendText = FormatLabel(plans[4], "0.4 OHFF");
+                return;
             }
         }
-        IsDirty = true;
-        ChartNeedsRepaint?.Invoke();
+
+        Plan02LegendText = $"{baseName} 0.2 OHFF";
+        Plan025LegendText = $"{baseName} 0.25 OHFF";
+        Plan03LegendText = $"{baseName} 0.3 OHFF";
+        Plan035LegendText = $"{baseName} 0.35 OHFF";
+        Plan04LegendText = $"{baseName} 0.4 OHFF";
+
+        RotTheoryLegendText = $"{baseName} 0.3 OHFF";
+
+        So02LegendText = $"{baseName} 0.2 OHFF";
+        So025LegendText = $"{baseName} 0.25 OHFF";
+        So03LegendText = $"{baseName} 0.3 OHFF";
+        So035LegendText = $"{baseName} 0.35 OHFF";
+        So04LegendText = $"{baseName} 0.4 OHFF";
     }
+
+    // Series Visibility Toggles
+
+    private bool GetSeriesVis(string key, bool defaultVal = true) =>
+
+        Document.PlotSettings.SeriesVisibility.TryGetValue(key, out var v) ? v : defaultVal;
+
+
+
+    private void SetSeriesVis(string key, bool value)
+
+    {
+
+        Document.PlotSettings.SeriesVisibility[key] = value;
+
+        IsDirty = true;
+
+        ChartNeedsRepaint?.Invoke();
+
+    }
+
+
+
+    public bool IsPlan02Visible { get => GetSeriesVis("plan02"); set { SetSeriesVis("plan02", value); OnPropertyChanged(); } }
+
+    public bool IsPlan025Visible { get => GetSeriesVis("plan025"); set { SetSeriesVis("plan025", value); OnPropertyChanged(); } }
+
+    public bool IsPlan03Visible { get => GetSeriesVis("plan03"); set { SetSeriesVis("plan03", value); OnPropertyChanged(); } }
+
+    public bool IsPlan035Visible { get => GetSeriesVis("plan035"); set { SetSeriesVis("plan035", value); OnPropertyChanged(); } }
+
+    public bool IsPlan04Visible { get => GetSeriesVis("plan04"); set { SetSeriesVis("plan04", value); OnPropertyChanged(); } }
+
+    public bool IsCasingPuVisible { get => GetSeriesVis("casingPu"); set { SetSeriesVis("casingPu", value); OnPropertyChanged(); } }
+
+    public bool IsRotTheoryVisible { get => GetSeriesVis("rotTheory"); set { SetSeriesVis("rotTheory", value); OnPropertyChanged(); } }
+
+    public bool IsCasingSoVisible { get => GetSeriesVis("casingSo"); set { SetSeriesVis("casingSo", value); OnPropertyChanged(); } }
+
+    public bool IsSo02Visible { get => GetSeriesVis("so02"); set { SetSeriesVis("so02", value); OnPropertyChanged(); } }
+
+    public bool IsSo025Visible { get => GetSeriesVis("so025"); set { SetSeriesVis("so025", value); OnPropertyChanged(); } }
+
+    public bool IsSo03Visible { get => GetSeriesVis("so03"); set { SetSeriesVis("so03", value); OnPropertyChanged(); } }
+
+    public bool IsSo035Visible { get => GetSeriesVis("so035"); set { SetSeriesVis("so035", value); OnPropertyChanged(); } }
+
+    public bool IsSo04Visible { get => GetSeriesVis("so04"); set { SetSeriesVis("so04", value); OnPropertyChanged(); } }
+
+    public bool IsActualPuVisible { get => GetSeriesVis("actualPu"); set { SetSeriesVis("actualPu", value); OnPropertyChanged(); } }
+
+    public bool IsActualSoVisible { get => GetSeriesVis("actualSo"); set { SetSeriesVis("actualSo", value); OnPropertyChanged(); } }
+
+    public bool IsActualRotVisible { get => GetSeriesVis("actualRot"); set { SetSeriesVis("actualRot", value); OnPropertyChanged(); } }
+
+
 
     // Chart Display Settings
+
     [ObservableProperty]
+
     private bool _invertDepthAxis = true;
 
+
+
     partial void OnInvertDepthAxisChanged(bool value)
+
     {
+
         Document.PlotSettings.InvertDepthAxis = value;
+
         IsDirty = true;
+
         ChartNeedsRepaint?.Invoke();
+
     }
 
+
+
     [ObservableProperty]
+
     private bool _highlightFormationTop;
 
+
+
     partial void OnHighlightFormationTopChanged(bool value)
+
     {
+
         Document.PlotSettings.HighlightFormationTop = value;
+
         IsDirty = true;
+
         ChartNeedsRepaint?.Invoke();
+
     }
 
+
+
     [ObservableProperty]
+
     private bool _viewCasing;
 
+
+
     partial void OnViewCasingChanged(bool value)
+
     {
+
         Document.PlotSettings.ViewCasing = value;
+
         IsDirty = true;
+
         ChartNeedsRepaint?.Invoke();
+
     }
 
+
+
     [ObservableProperty]
+
     private bool _section;
 
+
+
     [ObservableProperty]
+
     private string _unitSystem = "klbs";
 
+
+
     // DataSelector & Range Navigation Properties
+
     [ObservableProperty]
+
     private bool _isTimeLog = true;
 
+
+
     [ObservableProperty]
+
     private DateTime _logMinDate = DateTime.MinValue;
 
+
+
     [ObservableProperty]
+
     private DateTime _logMaxDate = DateTime.MinValue;
 
+
+
     [ObservableProperty]
+
     private DateTime _fromDate;
 
+
+
     [ObservableProperty]
+
     private DateTime _toDate;
 
+
+
     [ObservableProperty]
+
     private string _fromDateTimeText = string.Empty;
 
+
+
     [ObservableProperty]
+
     private string _toDateTimeText = string.Empty;
 
+
+
     [ObservableProperty]
+
     private double _fromDepth = 0.0;
 
+
+
     [ObservableProperty]
+
     private double _toDepth = 20750.0;
 
+
+
     [ObservableProperty]
+
     private string _selectedPreset = "Entire Log";
 
+
+
     public ObservableCollection<string> RangePresets { get; } = new()
+
     {
+
         "Last 1 Hour",
+
         "Last 4 Hours",
+
         "Last 12 Hours",
+
         "Last 24 Hours",
+
         "Last 48 Hours",
+
         "Last 7 Days",
+
         "Entire Log",
+
         "Custom Range"
+
     };
 
+
+
     partial void OnSelectedPresetChanged(string value)
+
     {
+
         if (value != "Custom Range")
+
         {
+
             _ = ApplyPresetAsync(value);
+
+        }
+
+    }
+
+
+
+    [ObservableProperty]
+
+    private string _selectedOverviewChannelMnemonic = "DEPTH";
+
+
+
+    // TrackBar DataSelector Properties
+
+    [ObservableProperty]
+
+    private double _trackBarMin = 0.0;
+
+
+
+    [ObservableProperty]
+
+    private double _trackBarMax = 20750.0;
+
+
+
+    [ObservableProperty]
+
+    private double _trackBarSelectionStart = 0.0;
+
+
+
+    [ObservableProperty]
+
+    private double _trackBarSelectionEnd = 20750.0;
+
+
+
+    [ObservableProperty]
+
+    private PointCollection? _trackBarOverviewPoints;
+
+
+
+    [ObservableProperty]
+
+    private string _trackBarOverviewChannelName = "DEPTH vs DateTime";
+
+
+
+    [ObservableProperty]
+
+    private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
+
+
+
+    // Hover Tooltip Telemetry
+
+    [ObservableProperty]
+
+    private bool _isHoverVisible;
+
+
+
+    [ObservableProperty]
+
+    private string _hoverDepthText = "--";
+
+
+
+    [ObservableProperty]
+
+    private string _hoverWeightText = "--";
+
+
+
+    [ObservableProperty]
+
+    private string _hoverTypeText = "--";
+
+
+
+    [ObservableProperty]
+
+    private string _hoverRigStateText = "--";
+
+
+
+    [ObservableProperty]
+
+    private string _hoverDateTimeText = "--";
+
+
+
+    [ObservableProperty]
+
+    private string _hoverColorHex = "#E91E63";
+
+
+
+    // Active Filtered Points currently plotted
+
+    public List<PUSOPoint> FilteredPoints { get; private set; } = new();
+
+
+
+    public BroomstickDocumentViewModel(
+
+        ProjectSession session,
+
+        IBroomstickTemplateRepository templateRepo,
+
+        IBroomstickDataService? dataService = null,
+
+        BroomstickDocument? initialDocument = null,
+
+        IChartDataService? chartDataService = null,
+
+        IWellDataRepository? wellDataRepo = null)
+
+    {
+
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+
+        _templateRepo = templateRepo ?? throw new ArgumentNullException(nameof(templateRepo));
+
+        _dataService = dataService;
+
+        _chartDataService = chartDataService ?? new ChartDataService(_session);
+
+        _wellDataRepo = wellDataRepo ?? new WellDataRepository(_session);
+
+
+
+        Document = initialDocument ?? new BroomstickDocument();
+
+        SyncFromDocument();
+
+        if (_session != null)
+        {
+            _session.DataChanged += OnSessionDataChanged;
         }
     }
 
-    [ObservableProperty]
-    private string _selectedOverviewChannelMnemonic = "DEPTH";
-
-    // TrackBar DataSelector Properties
-    [ObservableProperty]
-    private double _trackBarMin = 0.0;
-
-    [ObservableProperty]
-    private double _trackBarMax = 20750.0;
-
-    [ObservableProperty]
-    private double _trackBarSelectionStart = 0.0;
-
-    [ObservableProperty]
-    private double _trackBarSelectionEnd = 20750.0;
-
-    [ObservableProperty]
-    private PointCollection? _trackBarOverviewPoints;
-
-    [ObservableProperty]
-    private string _trackBarOverviewChannelName = "DEPTH vs DateTime";
-
-    [ObservableProperty]
-    private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(56, 189, 248));
-
-    // Hover Tooltip Telemetry
-    [ObservableProperty]
-    private bool _isHoverVisible;
-
-    [ObservableProperty]
-    private string _hoverDepthText = "--";
-
-    [ObservableProperty]
-    private string _hoverWeightText = "--";
-
-    [ObservableProperty]
-    private string _hoverTypeText = "--";
-
-    [ObservableProperty]
-    private string _hoverRigStateText = "--";
-
-    [ObservableProperty]
-    private string _hoverDateTimeText = "--";
-
-    [ObservableProperty]
-    private string _hoverColorHex = "#E91E63";
-
-    // Active Filtered Points currently plotted
-    public List<PUSOPoint> FilteredPoints { get; private set; } = new();
-
-    public BroomstickDocumentViewModel(
-        ProjectSession session,
-        IBroomstickTemplateRepository templateRepo,
-        IBroomstickDataService? dataService = null,
-        BroomstickDocument? initialDocument = null,
-        IChartDataService? chartDataService = null,
-        IWellDataRepository? wellDataRepo = null)
+    private async void OnSessionDataChanged(object? sender, EventArgs e)
     {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
-        _templateRepo = templateRepo ?? throw new ArgumentNullException(nameof(templateRepo));
-        _dataService = dataService;
-        _chartDataService = chartDataService ?? new ChartDataService(_session);
-        _wellDataRepo = wellDataRepo ?? new WellDataRepository(_session);
-
-        Document = initialDocument ?? new BroomstickDocument();
-        SyncFromDocument();
-    }
-
-    public async Task InitializeAsync()
-    {
-        StatusMessage = "Loading Broomstick data & theoretical plans...";
         try
         {
             var ds = _session.IsProjectOpen ? _session.GetDataService() : _dataService?.GetDataService();
+            if (ds != null)
+            {
+                await LoadBroomstickPointsFromDbAsync(ds);
+                ApplyRangeFilter();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BroomstickDocumentViewModel] OnSessionDataChanged error: {ex.Message}");
+        }
+    }
+
+
+
+    public async Task InitializeAsync()
+
+    {
+
+        StatusMessage = "Loading Broomstick data & theoretical plans...";
+
+        try
+
+        {
+
+            var ds = _session.IsProjectOpen ? _session.GetDataService() : _dataService?.GetDataService();
+
+
 
             // Resolve Well & Wellbore if not yet set
+
             if (string.IsNullOrWhiteSpace(WellId) && _session.IsProjectOpen)
+
             {
+
                 var well = await _wellDataRepo.GetProjectWellAsync();
+
+                if (well != null)
+
+                {
+
+                    WellId = well.ObjectID;
+
+                    WellName = well.name;
+
+                    Document.WellId = well.ObjectID;
+
+                }
+
+            }
+
+
+
+            // Resolve primary TimeLog if not yet set
+
+            if (string.IsNullOrWhiteSpace(LogId) && _session.IsProjectOpen)
+
+            {
+
+                var timeLogs = await _wellDataRepo.GetTimeLogsAsync();
+
+                var targetLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+
+                if (targetLog != null)
+
+                {
+
+                    LogId = targetLog.ObjectID;
+
+                    Document.LogId = targetLog.ObjectID;
+
+                }
+
+            }
+
+
+
+            // 1. Load theoretical plans from VMX_ADNL_HKLD_PLAN (Grouped by Main Plan ID)
+
+            if (ds != null)
+
+            {
+
+                var plans = await Task.Run(() =>
+
+                {
+
+                    var pList = AdnlHookloadPlan.GetMainPlanHeaders(ds, WellId, WellboreId, LogId);
+
+                    if ((pList == null || pList.Count == 0) && !string.IsNullOrWhiteSpace(WellId))
+
+                    {
+
+                        pList = AdnlHookloadPlan.GetMainPlanHeaders(ds, WellId, null, null);
+
+                    }
+
+                    if (pList == null || pList.Count == 0)
+
+                    {
+
+                        pList = AdnlHookloadPlan.GetMainPlanHeaders(ds, null, null, null);
+
+                    }
+
+                    return pList;
+
+                });
+
+
+
+                _isInitializingPlans = true;
+
+                try
+
+                {
+
+                    AvailablePlans.Clear();
+
+                    foreach (var p in plans)
+
+                    {
+
+                        AvailablePlans.Add(p);
+
+                    }
+
+
+
+                    if (!string.IsNullOrEmpty(Document.PlanId))
+
+                    {
+
+                        SelectedPlan = AvailablePlans.FirstOrDefault(p => p.PlanID == Document.PlanId || p.Name == Document.PlanId) ?? AvailablePlans.FirstOrDefault();
+
+                    }
+
+                    else
+
+                    {
+
+                        SelectedPlan = AvailablePlans.FirstOrDefault();
+
+                    }
+
+                }
+
+                finally
+
+                {
+
+                    _isInitializingPlans = false;
+
+                }
+
+
+
+                if (SelectedPlan != null)
+
+                {
+
+                    await LoadFullPlanDataAsync(SelectedPlan.PlanID);
+
+                }
+
+
+
+                // 2. Load calculated points from VMX_BROOMSTICK_POINTS
+
+                await LoadBroomstickPointsFromDbAsync(ds);
+
+            }
+
+
+
+            // 3. Load DataSelector overview waveform (DEPTH vs DateTime by default)
+
+            await LoadTrackBarOverviewAsync();
+
+
+
+            // 4. Filter Points for active selection
+
+            ApplyRangeFilter();
+
+
+
+            StatusMessage = $"Ready. {LoadedPointsCount:N0} points loaded.";
+
+            ChartNeedsRepaint?.Invoke();
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            StatusMessage = $"Error: {ex.Message}";
+
+        }
+
+    }
+
+
+
+    private void SyncFromDocument()
+
+    {
+
+        DocumentName = Document.DocumentName;
+
+        CurrentTemplateId = Document.TemplateId;
+
+        WellId = Document.WellId;
+
+        WellboreId = Document.WellboreId;
+
+        LogId = Document.LogId;
+
+        InvertDepthAxis = Document.PlotSettings.InvertDepthAxis;
+
+        HighlightFormationTop = Document.PlotSettings.HighlightFormationTop;
+
+        ViewCasing = Document.PlotSettings.ViewCasing;
+
+        UnitSystem = Document.PlotSettings.UnitSystem;
+
+    }
+
+
+
+    public async Task LoadBroomstickPointsFromDbAsync(IDataServiceDIntel ds)
+    {
+        if (ds == null) return;
+
+        if (string.IsNullOrWhiteSpace(WellId) && _session?.IsProjectOpen == true)
+        {
+            try
+            {
+                var repo = new WellDataRepository(_session);
+                var well = await repo.GetProjectWellAsync();
                 if (well != null)
                 {
                     WellId = well.ObjectID;
@@ -291,107 +1107,62 @@ public partial class BroomstickDocumentViewModel : ObservableObject
                     Document.WellId = well.ObjectID;
                 }
             }
-
-            // Resolve primary TimeLog if not yet set
-            if (string.IsNullOrWhiteSpace(LogId) && _session.IsProjectOpen)
-            {
-                var timeLogs = await _wellDataRepo.GetTimeLogsAsync();
-                var targetLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
-                if (targetLog != null)
-                {
-                    LogId = targetLog.ObjectID;
-                    Document.LogId = targetLog.ObjectID;
-                }
-            }
-
-            // 1. Load theoretical plans from VMX_ADNL_HKLD_PLAN
-            if (ds != null)
-            {
-                var plans = await Task.Run(() => AdnlHookloadPlan.getAllPlans(ds, WellId, WellboreId, LogId));
-                AvailablePlans.Clear();
-                foreach (var p in plans)
-                {
-                    AvailablePlans.Add(p);
-                }
-
-                if (!string.IsNullOrEmpty(Document.PlanId))
-                {
-                    SelectedPlan = AvailablePlans.FirstOrDefault(p => p.PlanID == Document.PlanId) ?? AvailablePlans.FirstOrDefault();
-                }
-                else
-                {
-                    SelectedPlan = AvailablePlans.FirstOrDefault();
-                }
-
-                if (SelectedPlan != null)
-                {
-                    await LoadFullPlanDataAsync(SelectedPlan.PlanID);
-                }
-
-                // 2. Load calculated points from VMX_BROOMSTICK_POINTS
-                await LoadBroomstickPointsFromDbAsync(ds);
-            }
-
-            // 3. Load DataSelector overview waveform (DEPTH vs DateTime by default)
-            await LoadTrackBarOverviewAsync();
-
-            // 4. Filter Points for active selection
-            ApplyRangeFilter();
-
-            StatusMessage = $"Ready. {LoadedPointsCount:N0} points loaded.";
-            ChartNeedsRepaint?.Invoke();
+            catch { }
         }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error: {ex.Message}";
-        }
-    }
-
-    private void SyncFromDocument()
-    {
-        DocumentName = Document.DocumentName;
-        CurrentTemplateId = Document.TemplateId;
-        WellId = Document.WellId;
-        WellboreId = Document.WellboreId;
-        LogId = Document.LogId;
-        InvertDepthAxis = Document.PlotSettings.InvertDepthAxis;
-        HighlightFormationTop = Document.PlotSettings.HighlightFormationTop;
-        ViewCasing = Document.PlotSettings.ViewCasing;
-        UnitSystem = Document.PlotSettings.UnitSystem;
-    }
-
-    public async Task LoadBroomstickPointsFromDbAsync(IDataServiceDIntel ds)
-    {
-        if (ds == null || string.IsNullOrWhiteSpace(WellId)) return;
 
         try
         {
             var list = await Task.Run(() =>
             {
-                string sql = $"SELECT * FROM VMX_BROOMSTICK_POINTS WHERE WELL_ID='{WellId.Replace("'", "''")}' ORDER BY DEPTH ASC";
+                string safeWellId = WellId?.Replace("'", "''") ?? "";
+                string safeWellName = WellName?.Replace("'", "''") ?? "";
+
+                string sql;
+                if (!string.IsNullOrWhiteSpace(safeWellName) && !safeWellName.Equals(safeWellId, StringComparison.OrdinalIgnoreCase))
+                {
+                    sql = $"SELECT * FROM VMX_BROOMSTICK_POINTS WHERE WELL_ID='{safeWellId}' OR WELL_ID='{safeWellName}' ORDER BY DEPTH ASC";
+                }
+                else if (!string.IsNullOrWhiteSpace(safeWellId))
+                {
+                    sql = $"SELECT * FROM VMX_BROOMSTICK_POINTS WHERE WELL_ID='{safeWellId}' ORDER BY DEPTH ASC";
+                }
+                else
+                {
+                    sql = "SELECT * FROM VMX_BROOMSTICK_POINTS ORDER BY DEPTH ASC";
+                }
+
                 DataTable dt = ds.GetTable(sql);
+
+                // Fallback: If 0 rows returned, load all points from VMX_BROOMSTICK_POINTS
+                if ((dt == null || dt.Rows == null || dt.Rows.Count == 0) && (!string.IsNullOrWhiteSpace(safeWellId) || !string.IsNullOrWhiteSpace(safeWellName)))
+                {
+                    dt = ds.GetTable("SELECT * FROM VMX_BROOMSTICK_POINTS ORDER BY DEPTH ASC");
+                }
 
                 var pts = new List<PUSOPoint>();
                 if (dt != null && dt.Rows != null)
                 {
-                    bool hasRigStates = dt.Columns.Contains("RIG_STATES");
                     bool hasUserVisible = dt.Columns.Contains("USER_VISIBLE");
-
                     foreach (DataRow r in dt.Rows)
                     {
-                        var pt = new PUSOPoint
+                        var pt = PUSOPoint.MapFromRow(r);
+                        if (hasUserVisible)
                         {
-                            Depth = Convert.ToDouble(r["DEPTH"] != DBNull.Value ? r["DEPTH"] : 0),
-                            Type = Convert.ToInt32(r["TYPE"] != DBNull.Value ? r["TYPE"] : 0),
-                            DynamicValue = Convert.ToDouble(r["DYNAMIC_VALUE"] != DBNull.Value ? r["DYNAMIC_VALUE"] : 0),
-                            Avg = Convert.ToDouble(r["AVG"] != DBNull.Value ? r["AVG"] : 0),
-                            Min = Convert.ToDouble(r["MIN"] != DBNull.Value ? r["MIN"] : 0),
-                            Max = Convert.ToDouble(r["MAX"] != DBNull.Value ? r["MAX"] : 0),
-                            StartDate = r["START_DATE"] != DBNull.Value && DateTime.TryParse(r["START_DATE"]?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var sd) ? sd : DateTime.MinValue,
-                            EndDate = r["END_DATE"] != DBNull.Value && DateTime.TryParse(r["END_DATE"]?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var ed) ? ed : DateTime.MinValue,
-                            RigStates = hasRigStates ? (r["RIG_STATES"]?.ToString() ?? "") : "",
-                            UserVisible = !hasUserVisible || Convert.ToInt32(r["USER_VISIBLE"] != DBNull.Value ? r["USER_VISIBLE"] : 1) == 1
-                        };
+                            object uv = r["USER_VISIBLE"];
+                            if (uv != null && uv != DBNull.Value)
+                            {
+                                string uvStr = uv.ToString()?.Trim() ?? "";
+                                pt.UserVisible = !(uvStr == "0" || string.Equals(uvStr, "false", StringComparison.OrdinalIgnoreCase));
+                            }
+                            else
+                            {
+                                pt.UserVisible = true;
+                            }
+                        }
+                        else
+                        {
+                            pt.UserVisible = true;
+                        }
                         pts.Add(pt);
                     }
                 }
@@ -400,194 +1171,407 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
             Document.BroomstickPointData = list;
             LoadedPointsCount = list.Count;
+            System.Diagnostics.Debug.WriteLine($"[BroomstickDocumentViewModel] Loaded {list.Count} broomstick points from database.");
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[BroomstickDocumentViewModel] Error loading points: {ex.Message}");
         }
     }
+
+
 
     /// <summary>
+
     /// Loads the DataSelector overview trackbar with a DEPTH vs DateTime waveform,
-    /// matching the RigStateDocument dataSelector mechanism.
+
+    /// <summary>
+
+    /// Loads background overview waveform for the bottom RangeTrackBarControl dataSelector
+
+    /// matching the RigStateDocument dataSelector mechanism (X Axis: Datetime, Y Axis: Depth).
+
     /// </summary>
+
     public async Task LoadTrackBarOverviewAsync()
+
     {
+
         // 1. Determine date range from TimeLog if available
+
         if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
+
         {
+
             try
+
             {
+
                 var dateRange = await _chartDataService.GetTimeLogDateRangeAsync(LogId);
+
                 if (dateRange.HasValue)
+
                 {
+
                     LogMinDate = dateRange.Value.MinDate;
+
                     LogMaxDate = dateRange.Value.MaxDate;
+
                     TrackBarMin = LogMinDate.ToOADate();
+
                     TrackBarMax = LogMaxDate.ToOADate();
+
                     TrackBarSelectionStart = TrackBarMin;
+
                     TrackBarSelectionEnd = TrackBarMax;
+
                     FromDate = LogMinDate;
+
                     ToDate = LogMaxDate;
+
                     FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+
                     ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+
                     IsTimeLog = true;
+
                 }
 
-                // Discover Depth mnemonic (DEPTH, HOLE_DEPTH, BIT_DEPTH, DMEA, DBIT, MD)
-                var availableChannels = await _chartDataService.GetAvailableChannelsAsync(LogId, enumRTDataSourceType.TimeLog);
-                string mnemonic = SelectedOverviewChannelMnemonic;
-                if (string.IsNullOrWhiteSpace(mnemonic) || !availableChannels.Any(c => string.Equals(c.Mnemonic, mnemonic, StringComparison.OrdinalIgnoreCase)))
+
+
+                // Query Depth channels for Y Axis (X Axis = Datetime)
+
+                string[] depthCandidates = { "BIT_DEPTH", "HOLE_DEPTH", "DEPTH", "DMEA", "DBIT", "MD", "Bit Depth", "Hole Depth" };
+
+
+
+                var overviewData = await _chartDataService.GetTimelogDataAsync(
+
+                    WellId,
+
+                    WellboreId,
+
+                    LogId,
+
+                    depthCandidates,
+
+                    fromDate: null,
+
+                    toDate: null,
+
+                    maxPoints: 800);
+
+
+
+                if (overviewData != null && overviewData.IndexValues.Count > 0)
+
                 {
-                    var depthCandidate = availableChannels.FirstOrDefault(c =>
-                        string.Equals(c.Mnemonic, "DEPTH", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Mnemonic, "HOLE_DEPTH", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Mnemonic, "BIT_DEPTH", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Mnemonic, "DMEA", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Mnemonic, "DBIT", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(c.Mnemonic, "MD", StringComparison.OrdinalIgnoreCase))
-                        ?? availableChannels.FirstOrDefault();
 
-                    if (depthCandidate != null)
+                    string? matchedMnemonic = null;
+
+                    List<double>? depthVals = null;
+
+
+
+                    foreach (var candidate in depthCandidates)
+
                     {
-                        mnemonic = depthCandidate.Mnemonic;
-                        SelectedOverviewChannelMnemonic = mnemonic;
+
+                        var kvp = overviewData.ChannelValues.FirstOrDefault(kv =>
+
+                            string.Equals(kv.Key.Trim(), candidate.Trim(), StringComparison.OrdinalIgnoreCase) &&
+
+                            kv.Value != null && kv.Value.Count > 0);
+
+
+
+                        if (kvp.Value != null && kvp.Value.Count == overviewData.IndexValues.Count)
+
+                        {
+
+                            matchedMnemonic = kvp.Key;
+
+                            depthVals = kvp.Value;
+
+                            break;
+
+                        }
+
                     }
+
+
+
+                    if (depthVals == null || depthVals.Count == 0)
+
+                    {
+
+                        // Fallback to any channel containing DEPTH, BIT, or HOLE
+
+                        var partialKvp = overviewData.ChannelValues.FirstOrDefault(kv =>
+
+                            (kv.Key.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+
+                             kv.Key.Contains("BIT", StringComparison.OrdinalIgnoreCase) ||
+
+                             kv.Key.Contains("HOLE", StringComparison.OrdinalIgnoreCase)) &&
+
+                            kv.Value != null && kv.Value.Count > 0);
+
+
+
+                        if (partialKvp.Value != null && partialKvp.Value.Count == overviewData.IndexValues.Count)
+
+                        {
+
+                            matchedMnemonic = partialKvp.Key;
+
+                            depthVals = partialKvp.Value;
+
+                        }
+
+                    }
+
+
+
+                    if (depthVals != null && depthVals.Count == overviewData.IndexValues.Count)
+
+                    {
+
+                        string displayTitle = "Bit Depth";
+
+                        if (!string.IsNullOrWhiteSpace(matchedMnemonic))
+
+                        {
+
+                            if (matchedMnemonic.Contains("BIT", StringComparison.OrdinalIgnoreCase))
+
+                                displayTitle = "Bit Depth";
+
+                            else if (matchedMnemonic.Contains("HOLE", StringComparison.OrdinalIgnoreCase))
+
+                                displayTitle = "Hole Depth";
+
+                            else
+
+                                displayTitle = "Depth";
+
+                        }
+
+
+
+                        var pts = new PointCollection(overviewData.IndexValues.Count);
+
+                        for (int i = 0; i < overviewData.IndexValues.Count; i++)
+
+                        {
+
+                            // X Axis: Datetime (OA Date), Y Axis: Depth
+
+                            pts.Add(new System.Windows.Point(overviewData.IndexValues[i], depthVals[i]));
+
+                        }
+
+                        if (pts.CanFreeze) pts.Freeze();
+
+
+
+                        TrackBarOverviewPoints = pts;
+
+                        TrackBarOverviewChannelName = displayTitle;
+
+                        TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210)); // #1976D2
+
+                        return;
+
+                    }
+
                 }
 
-                if (!string.IsNullOrWhiteSpace(mnemonic))
-                {
-                    var overviewData = await _chartDataService.GetTimelogDataAsync(
-                        WellId,
-                        WellboreId,
-                        LogId,
-                        new[] { mnemonic },
-                        fromDate: null,
-                        toDate: null,
-                        maxPoints: 800);
-
-                    if (overviewData != null && overviewData.IndexValues.Count > 0)
-                    {
-                        List<double>? vals = null;
-                        if (overviewData.ChannelValues.TryGetValue(mnemonic, out var exactVals))
-                        {
-                            vals = exactVals;
-                        }
-                        else
-                        {
-                            var kvp = overviewData.ChannelValues.FirstOrDefault(kv => string.Equals(kv.Key.Trim(), mnemonic.Trim(), StringComparison.OrdinalIgnoreCase));
-                            vals = kvp.Value;
-                        }
-
-                        if (vals != null && vals.Count == overviewData.IndexValues.Count)
-                        {
-                            var pts = new PointCollection(overviewData.IndexValues.Count);
-                            for (int i = 0; i < overviewData.IndexValues.Count; i++)
-                            {
-                                pts.Add(new System.Windows.Point(overviewData.IndexValues[i], vals[i]));
-                            }
-                            if (pts.CanFreeze) pts.Freeze();
-                            TrackBarOverviewPoints = pts;
-                            TrackBarOverviewChannelName = $"{mnemonic} vs Time";
-                            return;
-                        }
-                    }
-                }
             }
+
             catch
+
             {
+
             }
+
         }
 
-        // 2. Fallback: Build DEPTH vs DateTime from Document.BroomstickPointData if TimeLog wasn't queried
+
+
+        // 2. Fallback: Build DEPTH (Y Axis) vs DATETIME (X Axis) from Document.BroomstickPointData if TimeLog table wasn't queried
+
         if (Document.BroomstickPointData.Count > 0)
+
         {
+
             var validPoints = Document.BroomstickPointData
-                .Where(p => p.StartDate != DateTime.MinValue)
+
+                .Where(p => p.StartDate != DateTime.MinValue && p.Depth > 0)
+
                 .OrderBy(p => p.StartDate)
+
                 .ToList();
 
+
+
             if (validPoints.Count > 0)
+
             {
+
                 var minDt = validPoints.First().StartDate;
+
                 var maxDt = validPoints.Last().StartDate;
+
                 if (maxDt > minDt)
+
                 {
+
                     LogMinDate = minDt;
+
                     LogMaxDate = maxDt;
+
                     TrackBarMin = minDt.ToOADate();
+
                     TrackBarMax = maxDt.ToOADate();
+
                     TrackBarSelectionStart = TrackBarMin;
+
                     TrackBarSelectionEnd = TrackBarMax;
+
                     FromDate = minDt;
+
                     ToDate = maxDt;
+
                     FromDateTimeText = minDt.ToString("dd-MM-yyyy HH:mm");
+
                     ToDateTimeText = maxDt.ToString("dd-MM-yyyy HH:mm");
+
                     IsTimeLog = true;
 
+
+
                     var pts = new PointCollection();
+
                     var step = Math.Max(1, validPoints.Count / 300);
+
                     for (int i = 0; i < validPoints.Count; i += step)
+
                     {
+
+                        // X Axis: Datetime (OA Date), Y Axis: Depth
+
                         pts.Add(new System.Windows.Point(validPoints[i].StartDate.ToOADate(), validPoints[i].Depth));
+
                     }
+
                     if (pts.CanFreeze) pts.Freeze();
+
+
+
                     TrackBarOverviewPoints = pts;
-                    TrackBarOverviewChannelName = "DEPTH vs DateTime";
+
+                    TrackBarOverviewChannelName = "Bit Depth";
+
+                    TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
+
                     return;
+
                 }
+
             }
+
         }
+
+
 
         // 3. Fallback when only depths exist (or baseline default)
+
         if (Document.BroomstickPointData.Count > 0)
+
         {
+
             TrackBarMin = Document.BroomstickPointData.Min(p => p.Depth);
+
             TrackBarMax = Document.BroomstickPointData.Max(p => p.Depth);
+
             TrackBarSelectionStart = TrackBarMin;
+
             TrackBarSelectionEnd = TrackBarMax;
+
             FromDepth = TrackBarMin;
+
             ToDepth = TrackBarMax;
+
             IsTimeLog = false;
 
-            var pts = new PointCollection();
-            var step = Math.Max(1, Document.BroomstickPointData.Count / 300);
-            for (int i = 0; i < Document.BroomstickPointData.Count; i += step)
-            {
-                var pt = Document.BroomstickPointData[i];
-                double w = pt.DynamicValue > 0 ? pt.DynamicValue : pt.Avg;
-                pts.Add(new System.Windows.Point(pt.Depth, w));
-            }
-            if (pts.CanFreeze) pts.Freeze();
-            TrackBarOverviewPoints = pts;
-            TrackBarOverviewChannelName = "Depth Profile";
+
+
+            TrackBarOverviewPoints = null;
+
+            TrackBarOverviewChannelName = "Bit Depth";
+
+            TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
+
         }
+
         else
+
         {
+
             // Default baseline so the trackbar graph is never empty
+
             var now = DateTime.Now;
+
             LogMinDate = now.AddDays(-7);
+
             LogMaxDate = now;
+
             TrackBarMin = LogMinDate.ToOADate();
+
             TrackBarMax = LogMaxDate.ToOADate();
+
             TrackBarSelectionStart = TrackBarMin;
+
             TrackBarSelectionEnd = TrackBarMax;
+
             IsTimeLog = true;
+
             FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+
             ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
 
+
+
             var pts = new PointCollection();
+
             for (int i = 0; i <= 20; i++)
+
             {
+
                 double t = (double)i / 20;
+
                 double oa = TrackBarMin + (t * (TrackBarMax - TrackBarMin));
+
                 double d = t * 15000.0;
+
                 pts.Add(new System.Windows.Point(oa, d));
+
             }
+
             if (pts.CanFreeze) pts.Freeze();
+
             TrackBarOverviewPoints = pts;
-            TrackBarOverviewChannelName = "DEPTH vs DateTime";
+
+            TrackBarOverviewChannelName = "Bit Depth";
+
+            TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
+
         }
+
     }
+
+
 
     [RelayCommand]
     public void ApplyRangeFilter()
@@ -597,27 +1581,49 @@ public partial class BroomstickDocumentViewModel : ObservableObject
             DateTime? fromDt = null;
             DateTime? toDt = null;
 
-            if (DateTime.TryParseExact(FromDateTimeText, "dd-MM-yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var sDt))
+            if (!string.IsNullOrWhiteSpace(FromDateTimeText))
             {
-                fromDt = sDt;
-                TrackBarSelectionStart = sDt.ToOADate();
+                var parsed = DataService.checkNull(FromDateTimeText, DateTime.MinValue);
+                if (parsed > DateTime.MinValue)
+                {
+                    fromDt = parsed;
+                    TrackBarSelectionStart = parsed.ToOADate();
+                }
+                else if (TrackBarSelectionStart > 1000)
+                {
+                    fromDt = DateTime.FromOADate(TrackBarSelectionStart);
+                }
             }
             else if (TrackBarSelectionStart > 1000)
             {
                 fromDt = DateTime.FromOADate(TrackBarSelectionStart);
             }
 
-            if (DateTime.TryParseExact(ToDateTimeText, "dd-MM-yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var eDt))
+            if (!string.IsNullOrWhiteSpace(ToDateTimeText))
             {
-                toDt = eDt;
-                TrackBarSelectionEnd = eDt.ToOADate();
+                var parsed = DataService.checkNull(ToDateTimeText, DateTime.MinValue);
+                if (parsed > DateTime.MinValue)
+                {
+                    toDt = parsed;
+                    TrackBarSelectionEnd = parsed.ToOADate();
+                }
+                else if (TrackBarSelectionEnd > 1000)
+                {
+                    toDt = DateTime.FromOADate(TrackBarSelectionEnd);
+                }
             }
             else if (TrackBarSelectionEnd > 1000)
             {
                 toDt = DateTime.FromOADate(TrackBarSelectionEnd);
             }
 
-            FilteredPoints = Document.GetFilteredPoints(0, double.MaxValue, fromDt, toDt);
+            bool isEntireLog = SelectedPreset == "Entire Log" ||
+                               (LogMinDate > DateTime.MinValue && fromDt.HasValue && fromDt.Value <= LogMinDate.AddMinutes(5) &&
+                                toDt.HasValue && toDt.Value >= LogMaxDate.AddMinutes(-5));
+
+            FilteredPoints = isEntireLog
+                ? Document.GetFilteredPoints(0, double.MaxValue, null, null)
+                : Document.GetFilteredPoints(0, double.MaxValue, fromDt, toDt);
         }
         else
         {
@@ -630,266 +1636,589 @@ public partial class BroomstickDocumentViewModel : ObservableObject
         ChartNeedsRepaint?.Invoke();
     }
 
+
+
     [RelayCommand]
+
     public void RangeTrackBarChanged()
+
     {
+
         if (IsTimeLog && TrackBarSelectionStart > 1000)
+
         {
+
             var startDt = DateTime.FromOADate(TrackBarSelectionStart);
+
             var endDt = DateTime.FromOADate(TrackBarSelectionEnd);
 
+
+
             FromDate = startDt;
+
             ToDate = endDt;
+
             FromDateTimeText = startDt.ToString("dd-MM-yyyy HH:mm");
+
             ToDateTimeText = endDt.ToString("dd-MM-yyyy HH:mm");
+
             SelectedPreset = "Custom Range";
+
         }
+
         else if (!IsTimeLog)
+
         {
+
             FromDepth = TrackBarSelectionStart;
+
             ToDepth = TrackBarSelectionEnd;
+
             SelectedPreset = "Custom Range";
+
         }
+
+
 
         ApplyRangeFilter();
+
     }
 
+
+
     [RelayCommand]
+
     public async Task ApplyPresetAsync(string presetName)
+
     {
+
         if (!IsTimeLog) return;
+
         DateTime maxRef = LogMaxDate != DateTime.MinValue ? LogMaxDate : DateTime.Now;
+
         DateTime to = maxRef;
+
         DateTime from = to.AddHours(-24);
 
+
+
         switch (presetName)
+
         {
+
             case "Last 1 Hour":
+
                 from = to.AddHours(-1);
+
                 break;
+
             case "Last 4 Hours":
+
                 from = to.AddHours(-4);
+
                 break;
+
             case "Last 12 Hours":
+
                 from = to.AddHours(-12);
+
                 break;
+
             case "Last 24 Hours":
+
                 from = to.AddHours(-24);
+
                 break;
+
             case "Last 48 Hours":
+
                 from = to.AddHours(-48);
+
                 break;
+
             case "Last 7 Days":
+
                 from = to.AddDays(-7);
+
                 break;
+
             case "Entire Log":
+
                 from = LogMinDate != DateTime.MinValue ? LogMinDate : to.AddDays(-7);
+
                 break;
+
         }
+
+
 
         if (LogMinDate != DateTime.MinValue && from < LogMinDate) from = LogMinDate;
+
         if (to > maxRef) to = maxRef;
 
+
+
         FromDate = from;
+
         ToDate = to;
+
         FromDateTimeText = from.ToString("dd-MM-yyyy HH:mm");
+
         ToDateTimeText = to.ToString("dd-MM-yyyy HH:mm");
 
+
+
         TrackBarSelectionStart = from.ToOADate();
+
         TrackBarSelectionEnd = to.ToOADate();
 
+
+
         ApplyRangeFilter();
+
     }
 
+
+
     [RelayCommand]
+
     public void ResetZoom()
+
     {
+
         TrackBarSelectionStart = TrackBarMin;
+
         TrackBarSelectionEnd = TrackBarMax;
+
         if (IsTimeLog)
+
         {
+
             SelectedPreset = "Entire Log";
+
             if (LogMinDate != DateTime.MinValue) FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+
             if (LogMaxDate != DateTime.MinValue) ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+
         }
+
         else
+
         {
+
             FromDepth = TrackBarMin;
+
             ToDepth = TrackBarMax;
+
         }
+
         ApplyRangeFilter();
+
     }
 
+
+
     [RelayCommand]
+
     public async Task OpenDataSelectorAsync()
+
     {
+
         var console = GetOrCreateConsoleModel();
+
         var vm = new DataSelectorViewModel(console);
+
         if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
+
         {
+
             var match = vm.AvailableSeries.FirstOrDefault(s => s.Contains(SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+
             if (match != null) vm.TargetSeries = match;
+
             if (vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+
                 vm.YCoordinate = SelectedOverviewChannelMnemonic;
+
         }
+
+
 
         bool? result = OpenDataSelectorDialogHandler != null
+
             ? OpenDataSelectorDialogHandler(vm)
+
             : ShowDataSelectorDialog(vm);
 
+
+
         if (result == true)
+
         {
+
             if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
+
             {
+
                 SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
+
             }
+
             await LoadTrackBarOverviewAsync();
+
             ApplyRangeFilter();
+
         }
+
     }
+
+
 
     private static bool? ShowDataSelectorDialog(DataSelectorViewModel vm)
+
     {
+
         var dlg = new DataSelectorWindow(vm)
+
         {
+
             Owner = Application.Current?.MainWindow
+
         };
+
         return dlg.ShowDialog();
+
     }
+
+
 
     private VHTrackConsole GetOrCreateConsoleModel()
+
     {
+
         var console = new VHTrackConsole
+
         {
+
             WellID = WellId,
+
             IndexType = IsTimeLog ? enumIndexType.TimeLog : enumIndexType.Deptlog
+
         };
+
         console.DataSource.WellboreID = WellboreId;
+
         if (IsTimeLog) console.DataSource.TimeLogID = LogId;
+
         else console.DataSource.DepthLogID = LogId;
+
         console.DataSource.DatasourceType = IsTimeLog ? enumRTDataSourceType.TimeLog : enumRTDataSourceType.DepthLog;
 
+
+
         var track = new VHTrack { Title = "Data Selector Channels" };
+
         var channels = new List<VHTrackChannel>
+
         {
+
             new() { Mnemonic = "DEPTH", Title = "Hole Depth" },
+
             new() { Mnemonic = "BIT_DEPTH", Title = "Bit Depth" },
+
             new() { Mnemonic = "HKLD", Title = "Hookload" },
+
             new() { Mnemonic = "ROPA", Title = "Rate of Penetration" },
+
             new() { Mnemonic = "WOB", Title = "Weight on Bit" },
+
             new() { Mnemonic = "TORQ", Title = "Drilling Torque" },
+
             new() { Mnemonic = "RPM", Title = "Rotary Speed" }
+
         };
+
+
 
         foreach (var ch in channels)
+
         {
+
             track.Channels.Add(ch);
+
         }
+
         console.Tracks.Add(track);
+
         return console;
+
     }
 
+
+
     [RelayCommand]
+
     public async Task SaveDocumentAsync()
+
     {
+
         if (string.IsNullOrWhiteSpace(Document.TemplateId))
+
         {
+
             Document.TemplateId = Guid.NewGuid().ToString();
+
         }
+
+
 
         Document.DocumentName = DocumentName;
+
         Document.WellId = WellId;
+
         Document.WellboreId = WellboreId;
+
         Document.LogId = LogId;
+
         Document.PlanId = SelectedPlan?.PlanID ?? Document.PlanId;
 
+
+
         var item = new BroomstickTemplateItem
+
         {
+
             TemplateId = Document.TemplateId,
+
             WellId = WellId,
+
             WellboreId = WellboreId,
+
             PlanId = Document.PlanId,
+
             DocumentName = DocumentName,
+
             Description = Document.Description,
+
             IsDefault = Document.IsDefault,
+
             TemplateData = Document.SerializeToBlob()
+
         };
 
+
+
         await _templateRepo.SaveTemplateAsync(item);
+
         IsDirty = false;
+
         StatusMessage = $"Saved template '{DocumentName}' successfully.";
+
     }
 
+
+
     [RelayCommand]
+
     public async Task SaveAsDocumentAsync()
+
     {
+
         string? newName = PromptSaveAsHandler != null
+
             ? PromptSaveAsHandler(DocumentName)
+
             : $"{DocumentName} (Copy)";
+
+
 
         if (string.IsNullOrWhiteSpace(newName)) return;
 
+
+
         Document.TemplateId = Guid.NewGuid().ToString();
+
         Document.DocumentName = newName;
+
         DocumentName = newName;
+
         CurrentTemplateId = Document.TemplateId;
+
         Document.IsDefault = false;
 
+
+
         await SaveDocumentAsync();
+
     }
 
+
+
     [RelayCommand]
+
     public void OpenSetup()
+
     {
+
         bool? res = OpenSetupDialogHandler?.Invoke(this);
+
         if (res == true)
+
         {
+
             IsDirty = true;
+
             ApplyRangeFilter();
+
         }
+
     }
 
+
+
     [RelayCommand]
-    public async Task OpenTemplateManagerAsync()
+
+    public async Task RecalculatePointsAsync()
+
     {
+
+        if (_session == null || string.IsNullOrWhiteSpace(WellId)) return;
+
+        try
+
+        {
+
+            StatusMessage = "Recalculating Broomstick points from well log...";
+
+            var bsDataService = new BroomstickDataService(_session);
+
+            var bsProcessor = new DrillIntel.Services.BroomstickProcessor(bsDataService, _session);
+
+            await bsDataService.ClearBroomstickPointsAsync(WellId);
+
+            var result = await bsProcessor.RecalculatePointsAsync(WellId);
+
+
+
+            var ds = _session.GetDataService();
+
+            if (ds != null)
+
+            {
+
+                await LoadBroomstickPointsFromDbAsync(ds);
+
+                ApplyRangeFilter();
+
+            }
+
+
+
+            StatusMessage = result.Success
+
+                ? $"Ready. {LoadedPointsCount:N0} points loaded."
+
+                : $"Recalculation warning: {result.ErrorMessage}";
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            StatusMessage = $"Error recalculating points: {ex.Message}";
+
+        }
+
+    }
+
+
+
+    [RelayCommand]
+
+    public async Task OpenTemplateManagerAsync()
+
+    {
+
         var mgrVm = new BroomstickDocumentManagerViewModel(_templateRepo, _session, _wellDataRepo, WellId);
+
         await mgrVm.InitializeAsync();
 
+
+
         bool? res = OpenTemplateManagerDialogHandler?.Invoke(mgrVm);
+
         if (res == true && mgrVm.SelectedDocumentNode != null)
+
         {
+
             var item = await _templateRepo.GetTemplateByIdAsync(mgrVm.SelectedDocumentNode.TemplateId);
+
             if (item != null)
+
             {
+
                 var doc = BroomstickDocument.DeserializeFromBlob(item.TemplateData) ?? new BroomstickDocument();
+
                 doc.TemplateId = item.TemplateId;
+
                 doc.DocumentName = item.DocumentName;
+
                 doc.WellId = item.WellId;
+
                 doc.PlanId = item.PlanId ?? "";
+
                 doc.IsDefault = item.IsDefault;
 
+
+
                 Document = doc;
+
                 SyncFromDocument();
+
                 await InitializeAsync();
+
             }
+
         }
+
     }
+
+
 
     public void UpdateHoverTelemetry(BroomstickHoverInfo? info)
+
     {
+
         if (info == null)
+
         {
+
             IsHoverVisible = false;
+
             return;
+
         }
 
+
+
         IsHoverVisible = true;
+
         HoverDepthText = $"{info.Depth:F2} ft";
+
         HoverWeightText = $"{info.Weight:F2} {UnitSystem}";
+
         HoverTypeText = info.PointType;
+
         HoverRigStateText = !string.IsNullOrWhiteSpace(info.RigStateName) ? info.RigStateName : "Active";
+
         HoverDateTimeText = info.DateTimeText;
+
         HoverColorHex = info.ColorHex;
+
     }
+
 }
+
+
 

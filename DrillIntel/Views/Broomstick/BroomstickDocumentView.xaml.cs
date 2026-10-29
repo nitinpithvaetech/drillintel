@@ -55,12 +55,27 @@ public partial class BroomstickDocumentView : UserControl
         {
             Dispatcher.InvokeAsync(() =>
             {
-                double minD = ViewModel.IsTimeLog
-                    ? (ViewModel.FilteredPoints.Count > 0 ? ViewModel.FilteredPoints.Min(p => p.Depth) : 0)
-                    : ViewModel.TrackBarSelectionStart;
-                double maxD = ViewModel.IsTimeLog
-                    ? (ViewModel.FilteredPoints.Count > 0 ? ViewModel.FilteredPoints.Max(p => p.Depth) : 0)
-                    : ViewModel.TrackBarSelectionEnd;
+                double minD = 0;
+                double maxD = 0;
+
+                if (ViewModel.FilteredPoints.Count > 0)
+                {
+                    minD = ViewModel.FilteredPoints.Min(p => p.Depth);
+                    maxD = ViewModel.FilteredPoints.Max(p => p.Depth);
+                }
+                else if (ViewModel.Document.BroomstickPlanData != null)
+                {
+                    var p = ViewModel.Document.BroomstickPlanData;
+                    var depths = new List<double>();
+                    if (p.pickup?.Count > 0) depths.AddRange(p.pickup.Values.Select(x => x.Depth));
+                    if (p.slackoff?.Count > 0) depths.AddRange(p.slackoff.Values.Select(x => x.Depth));
+                    if (p.rotate?.Count > 0) depths.AddRange(p.rotate.Values.Select(x => x.Depth));
+                    if (depths.Count > 0)
+                    {
+                        minD = depths.Min();
+                        maxD = depths.Max();
+                    }
+                }
 
                 _renderer.RenderDocument(
                     ViewModel.Document,

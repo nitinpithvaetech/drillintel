@@ -10,8 +10,8 @@
              mc:Ignorable="d" 
              d:DataContext="{d:DesignInstance Type=viewmodels:BroomstickWorkspaceViewModel}"
              d:DesignHeight="800" d:DesignWidth="1280"
-             Background="#0B0E14"
-             TextElement.Foreground="#E2E8F0"
+             Background="{DynamicResource MaterialDesignPaper}"
+             TextElement.Foreground="{DynamicResource MaterialDesignBody}"
              FontFamily="{DynamicResource MaterialDesignFont}">
 
     <UserControl.Resources>
@@ -33,7 +33,7 @@
                                              Foreground="#4F46E5" VerticalAlignment="Center" Margin="0,0,6,0" />
 
                     <TextBlock Grid.Column="1" Text="{Binding DocumentName}" FontSize="11.5" FontWeight="SemiBold" 
-                               VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis" />
+                               Foreground="#1E293B" VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis" />
 
                     <TextBlock Grid.Column="2" Text="*" FontSize="13" FontWeight="Bold" Foreground="#F59E0B" 
                                VerticalAlignment="Center" Margin="2,0,4,0"
@@ -45,7 +45,7 @@
                             CommandParameter="{Binding}"
                             ToolTip="Close Document"
                             Width="18" Height="18" Padding="0" Margin="4,0,0,0" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="Close" Width="12" Height="12" Foreground="#94A3B8" />
+                        <materialDesign:PackIcon Kind="Close" Width="12" Height="12" Foreground="#64748B" />
                     </Button>
                 </Grid>
             </Border>
@@ -54,17 +54,44 @@
         <!-- TreeView Hierarchical Templates -->
         <HierarchicalDataTemplate DataType="{x:Type viewmodels:BroomstickDocumentTreeGroupNode}" ItemsSource="{Binding Children}">
             <StackPanel Orientation="Horizontal" Margin="2,3" Visibility="{Binding IsVisibleInFilter, Converter={StaticResource BoolToVisibilityConverter}}">
-                <materialDesign:PackIcon Kind="FolderOutline" Width="15" Height="15" Foreground="#6366F1" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="11.5" Foreground="#F8FAFC" VerticalAlignment="Center" />
-                <Border Background="#1E293B" CornerRadius="8" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding DocumentCount}" FontSize="9.5" FontWeight="Bold" Foreground="#818CF8" />
+                <materialDesign:PackIcon Kind="FolderOutline" Width="15" Height="15" Foreground="#4F46E5" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="11.5" Foreground="#1E293B" VerticalAlignment="Center" />
+                <Border Background="#EEF2FF" CornerRadius="8" Padding="6,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DocumentCount}" FontSize="9.5" FontWeight="Bold" Foreground="#4F46E5" />
                 </Border>
             </StackPanel>
         </HierarchicalDataTemplate>
 
         <DataTemplate DataType="{x:Type viewmodels:BroomstickDocumentTreeNode}">
-            <Border Padding="4,2" Margin="0,1" CornerRadius="4"
+            <Border Padding="4,2" Margin="0,1" CornerRadius="4" Background="Transparent"
                     Visibility="{Binding IsVisibleInFilter, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Border.ContextMenu>
+                    <ContextMenu Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#CBD5E1">
+                        <MenuItem Header="Open Document" 
+                                  Command="{Binding DataContext.OpenDocumentNodeCommand, RelativeSource={RelativeSource AncestorType=views:BroomstickWorkspaceView}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FolderOpenOutline" Width="14" Height="14" Foreground="#0284C7" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Set as Default" 
+                                  Command="{Binding DataContext.MakeDefaultCommand, RelativeSource={RelativeSource AncestorType=views:BroomstickWorkspaceView}}"
+                                  CommandParameter="{Binding}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="StarOutline" Width="14" Height="14" Foreground="#F59E0B" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <Separator Background="#E2E8F0" />
+                        <MenuItem Header="Delete Document" 
+                                  Command="{Binding DataContext.DeleteDocumentCommand, RelativeSource={RelativeSource AncestorType=views:BroomstickWorkspaceView}}"
+                                  CommandParameter="{Binding}"
+                                  Foreground="#EF4444">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="DeleteOutline" Width="14" Height="14" Foreground="#EF4444" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </ContextMenu>
+                </Border.ContextMenu>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -72,13 +99,13 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <materialDesign:PackIcon Grid.Column="0" Kind="ChartScatterPlot" Width="14" Height="14" Foreground="#38BDF8" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <materialDesign:PackIcon Grid.Column="0" Kind="ChartScatterPlot" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,6,0" />
 
-                    <TextBlock Grid.Column="1" Text="{Binding DocumentName}" FontSize="11" Foreground="#E2E8F0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding DocumentName}" FontSize="11" Foreground="#1E293B" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
-                    <Border Grid.Column="2" Background="#78350F" BorderBrush="#92400E" BorderThickness="1" CornerRadius="4" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                    <Border Grid.Column="2" Background="#FEF3C7" BorderBrush="#FDE68A" BorderThickness="1" CornerRadius="4" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
                             Visibility="{Binding IsDefault, Converter={StaticResource BoolToVisibilityConverter}}">
-                        <materialDesign:PackIcon Kind="Star" Width="10" Height="10" Foreground="#FBBF24" VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="Star" Width="10" Height="10" Foreground="#D97706" VerticalAlignment="Center" />
                     </Border>
                 </Grid>
             </Border>
@@ -96,7 +123,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Left Navigation Pane -->
-        <Border Grid.Column="0" Background="#10141D" BorderBrush="#1F2838" BorderThickness="0,0,1,0">
+        <Border Grid.Column="0" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
                     <!-- Toolbar -->
@@ -110,7 +137,7 @@
                 </Grid.RowDefinitions>
 
                 <!-- Toolbar -->
-                <Border Grid.Row="0" Background="#141924" BorderBrush="#1F2838" BorderThickness="0,0,0,1" Padding="6,4">
+                <Border Grid.Row="0" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="6,4">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Command="{Binding NewDocumentCommand}" 
                                 Style="{StaticResource MaterialDesignToolButton}"
@@ -118,7 +145,7 @@
                                 ToolTip="Create New Broomstick Document">
                             <StackPanel Orientation="Horizontal">
                                 <materialDesign:PackIcon Kind="Plus" Width="14" Height="14" Foreground="#10B981" VerticalAlignment="Center" Margin="0,0,3,0" />
-                                <TextBlock Text="New" FontSize="11" FontWeight="Bold" Foreground="#E2E8F0" VerticalAlignment="Center" />
+                                <TextBlock Text="New" FontSize="11" FontWeight="Bold" Foreground="#1E293B" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
 
@@ -141,12 +168,12 @@
                 </Border>
 
                 <!-- Search -->
-                <Border Grid.Row="1" Background="#10141D" BorderBrush="#1F2838" BorderThickness="0,0,0,1" Padding="8,4">
+                <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="8,4">
                     <Grid>
                         <materialDesign:PackIcon Kind="Magnify" Width="14" Height="14" Foreground="#64748B" VerticalAlignment="Center" Margin="4,0,0,0" />
                         <TextBox Text="{Binding SearchFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                  materialDesign:HintAssist.Hint="Filter templates..."
-                                 FontSize="11" Foreground="#F8FAFC" BorderThickness="0" Padding="22,0,0,0" VerticalAlignment="Center" />
+                                 FontSize="11" Foreground="#1E293B" BorderThickness="0" Padding="22,0,0,0" VerticalAlignment="Center" />
                     </Grid>
                 </Border>
 
@@ -157,26 +184,28 @@
                           Padding="4"
                           Background="Transparent"
                           SelectedItemChanged="OnTreeViewSelectedItemChanged"
-                          MouseDoubleClick="OnTreeViewMouseDoubleClick" />
+                          MouseDoubleClick="OnTreeViewMouseDoubleClick"
+                          PreviewMouseRightButtonDown="OnTreeViewPreviewMouseRightButtonDown"
+                          KeyDown="OnTreeViewKeyDown" />
 
                 <!-- Footer Status -->
-                <Border Grid.Row="3" Background="#0C0F17" BorderBrush="#1F2838" BorderThickness="0,1,0,0" Padding="8,4">
+                <Border Grid.Row="3" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="8,4">
                     <TextBlock Text="{Binding TotalDocumentCount, StringFormat='{}{0} templates total'}" FontSize="10.5" Foreground="#64748B" />
                 </Border>
             </Grid>
         </Border>
 
         <!-- Splitter -->
-        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#161C27" />
+        <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#E2E8F0" />
 
         <!-- Right: Multi-Document Workspace Tabs -->
         <Grid Grid.Column="2">
             <!-- No Document Open Placeholder -->
-            <Border Background="#0B0E14" Visibility="{Binding HasOpenDocuments, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+            <Border Background="#F8FAFC" Visibility="{Binding HasOpenDocuments, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <materialDesign:PackIcon Kind="ChartScatterPlot" Width="48" Height="48" Foreground="#334155" HorizontalAlignment="Center" Margin="0,0,0,12" />
-                    <TextBlock Text="No Broomstick Document Open" FontSize="14" FontWeight="Bold" Foreground="#64748B" HorizontalAlignment="Center" />
-                    <TextBlock Text="Double-click a template on the left or click New to begin." FontSize="11.5" Foreground="#475569" HorizontalAlignment="Center" Margin="0,4,0,14" />
+                    <materialDesign:PackIcon Kind="ChartScatterPlot" Width="48" Height="48" Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                    <TextBlock Text="No Broomstick Document Open" FontSize="14" FontWeight="Bold" Foreground="#475569" HorizontalAlignment="Center" />
+                    <TextBlock Text="Double-click a template on the left or click New to begin." FontSize="11.5" Foreground="#64748B" HorizontalAlignment="Center" Margin="0,4,0,14" />
                     <Button Command="{Binding NewDocumentCommand}" Style="{StaticResource MaterialDesignRaisedButton}" Background="#4F46E5" Foreground="White" Height="30" Padding="14,0" HorizontalAlignment="Center">
                         <TextBlock Text="Create New Document" FontSize="11" VerticalAlignment="Center" />
                     </Button>
@@ -188,7 +217,7 @@
                         SelectedItem="{Binding ActiveDocument, Mode=TwoWay}"
                         ItemTemplate="{StaticResource BroomstickTabHeaderTemplate}"
                         Visibility="{Binding HasOpenDocuments, Converter={StaticResource BoolToVisibilityConverter}}"
-                        Background="#000000" BorderThickness="0">
+                        Background="#FFFFFF" BorderThickness="0">
                 <TabControl.ContentTemplate>
                     <DataTemplate>
                         <views:BroomstickDocumentView />
@@ -198,4 +227,3 @@
         </Grid>
     </Grid>
 </UserControl>
-

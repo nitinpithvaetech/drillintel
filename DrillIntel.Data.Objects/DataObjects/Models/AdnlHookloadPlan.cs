@@ -228,6 +228,217 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             }
         }
 
+        #region getPlanHeaders
+        /// <summary>
+        /// Fast lightweight query that returns only plan header metadata (ID, Name, Well, Wellbore, Log)
+        /// WITHOUT loading the 9 heavy curve datasets. Ideal for populating ComboBoxes and navigation trees in milliseconds.
+        /// </summary>
+        public static List<AdnlHookloadPlan> getPlanHeaders(IDataServiceDIntel objDataService, string? wellId = null, string? wellboreId = null, string? logId = null)
+        {
+            var list = new List<AdnlHookloadPlan>();
+            if (objDataService == null) return list;
+
+            try
+            {
+                CreateTables(objDataService);
+                string query = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME FROM VMX_ADNL_HKLD_PLAN WHERE 1=1";
+                if (!string.IsNullOrEmpty(wellId))
+                    query += " AND WELL_ID='" + wellId.Replace("'", "''") + "'";
+                if (!string.IsNullOrEmpty(wellboreId))
+                    query += " AND WELLBORE_ID='" + wellboreId.Replace("'", "''") + "'";
+                if (!string.IsNullOrEmpty(logId))
+                    query += " AND LOG_ID='" + logId.Replace("'", "''") + "'";
+                query += " ORDER BY PLAN_NAME";
+
+                DataTable objData = objDataService.GetTable(query);
+
+                // Fallback 1: If filtering with wellboreId or logId returned 0 rows, try with wellId only
+                if ((objData == null || objData.Rows == null || objData.Rows.Count == 0) && (!string.IsNullOrEmpty(wellboreId) || !string.IsNullOrEmpty(logId)) && !string.IsNullOrEmpty(wellId))
+                {
+                    string fallbackQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME FROM VMX_ADNL_HKLD_PLAN WHERE WELL_ID='" + wellId.Replace("'", "''") + "' ORDER BY PLAN_NAME";
+                    objData = objDataService.GetTable(fallbackQuery);
+                }
+
+                // Fallback 2: If still 0 rows, load all plans across the project
+                if (objData == null || objData.Rows == null || objData.Rows.Count == 0)
+                {
+                    string allPlansQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME FROM VMX_ADNL_HKLD_PLAN ORDER BY PLAN_NAME";
+                    objData = objDataService.GetTable(allPlansQuery);
+                }
+
+                if (objData != null && objData.Rows != null)
+                {
+                    foreach (DataRow row in objData.Rows)
+                    {
+                        string wId = DataService.checkNull(row["WELL_ID"], "");
+                        string wbId = DataService.checkNull(row["WELLBORE_ID"], "");
+                        string lId = DataService.checkNull(row["LOG_ID"], "");
+                        string pId = DataService.checkNull(row["PLAN_ID"], "");
+                        string pName = DataService.checkNull(row["PLAN_NAME"], pId);
+
+                        var plan = new AdnlHookloadPlan
+                        {
+                            WellID = wId,
+                            WellboreID = wbId,
+                            LogID = lId,
+                            PlanID = pId,
+                            Name = !string.IsNullOrWhiteSpace(pName) ? pName : pId
+                        };
+                        list.Add(plan);
+                    }
+                }
+
+                return list;
+            }
+            catch
+            {
+                return new List<AdnlHookloadPlan>();
+            }
+        }
+
+        /// <summary>
+        /// Returns distinct Main Plans (grouped by RUN_NO or main plan name prefix)
+        /// for displaying in the Broomstick Document "Select Plan" dropdown.
+        /// </summary>
+        public static List<AdnlHookloadPlan> GetMainPlanHeaders(IDataServiceDIntel objDataService, string? wellId = null, string? wellboreId = null, string? logId = null)
+        {
+            var list = new List<AdnlHookloadPlan>();
+            if (objDataService == null) return list;
+
+            try
+            {
+                CreateTables(objDataService);
+                string query = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME, RUN_NO, PLAN_TYPE FROM VMX_ADNL_HKLD_PLAN WHERE 1=1";
+                if (!string.IsNullOrEmpty(wellId))
+                    query += " AND WELL_ID='" + wellId.Replace("'", "''") + "'";
+                if (!string.IsNullOrEmpty(wellboreId))
+                    query += " AND WELLBORE_ID='" + wellboreId.Replace("'", "''") + "'";
+                if (!string.IsNullOrEmpty(logId))
+                    query += " AND LOG_ID='" + logId.Replace("'", "''") + "'";
+                query += " ORDER BY RUN_NO, PLAN_NAME";
+
+                DataTable objData = objDataService.GetTable(query);
+
+                // Fallback 1: If filtering with wellboreId or logId returned 0 rows, try with wellId only
+                if ((objData == null || objData.Rows == null || objData.Rows.Count == 0) && (!string.IsNullOrEmpty(wellboreId) || !string.IsNullOrEmpty(logId)) && !string.IsNullOrEmpty(wellId))
+                {
+                    string fallbackQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME, RUN_NO, PLAN_TYPE FROM VMX_ADNL_HKLD_PLAN WHERE WELL_ID='" + wellId.Replace("'", "''") + "' ORDER BY RUN_NO, PLAN_NAME";
+                    objData = objDataService.GetTable(fallbackQuery);
+                }
+
+                // Fallback 2: If still 0 rows, load all plans across the project
+                if (objData == null || objData.Rows == null || objData.Rows.Count == 0)
+                {
+                    string allPlansQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME, RUN_NO, PLAN_TYPE FROM VMX_ADNL_HKLD_PLAN ORDER BY RUN_NO, PLAN_NAME";
+                    objData = objDataService.GetTable(allPlansQuery);
+                }
+
+                if (objData != null && objData.Rows != null)
+                {
+                    var groups = new Dictionary<string, AdnlHookloadPlan>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (DataRow row in objData.Rows)
+                    {
+                        string wId = DataService.checkNull(row["WELL_ID"], "");
+                        string wbId = DataService.checkNull(row["WELLBORE_ID"], "");
+                        string lId = DataService.checkNull(row["LOG_ID"], "");
+                        string pId = DataService.checkNull(row["PLAN_ID"], "");
+                        string pName = DataService.checkNull(row["PLAN_NAME"], pId);
+                        string runNo = DataService.checkNull(row["RUN_NO"], "");
+                        string pType = DataService.checkNull(row["PLAN_TYPE"], "");
+                        int typeVal = row.Table.Columns.Contains("TYPE") ? DataService.checkNull(row["TYPE"], 0) : 0;
+
+                        string mainKey = ExtractMainPlanKey(pName, runNo);
+                        if (string.IsNullOrWhiteSpace(mainKey))
+                            mainKey = !string.IsNullOrWhiteSpace(pName) ? pName : pId;
+
+                        if (!groups.ContainsKey(mainKey))
+                        {
+                            var mainPlan = new AdnlHookloadPlan
+                            {
+                                WellID = wId,
+                                WellboreID = wbId,
+                                LogID = lId,
+                                PlanID = mainKey,
+                                Name = mainKey,
+                                RunNo = !string.IsNullOrWhiteSpace(runNo) ? runNo : mainKey,
+                                PlanType = pType,
+                                Type = typeVal
+                            };
+                            groups[mainKey] = mainPlan;
+                        }
+                    }
+
+                    list.AddRange(groups.Values);
+                }
+
+                return list;
+            }
+            catch
+            {
+                return new List<AdnlHookloadPlan>();
+            }
+        }
+
+        public static string ExtractMainPlanKey(string planName, string runNo)
+        {
+            var isFfOnly = new System.Text.RegularExpressions.Regex(@"^0?\.\d+\s*(?:OHFF|FF)?\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var regexFf = new System.Text.RegularExpressions.Regex(@"(?:^|\s+)0?\.\d+\s*(?:OHFF|FF)?\s*$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // 1. If planName is provided and is NOT just a friction factor like "0.4 OHFF"
+            if (!string.IsNullOrWhiteSpace(planName) && !isFfOnly.IsMatch(planName.Trim()))
+            {
+                string stripped = regexFf.Replace(planName.Trim(), "").Trim();
+                if (!string.IsNullOrWhiteSpace(stripped))
+                    return stripped;
+                return planName.Trim();
+            }
+
+            // 2. If runNo is provided and is NOT just a friction factor like "0.4 OHFF"
+            if (!string.IsNullOrWhiteSpace(runNo) && !isFfOnly.IsMatch(runNo.Trim()) && !int.TryParse(runNo.Trim(), out _))
+            {
+                string stripped = regexFf.Replace(runNo.Trim(), "").Trim();
+                if (!string.IsNullOrWhiteSpace(stripped))
+                    return stripped;
+                return runNo.Trim();
+            }
+
+            // 3. If planName exists, strip FF
+            if (!string.IsNullOrWhiteSpace(planName))
+            {
+                string stripped = regexFf.Replace(planName.Trim(), "").Trim();
+                return !string.IsNullOrWhiteSpace(stripped) ? stripped : planName.Trim();
+            }
+
+            // 4. Fallback to runNo or default
+            if (!string.IsNullOrWhiteSpace(runNo))
+            {
+                return runNo.Trim();
+            }
+
+            return "Default Plan";
+        }
+
+        public static double ExtractFrictionFactor(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0.0;
+            var match = System.Text.RegularExpressions.Regex.Match(text, @"0\.\d+");
+            if (match.Success && double.TryParse(match.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out double val))
+            {
+                return val;
+            }
+            return 0.0;
+        }
+
+        public static double ExtractFrictionFactor(AdnlHookloadPlan? plan)
+        {
+            if (plan == null) return 0.0;
+            double ff = ExtractFrictionFactor(plan.RunNo);
+            if (ff > 0.0) return ff;
+            return ExtractFrictionFactor(plan.Name);
+        }
+        #endregion
+
         public static List<AdnlHookloadPlan> getAllPlans(IDataServiceDIntel objDataService, string? wellId = null, string? wellboreId = null, string? logId = null)
         {
             var list = new List<AdnlHookloadPlan>();
@@ -246,6 +457,20 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                 query += " ORDER BY PLAN_NAME";
 
                 DataTable objData = objDataService.GetTable(query);
+
+                // Fallback 1: If filtering with wellboreId or logId returned 0 rows, try with wellId only
+                if ((objData == null || objData.Rows == null || objData.Rows.Count == 0) && (!string.IsNullOrEmpty(wellboreId) || !string.IsNullOrEmpty(logId)) && !string.IsNullOrEmpty(wellId))
+                {
+                    string fallbackQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME FROM VMX_ADNL_HKLD_PLAN WHERE WELL_ID='" + wellId.Replace("'", "''") + "' ORDER BY PLAN_NAME";
+                    objData = objDataService.GetTable(fallbackQuery);
+                }
+
+                // Fallback 2: If still 0 rows, load all plans across the project
+                if (objData == null || objData.Rows == null || objData.Rows.Count == 0)
+                {
+                    string allPlansQuery = "SELECT DISTINCT WELL_ID, WELLBORE_ID, LOG_ID, PLAN_ID, PLAN_NAME FROM VMX_ADNL_HKLD_PLAN ORDER BY PLAN_NAME";
+                    objData = objDataService.GetTable(allPlansQuery);
+                }
                 if (objData != null && objData.Rows != null)
                 {
                     foreach (DataRow row in objData.Rows)
@@ -257,6 +482,10 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                         var plan = loadObject(objDataService, wId, wbId, lId, pId);
                         if (plan != null)
                         {
+                            if (string.IsNullOrWhiteSpace(plan.Name))
+                            {
+                                plan.Name = DataService.checkNull(row["PLAN_NAME"], pId);
+                            }
                             list.Add(plan);
                         }
                     }
@@ -331,15 +560,8 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                         objPlan.Type = DataService.checkNull(headerRow["TYPE"], 0);
                     }
 
-                    // Load all 8 curve datasets
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnPickup, objPlan.pickup);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnSlackOff, objPlan.slackoff);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnRotate, objPlan.rotate);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnTorque, objPlan.torque);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnOnTorque, objPlan.onTorque);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnMkTorque, objPlan.mkTorque);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnTorqueLimit, objPlan.tqLimit);
-                    LoadPlanDataSection(objDataService, actualWellId, actualWellboreId, actualLogId, actualPlanId, HookloadPlan.cnSinRot, objPlan.sinRot);
+                    // Load all 8 curve datasets in a single batch query for maximum performance
+                    LoadAllPlanData(objDataService, actualPlanId, objPlan);
 
                     return objPlan;
                 }
@@ -354,25 +576,20 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
             }
         }
 
-        private static void LoadPlanDataSection(
+        private static void LoadAllPlanData(
             IDataServiceDIntel objDataService,
-            string WellID,
-            string WellboreID,
-            string LogID,
             string PlanID,
-            string planType,
-            Dictionary<int, HookloadPlanData> targetDict)
+            AdnlHookloadPlan objPlan)
         {
             string pId = (PlanID ?? "").Replace("'", "''");
-            string pt = (planType ?? "").Replace("'", "''");
-
-            string sql = $"SELECT * FROM VMX_ADNL_HKLD_PLAN_DATA WHERE PLAN_ID='{pId}' AND PLAN_TYPE='{pt}' ORDER BY DEPTH";
+            string sql = $"SELECT PLAN_TYPE, DEPTH, WEIGHT, MAX_COMPRESS, MAX_TENSION, MIN_COMPRESS, MIN_TENSION FROM VMX_ADNL_HKLD_PLAN_DATA WHERE PLAN_ID='{pId}' ORDER BY PLAN_TYPE, DEPTH";
 
             DataTable dt = objDataService.GetTable(sql);
             if (dt != null && dt.Rows != null)
             {
                 foreach (DataRow row in dt.Rows)
                 {
+                    string pt = DataService.checkNull(row["PLAN_TYPE"], "").ToUpperInvariant();
                     var item = new HookloadPlanData
                     {
                         Depth = DataService.checkNull(row["DEPTH"], 0.0),
@@ -382,7 +599,34 @@ namespace DrillIntel.Data.Objects.DataObjects.Models
                         MinCompress = DataService.checkNull(row["MIN_COMPRESS"], 0.0),
                         MinTension = DataService.checkNull(row["MIN_TENSION"], 0.0)
                     };
-                    targetDict.Add(targetDict.Count + 1, item);
+
+                    switch (pt)
+                    {
+                        case HookloadPlan.cnPickup:
+                            objPlan.pickup.Add(objPlan.pickup.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnSlackOff:
+                            objPlan.slackoff.Add(objPlan.slackoff.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnRotate:
+                            objPlan.rotate.Add(objPlan.rotate.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnTorque:
+                            objPlan.torque.Add(objPlan.torque.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnOnTorque:
+                            objPlan.onTorque.Add(objPlan.onTorque.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnMkTorque:
+                            objPlan.mkTorque.Add(objPlan.mkTorque.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnTorqueLimit:
+                            objPlan.tqLimit.Add(objPlan.tqLimit.Count + 1, item);
+                            break;
+                        case HookloadPlan.cnSinRot:
+                            objPlan.sinRot.Add(objPlan.sinRot.Count + 1, item);
+                            break;
+                    }
                 }
             }
         }

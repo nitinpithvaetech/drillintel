@@ -67,8 +67,44 @@
         </HierarchicalDataTemplate>
 
         <DataTemplate DataType="{x:Type viewmodels:BroomstickDocumentTreeNode}">
-            <Border Padding="4,2" Margin="0,1" CornerRadius="4" x:Name="DocLeafBorder"
+            <Border Padding="4,2" Margin="0,1" CornerRadius="4" x:Name="DocLeafBorder" Background="Transparent"
                     Visibility="{Binding IsVisibleInFilter, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Border.ContextMenu>
+                    <ContextMenu Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#E2E8F0">
+                        <MenuItem Header="Open in Workspace" 
+                                  Command="{Binding DataContext.OpenSelectedCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FolderOpenOutline" Width="14" Height="14" Foreground="#4F46E5" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Rename Template" 
+                                  Command="{Binding DataContext.RenameTemplateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="PencilOutline" Width="14" Height="14" Foreground="#D97706" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Set as Default" 
+                                  Command="{Binding DataContext.SetDefaultCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="StarOutline" Width="14" Height="14" Foreground="#D97706" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="Duplicate" 
+                                  Command="{Binding DataContext.DuplicateTemplateCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ContentCopy" Width="14" Height="14" Foreground="#7C3AED" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <Separator Background="#E2E8F0" />
+                        <MenuItem Header="Delete Template" 
+                                  Command="{Binding DataContext.DeleteTemplateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                  Foreground="#DC2626">
+                            <MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="DeleteOutline" Width="14" Height="14" Foreground="#DC2626" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                    </ContextMenu>
+                </Border.ContextMenu>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -223,7 +259,9 @@
                               BorderThickness="0" 
                               Padding="6"
                               SelectedItemChanged="OnTreeViewSelectedItemChanged"
-                              MouseDoubleClick="OnTreeViewMouseDoubleClick" />
+                              MouseDoubleClick="OnTreeViewMouseDoubleClick"
+                              PreviewMouseRightButtonDown="OnTreeViewPreviewMouseRightButtonDown"
+                              KeyDown="OnTreeViewKeyDown" />
                 </Grid>
             </Border>
 

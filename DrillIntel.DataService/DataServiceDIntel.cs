@@ -49,6 +49,7 @@ namespace DrillIntel.Data
         /// <summary>Industry (LAS/WITS) convention for a missing/null numeric reading.</summary>
         public const double NULL_NUMERIC_VALUE = -999.25;
 
+        private readonly object _syncLock = new();
         private SqliteConnection? _connection;
         private SqliteTransaction? _activeTransaction;
         private bool _disposed;
@@ -244,11 +245,14 @@ namespace DrillIntel.Data
         public DbCommand CreateCommand(string sql)
         {
             RequireConnection();
-            var cmd = _connection!.CreateCommand();
+            lock (_syncLock)
+            {
+                var cmd = _connection!.CreateCommand();
             cmd.CommandText = sql;
             cmd.CommandTimeout = CommandTimeoutSeconds;
             cmd.Transaction = _activeTransaction;
-            return cmd;
+                return cmd;
+            }
         }
 
         public SqliteCommand CreateSqliteCommand(string sql) => (SqliteCommand)CreateCommand(sql);
@@ -281,7 +285,11 @@ namespace DrillIntel.Data
             {
                 try
                 {
-                    var result = action();
+                    T result;
+                    lock (_syncLock)
+                    {
+                        result = action();
+                    }
                     LastError = string.Empty;
                     return result;
                 }

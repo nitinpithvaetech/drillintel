@@ -25,9 +25,31 @@ public partial class BroomstickWorkspaceView : UserControl
 
     private void OnTreeViewSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (ViewModel != null && e.NewValue is BroomstickDocumentTreeNode docNode)
+        if (ViewModel != null)
         {
-            ViewModel.SelectedTreeNode = docNode;
+            ViewModel.SelectedTreeNode = e.NewValue as BroomstickDocumentTreeNode;
+        }
+    }
+
+    private void OnTreeViewPreviewMouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject dep)
+        {
+            var treeItem = FindVisualParent<TreeViewItem>(dep);
+            if (treeItem != null)
+            {
+                treeItem.Focus();
+                treeItem.IsSelected = true;
+            }
+        }
+    }
+
+    private async void OnTreeViewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Delete && ViewModel != null && ViewModel.CanDeleteSelection)
+        {
+            await ViewModel.DeleteDocumentCommand.ExecuteAsync(ViewModel.SelectedTreeNode);
+            e.Handled = true;
         }
     }
 

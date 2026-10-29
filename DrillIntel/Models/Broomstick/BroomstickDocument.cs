@@ -73,6 +73,10 @@ public class BroomstickDocument
     [JsonIgnore]
     public AdnlHookloadPlan? BroomstickPlanData { get; set; }
 
+    // Associated child plans (when a Main Plan / RunNo is selected)
+    [JsonIgnore]
+    public List<AdnlHookloadPlan> AssociatedPlans { get; set; } = new();
+
     // Actual Calculated Broomstick Points (loaded from VMX_BROOMSTICK_POINTS)
     [JsonIgnore]
     public List<PUSOPoint> BroomstickPointData { get; set; } = new();
@@ -139,7 +143,7 @@ public class BroomstickDocument
         }
         if (toDate.HasValue && toDate.Value > DateTime.MinValue)
         {
-            query = query.Where(p => p.StartDate == DateTime.MinValue || p.StartDate <= toDate.Value || (p.EndDate != DateTime.MinValue && p.StartDate <= toDate.Value));
+            query = query.Where(p => p.StartDate == DateTime.MinValue || p.StartDate <= toDate.Value || (p.EndDate != DateTime.MinValue && p.EndDate <= toDate.Value));
         }
 
         // 2. Hookload range filter (if enabled)
@@ -149,7 +153,13 @@ public class BroomstickDocument
             double maxHkld = Profile.MaxHookload > 0 ? Profile.MaxHookload : double.MaxValue;
             query = query.Where(p =>
             {
-                double val = p.DynamicValue > 0 ? p.DynamicValue : p.Avg;
+                double val = p.DynamicValue > 0 ? p.DynamicValue :
+                             p.Avg > 0 ? p.Avg :
+                             p.Max > 0 ? p.Max :
+                             p.Min > 0 ? p.Min :
+                             p.UserDynamicValue > 0 ? p.UserDynamicValue :
+                             p.UserStaticValue;
+                if (val <= 0) return true;
                 return val >= minHkld && val <= maxHkld;
             });
         }
