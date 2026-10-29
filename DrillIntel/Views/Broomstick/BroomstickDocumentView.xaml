@@ -72,23 +72,24 @@
             </Setter>
         </Style>
 
-        <!-- Clean Modern Light ComboBox Style with Crisp White Dropdown Popup -->
-        <Style TargetType="ComboBox">
+        <!-- Prominent Wide Boxed ComboBox Style matching Red Box Reference -->
+        <Style x:Key="BroomstickPlanComboBoxStyle" TargetType="ComboBox">
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
             <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
-            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Foreground" Value="#0F172A" />
             <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontSize" Value="11" />
+            <Setter Property="BorderBrush" Value="#94A3B8" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="FontSize" Value="11.5" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
-                            <!-- ToggleButton for dropdown open/close -->
+                            <!-- ToggleButton covering entire box width with distinct border and arrow affordance -->
                             <ToggleButton x:Name="ToggleButton" 
                                           Focusable="False" 
                                           IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" 
@@ -99,43 +100,59 @@
                                                 Background="{TemplateBinding Background}" 
                                                 BorderBrush="{TemplateBinding BorderBrush}" 
                                                 BorderThickness="{TemplateBinding BorderThickness}" 
-                                                CornerRadius="4">
+                                                CornerRadius="4"
+                                                SnapsToDevicePixels="True">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="22" />
+                                                    <ColumnDefinition Width="28" />
                                                 </Grid.ColumnDefinitions>
-                                                <Path x:Name="Arrow" 
-                                                      Grid.Column="1" 
-                                                      HorizontalAlignment="Center" 
-                                                      VerticalAlignment="Center" 
-                                                      Data="M 0 0 L 4 4 L 8 0 Z" 
-                                                      Fill="#64748B" />
+                                                
+                                                <!-- Right Arrow Section with separator -->
+                                                <Border x:Name="ArrowBox" 
+                                                        Grid.Column="1" 
+                                                        BorderBrush="#CBD5E1" 
+                                                        BorderThickness="1,0,0,0" 
+                                                        Background="#F8FAFC" 
+                                                        CornerRadius="0,3,3,0">
+                                                    <Path x:Name="Arrow" 
+                                                          HorizontalAlignment="Center" 
+                                                          VerticalAlignment="Center" 
+                                                          Data="M 0 0 L 4.5 4.5 L 9 0 Z" 
+                                                          Fill="#475569" />
+                                                </Border>
                                             </Grid>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
                                                 <Setter TargetName="Border" Property="BorderBrush" Value="#1976D2" />
+                                                <Setter TargetName="ArrowBox" Property="Background" Value="#EFF6FF" />
                                                 <Setter TargetName="Arrow" Property="Fill" Value="#1976D2" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="#1565C0" />
+                                                <Setter TargetName="ArrowBox" Property="Background" Value="#DBEAFE" />
+                                                <Setter TargetName="Arrow" Property="Fill" Value="#1565C0" />
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
 
-                            <!-- Selected item content displayed in the closed combobox box -->
-                            <ContentPresenter x:Name="ContentSite" 
-                                              IsHitTestVisible="False" 
-                                              Content="{TemplateBinding SelectionBoxItem}" 
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
-                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" 
-                                              Margin="8,3,24,3" 
-                                              VerticalAlignment="Center" 
-                                              HorizontalAlignment="Left"
-                                              TextElement.Foreground="#1E293B"
-                                              TextElement.FontWeight="SemiBold" />
+                            <!-- Selected item content displayed inside box with safe padding -->
+                            <Border Margin="10,0,32,0" ClipToBounds="True" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                <ContentPresenter x:Name="ContentSite" 
+                                                  IsHitTestVisible="False" 
+                                                  Content="{TemplateBinding SelectionBoxItem}" 
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
+                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" 
+                                                  TextElement.Foreground="#0F172A"
+                                                  TextElement.FontWeight="SemiBold"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left" />
+                            </Border>
 
-                            <!-- Dropdown Popup with Solid White Background and Subtle Shadow -->
+                            <!-- Dropdown Popup matching exact box width with subtle shadow -->
                             <Popup x:Name="Popup" 
                                    Placement="Bottom" 
                                    IsOpen="{TemplateBinding IsDropDownOpen}" 
@@ -148,14 +165,15 @@
                                       MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <Border x:Name="DropDownBorder" 
                                             Background="#FFFFFF" 
-                                            BorderBrush="#CBD5E1" 
-                                            BorderThickness="1" 
+                                            BorderBrush="#94A3B8" 
+                                            BorderThickness="1.5" 
                                             CornerRadius="4" 
-                                            Margin="0,2,0,0">
+                                            MinWidth="{TemplateBinding ActualWidth}"
+                                            Margin="0,3,0,0">
                                         <Border.Effect>
-                                            <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.15" Color="#000000" />
+                                            <DropShadowEffect BlurRadius="12" Direction="270" ShadowDepth="3" Opacity="0.18" Color="#000000" />
                                         </Border.Effect>
-                                        <ScrollViewer Margin="2,4" SnapsToDevicePixels="True">
+                                        <ScrollViewer Margin="2,4" SnapsToDevicePixels="True" MaxHeight="300">
                                             <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
                                         </ScrollViewer>
                                     </Border>
@@ -174,11 +192,14 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Default ComboBox Style based on BroomstickPlanComboBoxStyle -->
+        <Style TargetType="ComboBox" BasedOn="{StaticResource BroomstickPlanComboBoxStyle}" />
     </UserControl.Resources>
 
     <Grid Margin="10">
         <Grid.RowDefinitions>
-            <!-- 0: Control Header (Select Plan, Actions) -->
+            <!-- 0: Control Header (Title, Right Actions, and Plan Selector Bar) -->
             <RowDefinition Height="Auto" />
             <!-- 1: TeeChart Plot Canvas with Floating Legend & Hover Tooltip -->
             <RowDefinition Height="*" />
@@ -190,105 +211,142 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 0: Control Header Bar -->
-        <Border Grid.Row="0" Background="#F4F3F8" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+        <!-- 0: Control Header Bar (Clean 2-line layout preventing crowding on any screen size) -->
+        <Border Grid.Row="0" Background="#F4F3F8" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <!-- Left: Title, Plan Selector -->
-                    <ColumnDefinition Width="*" />
-                    <!-- Right: Actions & Tools -->
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <!-- Line 1: Title and Right Action Tools -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Line 2: Plan Selector Bar -->
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <!-- Left Group: Title and Plan Selector -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <materialDesign:PackIcon Kind="ChartScatterPlot" Width="20" Height="20" Foreground="#512DA8" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Text="Combined Broomstick Plot" FontSize="13.5" FontWeight="Bold" Foreground="#311B92" VerticalAlignment="Center" Margin="0,0,16,0" />
+                <!-- Row 0: Title on Left, Action Tools on Right -->
+                <Grid Grid.Row="0" Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <!-- Left: Title -->
+                        <ColumnDefinition Width="*" />
+                        <!-- Right: Actions & Tools -->
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                    <!-- Select Plan Dropdown (Crisp White Background) -->
-                    <TextBlock Text="Select Plan:" FontSize="11" FontWeight="SemiBold" Foreground="#555555" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <ComboBox ItemsSource="{Binding AvailablePlans}" 
-                              SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
-                              DisplayMemberPath="Name"
-                              Width="260" Height="28" FontSize="11" 
-                              VerticalContentAlignment="Center" Margin="0,0,12,0" />
-                </StackPanel>
+                    <!-- Title & Icon -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="ChartScatterPlot" Width="22" Height="22" Foreground="#512DA8" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBlock Text="Combined Broomstick Plot" FontSize="14" FontWeight="Bold" Foreground="#311B92" VerticalAlignment="Center" />
+                    </StackPanel>
 
-                <!-- Right Action Tools -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <!-- Reset Zoom -->
-                    <Button Command="{Binding ResetZoomCommand}" 
-                            Style="{StaticResource MaterialDesignOutlinedButton}" 
-                            Height="28" Padding="8,0" Margin="0,0,6,0"
-                            ToolTip="Reset Zoom to Extents">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="FitToScreenOutline" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Reset Zoom" FontSize="10.5" VerticalAlignment="Center" />
+                    <!-- Right Action Tools -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- Reset Zoom -->
+                        <Button Command="{Binding ResetZoomCommand}" 
+                                Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Height="28" Padding="8,0" Margin="0,0,6,0"
+                                ToolTip="Reset Zoom to Extents">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FitToScreenOutline" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Reset Zoom" FontSize="10.5" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Data Selector Window (Matching RigStateDocument) -->
+                        <Button Command="{Binding OpenDataSelectorCommand}" 
+                                Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Height="28" Padding="10,0" Margin="0,0,6,0"
+                                ToolTip="Open Data Selector &amp; Field Mapping Window">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Data Selector" FontSize="10.5" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Calculate Points Button -->
+                        <Button Command="{Binding RecalculatePointsCommand}" 
+                                Style="{StaticResource MaterialDesignRaisedButton}" 
+                                Background="#059669" Foreground="White"
+                                Height="28" Padding="10,0" Margin="0,0,6,0"
+                                ToolTip="Recalculate Broomstick Points from Well Log">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Calculator" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Calculate Points" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Setup & Filter Dialog -->
+                        <Button Command="{Binding OpenSetupCommand}" 
+                                Style="{StaticResource MaterialDesignRaisedButton}" 
+                                Background="#512DA8" Foreground="White"
+                                Height="28" Padding="10,0" Margin="0,0,6,0"
+                                ToolTip="Open Broomstick Setup &amp; Filter Criteria">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Tune" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Broomstick Setup" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Template Manager -->
+                        <Button Command="{Binding OpenTemplateManagerCommand}" 
+                                Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Height="28" Padding="10,0" Margin="0,0,6,0"
+                                ToolTip="Open Broomstick Template Manager">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="FileTree" Width="14" Height="14" Foreground="#D97706" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Templates" FontSize="10.5" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <!-- Save Document Layout -->
+                        <Button Command="{Binding SaveDocumentCommand}" 
+                                Style="{StaticResource MaterialDesignRaisedButton}" 
+                                Background="#10B981" Foreground="White"
+                                Height="28" Padding="10,0" Margin="0,0,4,0"
+                                ToolTip="Save Broomstick Setup (Ctrl+S)">
+                            <materialDesign:PackIcon Kind="ContentSaveOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                        </Button>
+
+                        <Button Command="{Binding SaveAsDocumentCommand}" 
+                                Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Height="28" Padding="8,0"
+                                ToolTip="Save As New Template...">
+                            <materialDesign:PackIcon Kind="ContentSavePlusOutline" Width="14" Height="14" VerticalAlignment="Center" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Row 1: Plan Selector Bar (Dedicated line with generous width, zero crowding) -->
+                <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="10,5">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <!-- Plan Dropdown -->
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <!-- Well & Plotted telemetry -->
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Select Plan:" FontSize="11.5" FontWeight="Bold" Foreground="#334155" VerticalAlignment="Center" Margin="0,0,10,0" />
+                            <ComboBox Style="{StaticResource BroomstickPlanComboBoxStyle}"
+                                      ItemsSource="{Binding AvailablePlans}" 
+                                      SelectedItem="{Binding SelectedPlan, Mode=TwoWay}"
+                                      Width="650" MinWidth="550" MaxWidth="900" Height="30" FontSize="11.5" 
+                                      VerticalContentAlignment="Center" Margin="0,0,14,0">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </StackPanel>
-                    </Button>
 
-                    <!-- Data Selector Window (Matching RigStateDocument) -->
-                    <Button Command="{Binding OpenDataSelectorCommand}" 
-                            Style="{StaticResource MaterialDesignOutlinedButton}" 
-                            Height="28" Padding="10,0" Margin="0,0,6,0"
-                            ToolTip="Open Data Selector &amp; Field Mapping Window">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Data Selector" FontSize="10.5" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Well: " FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                            <TextBlock Text="{Binding WellName, FallbackValue='(None)'}" FontSize="11" FontWeight="Bold" Foreground="#1E293B" Margin="0,0,14,0" />
+                            <TextBlock Text="Plotted Points: " FontSize="11" FontWeight="SemiBold" Foreground="#64748B" />
+                            <TextBlock Text="{Binding LoadedPointsCount, StringFormat='{}{0:N0}'}" FontSize="11" FontWeight="Bold" Foreground="#16A34A" />
                         </StackPanel>
-                    </Button>
-
-                    <!-- Calculate Points Button -->
-                    <Button Command="{Binding RecalculatePointsCommand}" 
-                            Style="{StaticResource MaterialDesignRaisedButton}" 
-                            Background="#059669" Foreground="White"
-                            Height="28" Padding="10,0" Margin="0,0,6,0"
-                            ToolTip="Recalculate Broomstick Points from Well Log">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Calculator" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Calculate Points" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Setup & Filter Dialog -->
-                    <Button Command="{Binding OpenSetupCommand}" 
-                            Style="{StaticResource MaterialDesignRaisedButton}" 
-                            Background="#512DA8" Foreground="White"
-                            Height="28" Padding="10,0" Margin="0,0,6,0"
-                            ToolTip="Open Broomstick Setup &amp; Filter Criteria">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Tune" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Broomstick Setup" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Template Manager -->
-                    <Button Command="{Binding OpenTemplateManagerCommand}" 
-                            Style="{StaticResource MaterialDesignOutlinedButton}" 
-                            Height="28" Padding="10,0" Margin="0,0,6,0"
-                            ToolTip="Open Broomstick Template Manager">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="FileTree" Width="14" Height="14" Foreground="#D97706" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Templates" FontSize="10.5" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Save Document Layout -->
-                    <Button Command="{Binding SaveDocumentCommand}" 
-                            Style="{StaticResource MaterialDesignRaisedButton}" 
-                            Background="#10B981" Foreground="White"
-                            Height="28" Padding="10,0" Margin="0,0,4,0"
-                            ToolTip="Save Broomstick Setup (Ctrl+S)">
-                        <materialDesign:PackIcon Kind="ContentSaveOutline" Width="14" Height="14" VerticalAlignment="Center" />
-                    </Button>
-
-                    <Button Command="{Binding SaveAsDocumentCommand}" 
-                            Style="{StaticResource MaterialDesignOutlinedButton}" 
-                            Height="28" Padding="8,0"
-                            ToolTip="Save As New Template...">
-                        <materialDesign:PackIcon Kind="ContentSavePlusOutline" Width="14" Height="14" VerticalAlignment="Center" />
-                    </Button>
-                </StackPanel>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
@@ -377,7 +435,7 @@
                     <TextBlock Text="Preset Range:" Style="{StaticResource BarLabel}" />
                     <ComboBox ItemsSource="{Binding RangePresets}" 
                               SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
-                              Width="140" Height="28" VerticalContentAlignment="Center" FontSize="11" />
+                              Width="160" Height="28" VerticalContentAlignment="Center" FontSize="11" />
                 </StackPanel>
 
                 <!-- Center/Right: From - To Single Text DateTime Boxes & Apply Button -->

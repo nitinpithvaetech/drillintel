@@ -26,11 +26,11 @@
         <SolidColorBrush x:Key="MaterialDesignBody" Color="#F8FAFC" />
         <SolidColorBrush x:Key="MaterialDesignToolTipBackground" Color="#1E293B" />
 
-        <!-- High-Contrast Dark ComboBoxItem Style -->
+        <!-- Clean Light ComboBoxItem Style -->
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="#171D28" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Padding" Value="10,5" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -41,16 +41,18 @@
                                 Background="{TemplateBinding Background}"
                                 BorderThickness="0"
                                 Padding="{TemplateBinding Padding}"
+                                CornerRadius="3"
+                                Margin="2,1"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left" />
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left" TextElement.Foreground="{TemplateBinding Foreground}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#2A3447" />
-                                <Setter Property="Foreground" Value="#38BDF8" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#EFF6FF" />
+                                <Setter Property="Foreground" Value="#1976D2" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#4F46E5" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1976D2" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
                             </Trigger>
                             <MultiTrigger>
@@ -58,7 +60,7 @@
                                     <Condition Property="IsSelected" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#4338CA" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1565C0" />
                                 <Setter Property="Foreground" Value="#FFFFFF" />
                             </MultiTrigger>
                         </ControlTemplate.Triggers>
@@ -67,16 +69,16 @@
             </Setter>
         </Style>
 
-        <!-- Complete High-Contrast Dark ComboBox Style with Dark DropDown Popup -->
+        <!-- Clean Modern Light ComboBox Style with White DropDown Popup -->
         <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="OverridesDefaultStyle" Value="True" />
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
             <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
             <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="Background" Value="#171D28" />
-            <Setter Property="BorderBrush" Value="#2D3748" />
+            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Background" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Template">
@@ -104,28 +106,30 @@
                                                       HorizontalAlignment="Center" 
                                                       VerticalAlignment="Center" 
                                                       Data="M 0 0 L 4 4 L 8 0 Z" 
-                                                      Fill="#94A3B8" />
+                                                      Fill="#64748B" />
                                             </Grid>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Border" Property="BorderBrush" Value="#6366F1" />
-                                                <Setter TargetName="Arrow" Property="Fill" Value="#38BDF8" />
+                                                <Setter TargetName="Border" Property="BorderBrush" Value="#1976D2" />
+                                                <Setter TargetName="Arrow" Property="Fill" Value="#1976D2" />
                                             </Trigger>
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
 
-                            <ContentPresenter x:Name="ContentSite" 
-                                              IsHitTestVisible="False" 
-                                              Content="{TemplateBinding SelectionBoxItem}" 
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
-                                              ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" 
-                                              Margin="8,2,22,2" 
-                                              VerticalAlignment="Center" 
-                                              HorizontalAlignment="Left"
-                                              TextElement.Foreground="#F8FAFC" />
+                            <Border Margin="8,2,22,2" ClipToBounds="True" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                                <ContentPresenter x:Name="ContentSite" 
+                                                  IsHitTestVisible="False" 
+                                                  Content="{TemplateBinding SelectionBoxItem}" 
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" 
+                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" 
+                                                  TextElement.Foreground="#1E293B"
+                                                  TextElement.FontWeight="SemiBold"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left" />
+                            </Border>
 
                             <Popup x:Name="Popup" 
                                    Placement="Bottom" 
@@ -138,11 +142,15 @@
                                       MinWidth="{TemplateBinding ActualWidth}" 
                                       MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <Border x:Name="DropDownBorder" 
-                                            Background="#171D28" 
-                                            BorderBrush="#2D3748" 
+                                            Background="#FFFFFF" 
+                                            BorderBrush="#CBD5E1" 
                                             BorderThickness="1" 
                                             CornerRadius="4" 
+                                            MinWidth="{TemplateBinding ActualWidth}"
                                             Margin="0,2,0,0">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.15" Color="#000000" />
+                                        </Border.Effect>
                                         <ScrollViewer Margin="2,4" SnapsToDevicePixels="True">
                                             <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
                                         </ScrollViewer>
@@ -155,7 +163,7 @@
                                 <Setter TargetName="DropDownBorder" Property="MinHeight" Value="50" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#64748B" />
+                                <Setter Property="Foreground" Value="#94A3B8" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -259,7 +267,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Down Sample Data On" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedIndex="{Binding DownSampleOn}" Background="#171D28" Foreground="#F8FAFC" BorderBrush="#2D3748" Height="26" FontSize="11">
+                                            <ComboBox SelectedIndex="{Binding DownSampleOn}" Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#CBD5E1" Height="26" FontSize="11">
                                                 <ComboBoxItem Content="By Depth" />
                                                 <ComboBoxItem Content="By Time" />
                                             </ComboBox>
@@ -313,7 +321,7 @@
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Filter Method" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding FilterMethod, Mode=TwoWay}" Background="#171D28" Foreground="#F8FAFC" BorderBrush="#2D3748" Height="26" FontSize="11">
+                                            <ComboBox SelectedValue="{Binding FilterMethod, Mode=TwoWay}" Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#CBD5E1" Height="26" FontSize="11">
                                                 <ComboBoxItem Content="Moving Avg." />
                                                 <ComboBoxItem Content="Median" />
                                                 <ComboBoxItem Content="Standard Deviation" />
@@ -342,7 +350,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Casing Point Style" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding CasingPointStyle}" Background="#171D28" Foreground="#F8FAFC" BorderBrush="#2D3748" Height="26" FontSize="11">
+                                            <ComboBox SelectedValue="{Binding CasingPointStyle}" Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#CBD5E1" Height="26" FontSize="11">
                                                 <ComboBoxItem Content="Rectangle" />
                                                 <ComboBoxItem Content="Circle" />
                                             </ComboBox>
@@ -389,7 +397,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Style" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding PointsStyle}" Background="#171D28" Foreground="#F8FAFC" BorderBrush="#2D3748" Height="26" FontSize="11">
+                                            <ComboBox SelectedValue="{Binding PointsStyle}" Background="#FFFFFF" Foreground="#1E293B" BorderBrush="#CBD5E1" Height="26" FontSize="11">
                                                 <ComboBoxItem Content="Rectangle" />
                                                 <ComboBoxItem Content="Circle" />
                                                 <ComboBoxItem Content="Triangle" />
