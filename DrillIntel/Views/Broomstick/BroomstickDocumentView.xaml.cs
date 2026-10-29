@@ -110,5 +110,10 @@ public partial class BroomstickDocumentView : UserControl
     {
         ViewModel?.UpdateHoverTelemetry(null);
     }
+
+    private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+
+    }
 }
 
