@@ -38,6 +38,21 @@ public partial class DataSelectorViewModel : ObservableObject
         }
     }
 
+    partial void OnYCoordinateChanged(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var ch = _console.Tracks.SelectMany(t => t.Channels)
+            .FirstOrDefault(c => c.Mnemonic.Equals(value, StringComparison.OrdinalIgnoreCase));
+        if (ch != null)
+        {
+            string name = !string.IsNullOrWhiteSpace(ch.Title) ? ch.Title : ch.Mnemonic;
+            if (AvailableSeries.Contains(name) && TargetSeries != name)
+            {
+                TargetSeries = name;
+            }
+        }
+    }
+
     public ObservableCollection<string> AvailableSeries { get; } = new();
     public ObservableCollection<string> AvailableLabelFields { get; } = new();
     public ObservableCollection<string> AvailableXCoordinates { get; } = new();
@@ -107,20 +122,29 @@ public partial class DataSelectorViewModel : ObservableObject
     [RelayCommand]
     private void ApplyChanges()
     {
-        // Apply field mappings to matching channel if found
-        var channel = _console.Tracks.SelectMany(t => t.Channels)
-            .FirstOrDefault(c => c.Title.Equals(TargetSeries, StringComparison.OrdinalIgnoreCase) ||
-                                 c.Mnemonic.Equals(TargetSeries, StringComparison.OrdinalIgnoreCase));
+        var exactChannel = _console.Tracks.SelectMany(t => t.Channels)
+            .FirstOrDefault(c => c.Mnemonic.Equals(YCoordinate, StringComparison.OrdinalIgnoreCase));
 
-        if (channel != null && !string.IsNullOrWhiteSpace(YCoordinate))
+        if (exactChannel != null)
         {
-            channel.Mnemonic = YCoordinate;
-            channel.Title = TargetSeries;
+            SelectedChannelMnemonic = exactChannel.Mnemonic;
         }
+        else
+        {
+            var channel = _console.Tracks.SelectMany(t => t.Channels)
+                .FirstOrDefault(c => c.Title.Equals(TargetSeries, StringComparison.OrdinalIgnoreCase) ||
+                                     c.Mnemonic.Equals(TargetSeries, StringComparison.OrdinalIgnoreCase));
 
-        SelectedChannelMnemonic = !string.IsNullOrWhiteSpace(YCoordinate)
-            ? YCoordinate
-            : (channel?.Mnemonic ?? TargetSeries);
+            if (channel != null && !string.IsNullOrWhiteSpace(YCoordinate))
+            {
+                channel.Mnemonic = YCoordinate;
+                channel.Title = TargetSeries;
+            }
+
+            SelectedChannelMnemonic = !string.IsNullOrWhiteSpace(YCoordinate)
+                ? YCoordinate
+                : (channel?.Mnemonic ?? TargetSeries);
+        }
 
         RequestClose?.Invoke(true);
     }

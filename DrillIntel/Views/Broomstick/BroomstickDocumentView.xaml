@@ -284,6 +284,18 @@
                             </StackPanel>
                         </Button>
 
+                        <!-- Broomstick Setup Dialog (Project Configuration Profile Settings) -->
+                        <Button Command="{Binding OpenBroomstickSetupCommand}" 
+                                Style="{StaticResource MaterialDesignRaisedButton}" 
+                                Background="#1976D2" Foreground="White"
+                                Height="28" Padding="10,0" Margin="0,0,6,0"
+                                ToolTip="Open Broomstick Setup (Project Configuration Profile Settings)">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="TuneVariant" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                <TextBlock Text="Broomstick Setup" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
                         <!-- Template Manager -->
                         <Button Command="{Binding OpenTemplateManagerCommand}" 
                                 Style="{StaticResource MaterialDesignOutlinedButton}" 

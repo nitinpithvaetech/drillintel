@@ -380,4 +380,65 @@ public class BroomstickDocumentViewModelTests : IDisposable
         };
         Assert.Equal(2850.5, DrillIntel.Services.Charting.BroomstickChartRenderer.ResolvePointPlotValue(torquePt));
     }
+
+    [Fact]
+    public async Task BroomstickSetupCommand_InvokesDialogHandler_AndReloadsProfile()
+    {
+        var doc = new BroomstickDocument { DocumentName = "Test Setup Document" };
+        var repo = new BroomstickTemplateRepository(_session);
+        var dataService = new BroomstickDataService(_session);
+        var vm = new BroomstickDocumentViewModel(_session, repo, dataService, doc);
+
+        bool dialogInvoked = false;
+        vm.OpenBroomstickSetupDialogHandler = (docVm) =>
+        {
+            dialogInvoked = true;
+            return true;
+        };
+
+        await vm.OpenBroomstickSetupCommand.ExecuteAsync(null);
+
+        Assert.True(dialogInvoked);
+        Assert.True(vm.IsDirty);
+    }
+
+    [Fact]
+    public async Task OpenDataSelectorCommand_WhenChannelSelected_UpdatesMnemonicAndTrackBarOverview()
+    {
+        var doc = new BroomstickDocument { DocumentName = "Test DataSelector Doc" };
+        var repo = new BroomstickTemplateRepository(_session);
+        var dataService = new BroomstickDataService(_session);
+        var vm = new BroomstickDocumentViewModel(_session, repo, dataService, doc);
+
+        // Add dummy point data so trackbar can render
+        var now = DateTime.Now;
+        doc.BroomstickPointData.Add(new DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.PUSOPoint
+        {
+            Depth = 1000,
+            DynamicValue = 120,
+            StartDate = now.AddHours(-2),
+            EndDate = now.AddHours(-1)
+        });
+        doc.BroomstickPointData.Add(new DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.PUSOPoint
+        {
+            Depth = 2000,
+            DynamicValue = 180,
+            StartDate = now.AddHours(-1),
+            EndDate = now
+        });
+
+        vm.OpenDataSelectorDialogHandler = (dataVm) =>
+        {
+            dataVm.YCoordinate = "HKLD";
+            dataVm.ApplyChangesCommand.Execute(null);
+            return true;
+        };
+
+        await vm.OpenDataSelectorCommand.ExecuteAsync(null);
+
+        Assert.Equal("HKLD", vm.SelectedOverviewChannelMnemonic);
+        Assert.Contains("Hookload", vm.TrackBarOverviewChannelName);
+        Assert.NotNull(vm.TrackBarOverviewPoints);
+        Assert.True(vm.TrackBarOverviewPoints.Count > 0);
+    }
 }

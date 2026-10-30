@@ -35,6 +35,7 @@ using DrillIntel.Projects;
 using DrillIntel.Services.Charting;
 
 using DrillIntel.Views;
+using DrillIntel.Views.Broomstick;
 
 
 
@@ -77,6 +78,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
     // UI Dialog Handlers
 
     public Func<BroomstickDocumentViewModel, bool?>? OpenSetupDialogHandler { get; set; }
+    public Func<BroomstickDocumentViewModel, bool?>? OpenBroomstickSetupDialogHandler { get; set; }
 
     public Func<BroomstickDocumentManagerViewModel, bool?>? OpenTemplateManagerDialogHandler { get; set; }
 
@@ -720,6 +722,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
     [ObservableProperty]
 
     private string _selectedOverviewChannelMnemonic = "DEPTH";
+    private VHTrackConsole? _consoleModel;
 
 
 
@@ -1194,386 +1197,303 @@ public partial class BroomstickDocumentViewModel : ObservableObject
     /// </summary>
 
     public async Task LoadTrackBarOverviewAsync()
-
     {
+        string mnemonic = !string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic)
+            ? SelectedOverviewChannelMnemonic
+            : "DEPTH";
 
-        // 1. Determine date range from TimeLog if available
-
-        if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
-
+        if (_consoleModel == null)
         {
+            _consoleModel = await GetOrCreateConsoleModelAsync();
+        }
 
+        // Look for exact mnemonic match first
+        var channel = _consoleModel?.Tracks.SelectMany(t => t.Channels)
+            .FirstOrDefault(c => string.Equals(c.Mnemonic, mnemonic, StringComparison.OrdinalIgnoreCase));
+        if (channel == null)
+        {
+            channel = _consoleModel?.Tracks.SelectMany(t => t.Channels)
+                .FirstOrDefault(c => string.Equals(c.Title, mnemonic, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (channel != null && !string.IsNullOrWhiteSpace(channel.Mnemonic))
+        {
+            mnemonic = channel.Mnemonic;
+        }
+
+        string channelTitle = mnemonic;
+        string channelUnit = string.Empty;
+
+        // Derive standard channel title and unit for recognized drilling channels
+        if (mnemonic.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) || mnemonic.Contains("BIT", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Depth", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Bit Depth";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "ft";
+        }
+        else if (mnemonic.Contains("HKLD", StringComparison.OrdinalIgnoreCase) || mnemonic.Contains("HOOK", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Hook", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Hookload";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "klb";
+        }
+        else if (mnemonic.Contains("TORQ", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Torq", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Drilling Torque";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "kft-lb";
+        }
+        else if (mnemonic.Contains("ROP", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Penetration", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Rate of Penetration";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "ft/hr";
+        }
+        else if (mnemonic.Contains("WOB", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Weight", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Weight on Bit";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "klb";
+        }
+        else if (mnemonic.Contains("RPM", StringComparison.OrdinalIgnoreCase))
+        {
+            channelTitle = channel?.Title != null && channel.Title.Contains("Speed", StringComparison.OrdinalIgnoreCase) ? channel.Title : "Rotary Speed";
+            channelUnit = !string.IsNullOrWhiteSpace(channel?.Unit) ? channel.Unit : "rpm";
+        }
+        else
+        {
+            channelTitle = !string.IsNullOrWhiteSpace(channel?.Title) ? channel.Title : mnemonic;
+            channelUnit = channel?.Unit ?? string.Empty;
+        }
+
+        TrackBarOverviewChannelName = !string.IsNullOrWhiteSpace(channelUnit)
+            ? $"{channelTitle} ({channelUnit})"
+            : channelTitle;
+
+        TrackBarOverviewBrush = GetChannelBrush(mnemonic);
+
+        // 1. Determine date range and query from TimeLog if available
+        if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
+        {
             try
-
             {
-
                 var dateRange = await _chartDataService.GetTimeLogDateRangeAsync(LogId);
-
                 if (dateRange.HasValue)
-
                 {
-
                     LogMinDate = dateRange.Value.MinDate;
-
                     LogMaxDate = dateRange.Value.MaxDate;
-
                     TrackBarMin = LogMinDate.ToOADate();
-
                     TrackBarMax = LogMaxDate.ToOADate();
-
-                    TrackBarSelectionStart = TrackBarMin;
-
-                    TrackBarSelectionEnd = TrackBarMax;
-
-                    FromDate = LogMinDate;
-
-                    ToDate = LogMaxDate;
-
-                    FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
-
-                    ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
-
+                    if (TrackBarSelectionStart < TrackBarMin || TrackBarSelectionEnd > TrackBarMax || TrackBarSelectionStart >= TrackBarSelectionEnd)
+                    {
+                        TrackBarSelectionStart = TrackBarMin;
+                        TrackBarSelectionEnd = TrackBarMax;
+                        FromDate = LogMinDate;
+                        ToDate = LogMaxDate;
+                        FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+                        ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+                    }
                     IsTimeLog = true;
-
                 }
 
-
-
-                // Query Depth channels for Y Axis (X Axis = Datetime)
-
-                string[] depthCandidates = { "BIT_DEPTH", "HOLE_DEPTH", "DEPTH", "DMEA", "DBIT", "MD", "Bit Depth", "Hole Depth" };
-
-
+                var queryList = new List<string> { mnemonic };
+                if (mnemonic.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) || mnemonic.Contains("BIT", StringComparison.OrdinalIgnoreCase))
+                {
+                    string[] depthCandidates = { "BIT_DEPTH", "HOLE_DEPTH", "DEPTH", "DMEA", "DBIT", "MD", "Bit Depth", "Hole Depth" };
+                    foreach (var c in depthCandidates)
+                    {
+                        if (!queryList.Contains(c, StringComparer.OrdinalIgnoreCase))
+                            queryList.Add(c);
+                    }
+                }
 
                 var overviewData = await _chartDataService.GetTimelogDataAsync(
-
                     WellId,
-
                     WellboreId,
-
                     LogId,
-
-                    depthCandidates,
-
+                    queryList,
                     fromDate: null,
-
                     toDate: null,
-
                     maxPoints: 800);
 
-
-
                 if (overviewData != null && overviewData.IndexValues.Count > 0)
-
                 {
-
-                    string? matchedMnemonic = null;
-
-                    List<double>? depthVals = null;
-
-
-
-                    foreach (var candidate in depthCandidates)
-
+                    List<double>? vals = null;
+                    if (overviewData.ChannelValues.TryGetValue(mnemonic, out var exactVals) && exactVals != null && exactVals.Count == overviewData.IndexValues.Count)
                     {
-
+                        vals = exactVals;
+                    }
+                    else
+                    {
                         var kvp = overviewData.ChannelValues.FirstOrDefault(kv =>
-
-                            string.Equals(kv.Key.Trim(), candidate.Trim(), StringComparison.OrdinalIgnoreCase) &&
-
-                            kv.Value != null && kv.Value.Count > 0);
-
-
-
-                        if (kvp.Value != null && kvp.Value.Count == overviewData.IndexValues.Count)
-
+                            string.Equals(kv.Key.Trim(), mnemonic.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                            kv.Value != null && kv.Value.Count == overviewData.IndexValues.Count);
+                        if (kvp.Value != null)
                         {
-
-                            matchedMnemonic = kvp.Key;
-
-                            depthVals = kvp.Value;
-
-                            break;
-
+                            vals = kvp.Value;
                         }
-
+                        else
+                        {
+                            var first = overviewData.ChannelValues.FirstOrDefault(kv => kv.Value != null && kv.Value.Count == overviewData.IndexValues.Count);
+                            vals = first.Value;
+                        }
                     }
 
-
-
-                    if (depthVals == null || depthVals.Count == 0)
-
+                    if (vals != null && vals.Count == overviewData.IndexValues.Count)
                     {
-
-                        // Fallback to any channel containing DEPTH, BIT, or HOLE
-
-                        var partialKvp = overviewData.ChannelValues.FirstOrDefault(kv =>
-
-                            (kv.Key.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) ||
-
-                             kv.Key.Contains("BIT", StringComparison.OrdinalIgnoreCase) ||
-
-                             kv.Key.Contains("HOLE", StringComparison.OrdinalIgnoreCase)) &&
-
-                            kv.Value != null && kv.Value.Count > 0);
-
-
-
-                        if (partialKvp.Value != null && partialKvp.Value.Count == overviewData.IndexValues.Count)
-
-                        {
-
-                            matchedMnemonic = partialKvp.Key;
-
-                            depthVals = partialKvp.Value;
-
-                        }
-
-                    }
-
-
-
-                    if (depthVals != null && depthVals.Count == overviewData.IndexValues.Count)
-
-                    {
-
-                        string displayTitle = "Bit Depth";
-
-                        if (!string.IsNullOrWhiteSpace(matchedMnemonic))
-
-                        {
-
-                            if (matchedMnemonic.Contains("BIT", StringComparison.OrdinalIgnoreCase))
-
-                                displayTitle = "Bit Depth";
-
-                            else if (matchedMnemonic.Contains("HOLE", StringComparison.OrdinalIgnoreCase))
-
-                                displayTitle = "Hole Depth";
-
-                            else
-
-                                displayTitle = "Depth";
-
-                        }
-
-
-
                         var pts = new PointCollection(overviewData.IndexValues.Count);
-
                         for (int i = 0; i < overviewData.IndexValues.Count; i++)
-
                         {
-
-                            // X Axis: Datetime (OA Date), Y Axis: Depth
-
-                            pts.Add(new System.Windows.Point(overviewData.IndexValues[i], depthVals[i]));
-
+                            // X Axis: Datetime (OA Date), Y Axis: Channel value
+                            pts.Add(new System.Windows.Point(overviewData.IndexValues[i], vals[i]));
                         }
-
                         if (pts.CanFreeze) pts.Freeze();
 
-
-
                         TrackBarOverviewPoints = pts;
-
-                        TrackBarOverviewChannelName = displayTitle;
-
-                        TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210)); // #1976D2
-
                         return;
-
                     }
-
                 }
-
             }
-
             catch
-
             {
-
             }
-
         }
 
-
-
-        // 2. Fallback: Build DEPTH (Y Axis) vs DATETIME (X Axis) from Document.BroomstickPointData if TimeLog table wasn't queried
-
+        // 2. Fallback: Build from Document.BroomstickPointData if TimeLog table wasn't queried
         if (Document.BroomstickPointData.Count > 0)
-
         {
-
             var validPoints = Document.BroomstickPointData
-
                 .Where(p => p.StartDate != DateTime.MinValue && p.Depth > 0)
-
                 .OrderBy(p => p.StartDate)
-
                 .ToList();
 
-
-
             if (validPoints.Count > 0)
-
             {
-
                 var minDt = validPoints.First().StartDate;
-
                 var maxDt = validPoints.Last().StartDate;
-
                 if (maxDt > minDt)
-
                 {
-
-                    LogMinDate = minDt;
-
-                    LogMaxDate = maxDt;
-
-                    TrackBarMin = minDt.ToOADate();
-
-                    TrackBarMax = maxDt.ToOADate();
-
-                    TrackBarSelectionStart = TrackBarMin;
-
-                    TrackBarSelectionEnd = TrackBarMax;
-
-                    FromDate = minDt;
-
-                    ToDate = maxDt;
-
-                    FromDateTimeText = minDt.ToString("dd-MM-yyyy HH:mm");
-
-                    ToDateTimeText = maxDt.ToString("dd-MM-yyyy HH:mm");
-
-                    IsTimeLog = true;
-
-
-
-                    var pts = new PointCollection();
-
-                    var step = Math.Max(1, validPoints.Count / 300);
-
-                    for (int i = 0; i < validPoints.Count; i += step)
-
+                    if (LogMinDate == DateTime.MinValue || LogMaxDate == DateTime.MinValue)
                     {
-
-                        // X Axis: Datetime (OA Date), Y Axis: Depth
-
-                        pts.Add(new System.Windows.Point(validPoints[i].StartDate.ToOADate(), validPoints[i].Depth));
-
+                        LogMinDate = minDt;
+                        LogMaxDate = maxDt;
+                        TrackBarMin = minDt.ToOADate();
+                        TrackBarMax = maxDt.ToOADate();
+                        if (TrackBarSelectionStart < TrackBarMin || TrackBarSelectionEnd > TrackBarMax || TrackBarSelectionStart >= TrackBarSelectionEnd)
+                        {
+                            TrackBarSelectionStart = TrackBarMin;
+                            TrackBarSelectionEnd = TrackBarMax;
+                            FromDate = minDt;
+                            ToDate = maxDt;
+                            FromDateTimeText = minDt.ToString("dd-MM-yyyy HH:mm");
+                            ToDateTimeText = maxDt.ToString("dd-MM-yyyy HH:mm");
+                        }
+                        IsTimeLog = true;
                     }
 
+                    var pts = new PointCollection();
+                    var step = Math.Max(1, validPoints.Count / 300);
+                    for (int i = 0; i < validPoints.Count; i += step)
+                    {
+                        double yVal = validPoints[i].Depth;
+                        if (mnemonic.Contains("HKLD", StringComparison.OrdinalIgnoreCase) ||
+                            mnemonic.Contains("HOOK", StringComparison.OrdinalIgnoreCase) ||
+                            mnemonic.Contains("TORQ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            yVal = BroomstickChartRenderer.ResolvePointPlotValue(validPoints[i]);
+                        }
+                        pts.Add(new System.Windows.Point(validPoints[i].StartDate.ToOADate(), yVal));
+                    }
                     if (pts.CanFreeze) pts.Freeze();
 
-
-
                     TrackBarOverviewPoints = pts;
-
-                    TrackBarOverviewChannelName = "Bit Depth";
-
-                    TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
-
                     return;
-
                 }
-
             }
-
         }
-
-
 
         // 3. Fallback when only depths exist (or baseline default)
-
         if (Document.BroomstickPointData.Count > 0)
-
         {
-
             TrackBarMin = Document.BroomstickPointData.Min(p => p.Depth);
-
             TrackBarMax = Document.BroomstickPointData.Max(p => p.Depth);
-
-            TrackBarSelectionStart = TrackBarMin;
-
-            TrackBarSelectionEnd = TrackBarMax;
-
-            FromDepth = TrackBarMin;
-
-            ToDepth = TrackBarMax;
-
+            if (TrackBarSelectionStart < TrackBarMin || TrackBarSelectionEnd > TrackBarMax || TrackBarSelectionStart >= TrackBarSelectionEnd)
+            {
+                TrackBarSelectionStart = TrackBarMin;
+                TrackBarSelectionEnd = TrackBarMax;
+                FromDepth = TrackBarMin;
+                ToDepth = TrackBarMax;
+            }
             IsTimeLog = false;
 
-
-
             TrackBarOverviewPoints = null;
-
-            TrackBarOverviewChannelName = "Bit Depth";
-
-            TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
-
         }
-
         else
-
         {
-
             // Default baseline so the trackbar graph is never empty
-
             var now = DateTime.Now;
-
             LogMinDate = now.AddDays(-7);
-
             LogMaxDate = now;
-
             TrackBarMin = LogMinDate.ToOADate();
-
             TrackBarMax = LogMaxDate.ToOADate();
-
-            TrackBarSelectionStart = TrackBarMin;
-
-            TrackBarSelectionEnd = TrackBarMax;
-
+            if (TrackBarSelectionStart < TrackBarMin || TrackBarSelectionEnd > TrackBarMax || TrackBarSelectionStart >= TrackBarSelectionEnd)
+            {
+                TrackBarSelectionStart = TrackBarMin;
+                TrackBarSelectionEnd = TrackBarMax;
+                FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+                ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+            }
             IsTimeLog = true;
 
-            FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
-
-            ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
-
-
-
             var pts = new PointCollection();
-
             for (int i = 0; i <= 20; i++)
-
             {
-
                 double t = (double)i / 20;
-
                 double oa = TrackBarMin + (t * (TrackBarMax - TrackBarMin));
-
                 double d = t * 15000.0;
-
                 pts.Add(new System.Windows.Point(oa, d));
-
             }
-
             if (pts.CanFreeze) pts.Freeze();
-
             TrackBarOverviewPoints = pts;
-
-            TrackBarOverviewChannelName = "Bit Depth";
-
-            TrackBarOverviewBrush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 118, 210));
-
         }
-
     }
 
+    private static Brush GetChannelBrush(string mnemonic)
+    {
+        if (string.IsNullOrWhiteSpace(mnemonic))
+        {
+            var b = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+            if (b.CanFreeze) b.Freeze();
+            return b;
+        }
 
+        Color color;
+        if (mnemonic.Contains("HKLD", StringComparison.OrdinalIgnoreCase) || mnemonic.Contains("HOOK", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Color.FromRgb(13, 148, 136); // Teal #0D9488
+        }
+        else if (mnemonic.Contains("TORQ", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Color.FromRgb(217, 119, 6); // Amber #D97706
+        }
+        else if (mnemonic.Contains("ROP", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Color.FromRgb(139, 92, 246); // Purple #8B5CF6
+        }
+        else if (mnemonic.Contains("WOB", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Color.FromRgb(236, 72, 153); // Pink #EC4899
+        }
+        else if (mnemonic.Contains("RPM", StringComparison.OrdinalIgnoreCase))
+        {
+            color = Color.FromRgb(6, 182, 212); // Cyan #06B6D4
+        }
+        else
+        {
+            color = Color.FromRgb(25, 118, 210); // Blue #1976D2
+        }
 
-    [RelayCommand]
+        var brush = new SolidColorBrush(color);
+        if (brush.CanFreeze) brush.Freeze();
+        return brush;
+    }
+
+        [RelayCommand]
     public void ApplyRangeFilter()
     {
         if (IsTimeLog)
@@ -1819,142 +1739,119 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
 
     [RelayCommand]
-
     public async Task OpenDataSelectorAsync()
-
     {
-
-        var console = GetOrCreateConsoleModel();
-
+        var console = await GetOrCreateConsoleModelAsync();
         var vm = new DataSelectorViewModel(console);
-
         if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
-
         {
+            if (!vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+            {
+                vm.AvailableYCoordinates.Add(SelectedOverviewChannelMnemonic);
+            }
 
             var match = vm.AvailableSeries.FirstOrDefault(s => s.Contains(SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
-
-            if (match != null) vm.TargetSeries = match;
-
-            if (vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
-
-                vm.YCoordinate = SelectedOverviewChannelMnemonic;
-
+            if (match != null)
+            {
+                vm.TargetSeries = match;
+            }
+            vm.YCoordinate = SelectedOverviewChannelMnemonic;
         }
 
-
-
         bool? result = OpenDataSelectorDialogHandler != null
-
             ? OpenDataSelectorDialogHandler(vm)
-
             : ShowDataSelectorDialog(vm);
 
-
-
         if (result == true)
-
         {
-
             if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
-
             {
-
                 SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
-
+            }
+            else if (!string.IsNullOrWhiteSpace(vm.YCoordinate))
+            {
+                SelectedOverviewChannelMnemonic = vm.YCoordinate;
             }
 
             await LoadTrackBarOverviewAsync();
-
             ApplyRangeFilter();
-
         }
-
     }
-
-
 
     private static bool? ShowDataSelectorDialog(DataSelectorViewModel vm)
-
     {
-
         var dlg = new DataSelectorWindow(vm)
-
         {
-
             Owner = Application.Current?.MainWindow
-
         };
-
         return dlg.ShowDialog();
-
     }
 
-
-
-    private VHTrackConsole GetOrCreateConsoleModel()
-
+    private async Task<VHTrackConsole> GetOrCreateConsoleModelAsync()
     {
+        if (_consoleModel != null && _consoleModel.Tracks.Count > 0 && _consoleModel.Tracks[0].Channels.Count > 0)
+        {
+            return _consoleModel;
+        }
 
         var console = new VHTrackConsole
-
         {
-
             WellID = WellId,
-
             IndexType = IsTimeLog ? enumIndexType.TimeLog : enumIndexType.Deptlog
-
         };
-
         console.DataSource.WellboreID = WellboreId;
-
         if (IsTimeLog) console.DataSource.TimeLogID = LogId;
-
         else console.DataSource.DepthLogID = LogId;
-
         console.DataSource.DatasourceType = IsTimeLog ? enumRTDataSourceType.TimeLog : enumRTDataSourceType.DepthLog;
-
-
 
         var track = new VHTrack { Title = "Data Selector Channels" };
 
-        var channels = new List<VHTrackChannel>
-
+        List<LogChannelMetadata>? available = null;
+        if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
         {
+            try
+            {
+                available = await _chartDataService.GetAvailableChannelsAsync(LogId, console.DataSource.DatasourceType);
+            }
+            catch
+            {
+            }
+        }
 
-            new() { Mnemonic = "DEPTH", Title = "Hole Depth" },
-
-            new() { Mnemonic = "BIT_DEPTH", Title = "Bit Depth" },
-
-            new() { Mnemonic = "HKLD", Title = "Hookload" },
-
-            new() { Mnemonic = "ROPA", Title = "Rate of Penetration" },
-
-            new() { Mnemonic = "WOB", Title = "Weight on Bit" },
-
-            new() { Mnemonic = "TORQ", Title = "Drilling Torque" },
-
-            new() { Mnemonic = "RPM", Title = "Rotary Speed" }
-
-        };
-
-
-
-        foreach (var ch in channels)
-
+        if (available != null && available.Count > 0)
         {
-
-            track.Channels.Add(ch);
-
+            foreach (var ch in available)
+            {
+                track.Channels.Add(new VHTrackChannel
+                {
+                    Mnemonic = ch.Mnemonic,
+                    Title = !string.IsNullOrWhiteSpace(ch.Name) ? ch.Name : ch.Mnemonic,
+                    Unit = ch.Unit
+                });
+            }
+        }
+        else
+        {
+            var fallbackChannels = new List<VHTrackChannel>
+            {
+                new() { Mnemonic = "DEPTH", Title = "Hole Depth", Unit = "ft" },
+                new() { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "ft" },
+                new() { Mnemonic = "HKLD", Title = "Hookload", Unit = "klb" },
+                new() { Mnemonic = "ROPA", Title = "Rate of Penetration", Unit = "ft/hr" },
+                new() { Mnemonic = "WOB", Title = "Weight on Bit", Unit = "klb" },
+                new() { Mnemonic = "TORQ", Title = "Drilling Torque", Unit = "kft-lb" },
+                new() { Mnemonic = "RPM", Title = "Rotary Speed", Unit = "rpm" }
+            };
+            foreach (var ch in fallbackChannels)
+            {
+                track.Channels.Add(ch);
+            }
         }
 
         console.Tracks.Add(track);
-
-        return console;
-
+        _consoleModel = console;
+        return _consoleModel;
     }
-
-
 
     [RelayCommand]
 
@@ -2055,26 +1952,66 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
 
     [RelayCommand]
-
     public void OpenSetup()
-
     {
-
         bool? res = OpenSetupDialogHandler?.Invoke(this);
-
         if (res == true)
-
         {
-
             IsDirty = true;
-
             ApplyRangeFilter();
-
         }
-
     }
 
+    [RelayCommand]
+    public async Task OpenBroomstickSetupAsync()
+    {
+        bool? result;
+        if (OpenBroomstickSetupDialogHandler != null)
+        {
+            result = OpenBroomstickSetupDialogHandler(this);
+        }
+        else
+        {
+            var ds = _session?.GetDataService();
+            var appDb = App.AppDatabaseService;
+            var appDataService = appDb?.GetDataService();
+            var contextName = _session != null && _session.IsProjectOpen ? $"Project: {_session.ProjectName}" : "Application Master Template";
+            var editorVm = new BroomstickProfileEditorViewModel(ds, contextName, appDataService: appDataService, isProjectContext: _session?.IsProjectOpen == true);
+            var dlg = new BroomstickProfileEditorWindow
+            {
+                DataContext = editorVm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = dlg.ShowDialog();
+        }
 
+        if (result == true)
+        {
+            IsDirty = true;
+            await ReloadProfileAsync();
+        }
+    }
+
+    public async Task ReloadProfileAsync()
+    {
+        try
+        {
+            var ds = _session?.GetDataService();
+            if (ds != null)
+            {
+                var profile = BroomstickProfile.LoadSingleProfile(ds, out _, isProjectDatabase: true);
+                if (profile != null)
+                {
+                    Document.Profile = profile;
+                    ApplyRangeFilter();
+                }
+            }
+        }
+        catch
+        {
+        }
+        await Task.CompletedTask;
+    }
 
     [RelayCommand]
 

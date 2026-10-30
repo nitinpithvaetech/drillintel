@@ -475,6 +475,21 @@ public partial class BroomstickWorkspaceViewModel : ObservableObject
             return dlg.ShowDialog();
         };
 
+        docVm.OpenBroomstickSetupDialogHandler = (vm) =>
+        {
+            var ds = _session?.GetDataService();
+            var appDb = App.AppDatabaseService;
+            var appDataService = appDb?.GetDataService();
+            var contextName = _session != null && _session.IsProjectOpen ? $"Project: {_session.ProjectName}" : "Application Master Template";
+            var editorVm = new BroomstickProfileEditorViewModel(ds, contextName, appDataService: appDataService, isProjectContext: _session?.IsProjectOpen == true);
+            var dlg = new BroomstickProfileEditorWindow
+            {
+                DataContext = editorVm,
+                Owner = Application.Current?.MainWindow
+            };
+            return dlg.ShowDialog();
+        };
+
         docVm.OpenTemplateManagerDialogHandler = (mgrVm) =>
         {
             var dlg = new BroomstickDocumentManagerDialog(mgrVm);
