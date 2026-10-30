@@ -497,10 +497,13 @@ public class BroomstickChartRenderer
             rotPoints = points.Where(p => p.Type == 2);
         }
 
+        int ptSize = doc.PlotSettings.PointSize > 0 ? doc.PlotSettings.PointSize : 6;
+        var ptStyle = ResolvePointerStyle(doc.PlotSettings.PointsStyle);
+
         // Pick-Up Points (PU) - Crimson / Rose
         if (IsSeriesVisible(vis, "actualPu"))
         {
-            var puSeries = CreatePointsSeries("actualPu", "Pick up", Color.FromArgb(225, 29, 72), 6);
+            var puSeries = CreatePointsSeries("actualPu", "Pick up", Color.FromArgb(225, 29, 72), ptSize, ptStyle);
             foreach (var pt in puPoints)
             {
                 double val = ResolvePointPlotValue(pt);
@@ -511,7 +514,7 @@ public class BroomstickChartRenderer
         // Slack-Off Points (SO) - Royal Blue
         if (IsSeriesVisible(vis, "actualSo"))
         {
-            var soSeries = CreatePointsSeries("actualSo", "Slack Off", Color.FromArgb(37, 99, 235), 6);
+            var soSeries = CreatePointsSeries("actualSo", "Slack Off", Color.FromArgb(37, 99, 235), ptSize, ptStyle);
             foreach (var pt in soPoints)
             {
                 double val = ResolvePointPlotValue(pt);
@@ -522,7 +525,7 @@ public class BroomstickChartRenderer
         // Rotate Points (ROT) - Amber / Orange
         if (IsSeriesVisible(vis, "actualRot"))
         {
-            var rotSeries = CreatePointsSeries("actualRot", "Rotate", Color.FromArgb(217, 119, 6), 5);
+            var rotSeries = CreatePointsSeries("actualRot", "Rotate", Color.FromArgb(217, 119, 6), Math.Max(3, ptSize - 1), ptStyle);
             foreach (var pt in rotPoints)
             {
                 double val = ResolvePointPlotValue(pt);
@@ -545,7 +548,15 @@ public class BroomstickChartRenderer
         return s;
     }
 
-    private Points CreatePointsSeries(string id, string title, Color color, int size)
+    private static PointerStyles ResolvePointerStyle(string? style) => (style?.Trim().ToLowerInvariant()) switch
+    {
+        "circle" => PointerStyles.Circle,
+        "triangle" => PointerStyles.Triangle,
+        "diamond" => PointerStyles.Diamond,
+        _ => PointerStyles.Rectangle
+    };
+
+    private Points CreatePointsSeries(string id, string title, Color color, int size, PointerStyles pointerStyle = PointerStyles.Rectangle)
     {
         var s = new Points(_tChart.Chart)
         {
@@ -553,7 +564,7 @@ public class BroomstickChartRenderer
             Color = color
         };
         s.Pointer.Visible = true;
-        s.Pointer.Style = PointerStyles.Rectangle;
+        s.Pointer.Style = pointerStyle;
         s.Pointer.HorizSize = size;
         s.Pointer.VertSize = size;
         s.Pointer.Pen.Visible = false;

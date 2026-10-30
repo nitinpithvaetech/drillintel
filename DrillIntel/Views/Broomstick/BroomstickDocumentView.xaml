@@ -371,7 +371,8 @@
                 <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" 
                         CornerRadius="6" Padding="10,8" Margin="0,16,16,0"
                         HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Opacity="0.96" MaxHeight="450">
+                        Opacity="0.96" MaxHeight="450"
+                        Visibility="{Binding IsLegendVisible, Converter={StaticResource BoolToVisibilityConverter}}">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="8" Direction="270" ShadowDepth="2" Opacity="0.18" Color="#000000" />
                     </Border.Effect>

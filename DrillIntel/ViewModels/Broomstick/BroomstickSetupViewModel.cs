@@ -161,6 +161,11 @@ public partial class BroomstickSetupViewModel : ObservableObject
     [ObservableProperty]
     private string _casingSlackoffColor = "#4DD0E1";
 
+    // Dropdown choices for UI selection
+    public IReadOnlyList<string> AvailablePointStyles { get; } = new[] { "Rectangle", "Circle", "Triangle", "Diamond" };
+    public IReadOnlyList<string> AvailableFilterMethods { get; } = new[] { "Moving Avg.", "Median", "Standard Deviation" };
+    public IReadOnlyList<string> AvailableCasingPointStyles { get; } = new[] { "Rectangle", "Circle" };
+
     // Hookload Rig States
     public ObservableCollection<BroomstickSetupRigStateItem> RigStates { get; } = new();
 
@@ -194,11 +199,47 @@ public partial class BroomstickSetupViewModel : ObservableObject
         ProfileName = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : "Hookload Test";
         DownSampleOn = p.DownSampleOn;
         DataPointsPer = p.DataPoints > 0 ? p.DataPoints : 100;
+
+        // Parse GroupFunctions: e.g. "0,1,2" or "MIN,MAX,AVG"
+        var gf = (p.GroupFunctions ?? string.Empty).ToUpperInvariant();
+        var tokens = gf.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+        if (tokens.Count == 0)
+        {
+            GroupMin = true;
+            GroupMax = true;
+            GroupAvg = true;
+        }
+        else
+        {
+            GroupMin = tokens.Contains("0") || tokens.Contains("MIN");
+            GroupMax = tokens.Contains("1") || tokens.Contains("MAX");
+            GroupAvg = tokens.Contains("2") || tokens.Contains("AVG");
+        }
+
         FilterByHookloadRange = p.FilterByRange;
         MinHookload = p.MinHooklaod > 0 ? p.MinHooklaod : 1.0;
         MaxHookload = p.MaxHookload > 0 ? p.MaxHookload : 300.0;
         FilterByDepthIntervals = p.FilterByInterval;
         DepthInterval = p.DepthInterval > 0 ? p.DepthInterval : 500.0;
+        OutlierPercentMean = p.IntervalWindow > 0 ? p.IntervalWindow : 10.0;
+
+        // Load settings from Document.PlotSettings
+        var ps = _document.PlotSettings;
+        PlotTimeData = ps.PlotTimeData;
+        ShowLegend = ps.ShowLegend;
+        PlotMakeupTorque = ps.PlotMakeupTorque;
+        PlotTorqueLimit = ps.PlotTorqueLimit;
+        ShowCasingPoints = ps.ShowCasingPoints;
+        ShowCasingMax = ps.ShowCasingMax;
+        ShowCasingMin = ps.ShowCasingMin;
+        if (!string.IsNullOrWhiteSpace(ps.FilterMethod)) FilterMethod = ps.FilterMethod;
+        if (!string.IsNullOrWhiteSpace(ps.PointsStyle)) PointsStyle = ps.PointsStyle;
+        if (ps.PointSize > 0) PointSize = ps.PointSize;
+        PointTransparency = ps.PointTransparency;
+        if (ps.LineThickness > 0) LineThickness = ps.LineThickness;
+        if (!string.IsNullOrWhiteSpace(ps.CasingPointStyle)) CasingPointStyle = ps.CasingPointStyle;
+        if (ps.CasingPointSize > 0) CasingPointSize = ps.CasingPointSize;
+        CasingPointTransparency = ps.CasingPointTransparency;
     }
 
     private void LoadRigStates()
@@ -217,6 +258,19 @@ public partial class BroomstickSetupViewModel : ObservableObject
             (9, "Wiper Trip", "#8B5CF6", false)
         };
 
+        var savedCodes = new HashSet<int>();
+        bool hasSaved = false;
+        if (!string.IsNullOrWhiteSpace(_document.Profile?.PkupRigStates))
+        {
+            var parts = _document.Profile.PkupRigStates.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (var part in parts)
+            {
+                if (int.TryParse(part, out int code))
+                    savedCodes.Add(code);
+            }
+            hasSaved = savedCodes.Count > 0;
+        }
+
         foreach (var def in defaults)
         {
             RigStates.Add(new BroomstickSetupRigStateItem
@@ -224,7 +278,7 @@ public partial class BroomstickSetupViewModel : ObservableObject
                 Number = def.num,
                 Name = def.name,
                 ColorHex = def.hex,
-                IsSelected = def.sel
+                IsSelected = hasSaved ? savedCodes.Contains(def.num) : def.sel
             });
         }
     }
@@ -235,13 +289,41 @@ public partial class BroomstickSetupViewModel : ObservableObject
         var p = _document.Profile;
         p.DownSampleOn = DownSampleOn;
         p.DataPoints = DataPointsPer;
-        p.GroupFunctions = "MIN,MAX,AVG";
+
+        var gfList = new List<string>();
+        if (GroupMin) gfList.Add("0");
+        if (GroupMax) gfList.Add("1");
+        if (GroupAvg) gfList.Add("2");
+        p.GroupFunctions = gfList.Count > 0 ? string.Join(",", gfList) : "";
+
         p.FilterByRange = FilterByHookloadRange;
         p.MinHooklaod = MinHookload;
         p.MaxHookload = MaxHookload;
         p.FilterByInterval = FilterByDepthIntervals;
         p.DepthInterval = DepthInterval;
         p.IntervalWindow = OutlierPercentMean;
+
+        // Serialize RigStates checklist to profile
+        var selectedRigStates = RigStates.Where(r => r.IsSelected).Select(r => r.Number).OrderBy(n => n);
+        p.PkupRigStates = string.Join(",", selectedRigStates);
+
+        // Save plot settings to document
+        var ps = _document.PlotSettings;
+        ps.PlotTimeData = PlotTimeData;
+        ps.ShowLegend = ShowLegend;
+        ps.PlotMakeupTorque = PlotMakeupTorque;
+        ps.PlotTorqueLimit = PlotTorqueLimit;
+        ps.ShowCasingPoints = ShowCasingPoints;
+        ps.ShowCasingMax = ShowCasingMax;
+        ps.ShowCasingMin = ShowCasingMin;
+        ps.FilterMethod = FilterMethod;
+        ps.PointsStyle = PointsStyle;
+        ps.PointSize = PointSize;
+        ps.PointTransparency = PointTransparency;
+        ps.LineThickness = LineThickness;
+        ps.CasingPointStyle = CasingPointStyle;
+        ps.CasingPointSize = CasingPointSize;
+        ps.CasingPointTransparency = CasingPointTransparency;
 
         // Persist to project and/or global database if requested
         if (UpdateProfile && _projectDataService != null)

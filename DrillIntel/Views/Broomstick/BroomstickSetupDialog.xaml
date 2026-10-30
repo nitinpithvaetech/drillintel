@@ -129,13 +129,13 @@
                                     <!-- Grouping Function -->
                                     <TextBlock Text="Grouping Function" Style="{StaticResource FieldLabelStyle}" />
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <CheckBox IsChecked="{Binding GroupMin}" Content="Min" FontSize="11.5" Margin="0,0,12,0" />
-                                        <CheckBox IsChecked="{Binding GroupMax}" Content="Max" FontSize="11.5" Margin="0,0,12,0" />
-                                        <CheckBox IsChecked="{Binding GroupAvg}" Content="Avg" FontSize="11.5" />
+                                        <CheckBox IsChecked="{Binding GroupMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Min" FontSize="11.5" Margin="0,0,12,0" />
+                                        <CheckBox IsChecked="{Binding GroupMax, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Max" FontSize="11.5" Margin="0,0,12,0" />
+                                        <CheckBox IsChecked="{Binding GroupAvg, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Avg" FontSize="11.5" />
                                     </StackPanel>
 
                                     <!-- Hookload Range Filter -->
-                                    <CheckBox IsChecked="{Binding FilterByHookloadRange}" Content="Filter By Hookload Range" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,4" />
+                                    <CheckBox IsChecked="{Binding FilterByHookloadRange, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Filter By Hookload Range" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,4" />
                                     <Grid Margin="16,0,0,10">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -152,7 +152,7 @@
                                     </Grid>
 
                                     <!-- Depth Intervals -->
-                                    <CheckBox IsChecked="{Binding FilterByDepthIntervals}" Content="Filter By Depth Intervals" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,4" />
+                                    <CheckBox IsChecked="{Binding FilterByDepthIntervals, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Filter By Depth Intervals" FontWeight="SemiBold" FontSize="11.5" Margin="0,0,0,4" />
                                     <StackPanel Margin="16,0,0,10">
                                         <TextBlock Text="Depth Interval (ft)" Style="{StaticResource FieldLabelStyle}" />
                                         <TextBox Text="{Binding DepthInterval}" Style="{StaticResource LightInputBox}" />
@@ -169,11 +169,7 @@
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Filter Method" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding FilterMethod, Mode=TwoWay}" Style="{StaticResource LightComboBox}">
-                                                <ComboBoxItem Content="Moving Avg." />
-                                                <ComboBoxItem Content="Median" />
-                                                <ComboBoxItem Content="Standard Deviation" />
-                                            </ComboBox>
+                                            <ComboBox ItemsSource="{Binding AvailableFilterMethods}" SelectedItem="{Binding FilterMethod, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LightComboBox}" />
                                         </StackPanel>
                                     </Grid>
                                 </StackPanel>
@@ -185,9 +181,9 @@
                                     <TextBlock Text="Casing Points Formatting" Style="{StaticResource PanelHeaderStyle}" />
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <CheckBox IsChecked="{Binding ShowCasingPoints}" Content="Show Casing Points" FontSize="11.5" Margin="0,0,12,0" />
-                                        <CheckBox IsChecked="{Binding ShowCasingMax}" Content="Show Max Value" FontSize="11.5" Margin="0,0,12,0" />
-                                        <CheckBox IsChecked="{Binding ShowCasingMin}" Content="Show Min Value" FontSize="11.5" />
+                                        <CheckBox IsChecked="{Binding ShowCasingPoints, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Show Casing Points" FontSize="11.5" Margin="0,0,12,0" />
+                                        <CheckBox IsChecked="{Binding ShowCasingMax, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Show Max Value" FontSize="11.5" Margin="0,0,12,0" />
+                                        <CheckBox IsChecked="{Binding ShowCasingMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Show Min Value" FontSize="11.5" />
                                     </StackPanel>
 
                                     <Grid Margin="0,0,0,8">
@@ -198,10 +194,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Casing Point Style" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding CasingPointStyle}" Style="{StaticResource LightComboBox}">
-                                                <ComboBoxItem Content="Rectangle" />
-                                                <ComboBoxItem Content="Circle" />
-                                            </ComboBox>
+                                            <ComboBox ItemsSource="{Binding AvailableCasingPointStyles}" SelectedItem="{Binding CasingPointStyle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LightComboBox}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="2,0,2,0">
                                             <TextBlock Text="Point Size" Style="{StaticResource FieldLabelStyle}" />
@@ -245,12 +238,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Margin="0,0,4,0">
                                             <TextBlock Text="Style" Style="{StaticResource FieldLabelStyle}" />
-                                            <ComboBox SelectedValue="{Binding PointsStyle}" Style="{StaticResource LightComboBox}">
-                                                <ComboBoxItem Content="Rectangle" />
-                                                <ComboBoxItem Content="Circle" />
-                                                <ComboBoxItem Content="Triangle" />
-                                                <ComboBoxItem Content="Diamond" />
-                                            </ComboBox>
+                                            <ComboBox ItemsSource="{Binding AvailablePointStyles}" SelectedItem="{Binding PointsStyle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LightComboBox}" />
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Margin="4,0,0,0">
                                             <TextBlock Text="Size" Style="{StaticResource FieldLabelStyle}" />
@@ -279,10 +267,10 @@
                             <Border Style="{StaticResource ParamCard}" Margin="0,0,0,10">
                                 <StackPanel>
                                     <TextBlock Text="Plot Time Data" Style="{StaticResource PanelHeaderStyle}" />
-                                    <CheckBox IsChecked="{Binding PlotTimeData}" Content="Plot Time Data" FontSize="11.5" Margin="0,0,0,6" />
-                                    <CheckBox IsChecked="{Binding ShowLegend}" Content="Show Legend" FontSize="11.5" Margin="0,0,0,6" />
-                                    <CheckBox IsChecked="{Binding PlotMakeupTorque}" Content="Plot Makeup Torque" FontSize="11.5" Margin="0,0,0,6" />
-                                    <CheckBox IsChecked="{Binding PlotTorqueLimit}" Content="Plot Torque Limit" FontSize="11.5" />
+                                    <CheckBox IsChecked="{Binding PlotTimeData, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Plot Time Data" FontSize="11.5" Margin="0,0,0,6" />
+                                    <CheckBox IsChecked="{Binding ShowLegend, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Show Legend" FontSize="11.5" Margin="0,0,0,6" />
+                                    <CheckBox IsChecked="{Binding PlotMakeupTorque, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Plot Makeup Torque" FontSize="11.5" Margin="0,0,0,6" />
+                                    <CheckBox IsChecked="{Binding PlotTorqueLimit, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Plot Torque Limit" FontSize="11.5" />
                                 </StackPanel>
                             </Border>
 
@@ -388,7 +376,7 @@
                                                                 <ColumnDefinition Width="*" />
                                                             </Grid.ColumnDefinitions>
 
-                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                                             <Border Grid.Column="1" Width="10" Height="10" Background="{Binding ColorHex}" CornerRadius="5" VerticalAlignment="Center" Margin="0,0,8,0" />
                                                             <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="11.5" Foreground="{DynamicResource MaterialDesignBody}" VerticalAlignment="Center" />
                                                         </Grid>
