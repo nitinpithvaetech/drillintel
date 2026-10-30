@@ -40,6 +40,10 @@ public partial class BroomstickWorkspaceView : UserControl
             {
                 treeItem.Focus();
                 treeItem.IsSelected = true;
+                if (ViewModel != null && treeItem.DataContext is BroomstickDocumentTreeNode node)
+                {
+                    ViewModel.SelectedTreeNode = node;
+                }
             }
         }
     }

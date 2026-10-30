@@ -1083,17 +1083,8 @@ public partial class MainViewModel : ObservableObject
     private async Task ManageBroomstickTemplates()
     {
         if (!_session.IsProjectOpen) return;
-        var repo = new BroomstickTemplateRepository(_session);
-        var mgrVm = new BroomstickDocumentManagerViewModel(repo, _session);
-        await mgrVm.InitializeAsync();
-        var dlg = new BroomstickDocumentManagerDialog(mgrVm)
-        {
-            Owner = Application.Current?.MainWindow
-        };
-        if (dlg.ShowDialog() == true && !string.IsNullOrWhiteSpace(mgrVm.SelectedTemplateIdToOpen))
-        {
-            await ShowBroomstickWorkspaceAsync(triggerNew: false, targetTemplateId: mgrVm.SelectedTemplateIdToOpen);
-        }
+        // Integrated directly into Broomstick Viewer left management pane
+        await ShowBroomstickWorkspaceAsync(triggerNew: false);
     }
 
     private async Task ShowBroomstickWorkspaceAsync(bool triggerNew, string? targetTemplateId = null)

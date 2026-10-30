@@ -7,7 +7,7 @@
         xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels.Broomstick"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=viewmodels:BroomstickWorkspaceViewModel}"
-        Title="Broomstick Document Workspace" 
+        Title="Broomstick Viewer" 
         Height="900" Width="1440"
         MinHeight="600" MinWidth="900"
         WindowState="Maximized"

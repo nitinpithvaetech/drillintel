@@ -1204,7 +1204,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
         if (_consoleModel == null)
         {
-            _consoleModel = await GetOrCreateConsoleModelAsync();
+            _consoleModel = GetOrCreateConsoleModel();
         }
 
         // Look for exact mnemonic match first
@@ -1738,56 +1738,98 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
 
 
+    public void OpenDataSelector() => _ = OpenDataSelectorAsync();
+
     [RelayCommand]
     public async Task OpenDataSelectorAsync()
     {
-        var console = await GetOrCreateConsoleModelAsync();
-        var vm = new DataSelectorViewModel(console);
-        if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
+        try
         {
-            if (!vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+            var console = GetOrCreateConsoleModel();
+            var vm = new DataSelectorViewModel(console);
+            if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
             {
-                vm.AvailableYCoordinates.Add(SelectedOverviewChannelMnemonic);
+                if (!vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+                {
+                    vm.AvailableYCoordinates.Add(SelectedOverviewChannelMnemonic);
+                }
+
+                var match = vm.AvailableSeries.FirstOrDefault(s => s.Contains(SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+                if (match != null)
+                {
+                    vm.TargetSeries = match;
+                }
+                vm.YCoordinate = SelectedOverviewChannelMnemonic;
             }
 
-            var match = vm.AvailableSeries.FirstOrDefault(s => s.Contains(SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
+            bool? result = OpenDataSelectorDialogHandler != null
+                ? OpenDataSelectorDialogHandler(vm)
+                : ShowDataSelectorDialog(vm);
+
+            if (result == true)
             {
-                vm.TargetSeries = match;
+                if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
+                {
+                    SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
+                }
+                else if (!string.IsNullOrWhiteSpace(vm.YCoordinate))
+                {
+                    SelectedOverviewChannelMnemonic = vm.YCoordinate;
+                }
+
+                await LoadTrackBarOverviewAsync();
+                ApplyRangeFilter();
             }
-            vm.YCoordinate = SelectedOverviewChannelMnemonic;
         }
-
-        bool? result = OpenDataSelectorDialogHandler != null
-            ? OpenDataSelectorDialogHandler(vm)
-            : ShowDataSelectorDialog(vm);
-
-        if (result == true)
+        catch (Exception ex)
         {
-            if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
-            {
-                SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
-            }
-            else if (!string.IsNullOrWhiteSpace(vm.YCoordinate))
-            {
-                SelectedOverviewChannelMnemonic = vm.YCoordinate;
-            }
-
-            await LoadTrackBarOverviewAsync();
-            ApplyRangeFilter();
+            System.Diagnostics.Debug.WriteLine($"[BroomstickDocumentViewModel] Error opening Data Selector: {ex}");
+            StatusMessage = $"Error opening Data Selector: {ex.Message}";
         }
     }
 
     private static bool? ShowDataSelectorDialog(DataSelectorViewModel vm)
     {
-        var dlg = new DataSelectorWindow(vm)
+        if (Application.Current == null) return false;
+
+        bool? result = false;
+        void ShowAction()
         {
-            Owner = Application.Current?.MainWindow
-        };
-        return dlg.ShowDialog();
+            var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.GetType().Name == "BroomstickWorkspaceWindow" && w.IsVisible)
+                     ?? Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsVisible)
+                     ?? Application.Current.MainWindow;
+
+            var dlg = new DataSelectorWindow(vm)
+            {
+                Topmost = true,
+                ShowInTaskbar = true
+            };
+            if (owner != null && owner.IsVisible)
+            {
+                dlg.Owner = owner;
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
+
+            result = dlg.ShowDialog();
+        }
+
+        if (Application.Current.Dispatcher.CheckAccess())
+        {
+            ShowAction();
+        }
+        else
+        {
+            Application.Current.Dispatcher.Invoke(ShowAction);
+        }
+
+        return result;
     }
 
-    private async Task<VHTrackConsole> GetOrCreateConsoleModelAsync()
+    public VHTrackConsole GetOrCreateConsoleModel()
     {
         if (_consoleModel != null && _consoleModel.Tracks.Count > 0 && _consoleModel.Tracks[0].Channels.Count > 0)
         {
@@ -1806,46 +1848,19 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
         var track = new VHTrack { Title = "Data Selector Channels" };
 
-        List<LogChannelMetadata>? available = null;
-        if (_chartDataService != null && !string.IsNullOrWhiteSpace(LogId))
+        var fallbackChannels = new List<VHTrackChannel>
         {
-            try
-            {
-                available = await _chartDataService.GetAvailableChannelsAsync(LogId, console.DataSource.DatasourceType);
-            }
-            catch
-            {
-            }
-        }
-
-        if (available != null && available.Count > 0)
+            new() { Mnemonic = "HKLD", Title = "Hookload", Unit = "klb" },
+            new() { Mnemonic = "DEPTH", Title = "Hole Depth", Unit = "ft" },
+            new() { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "ft" },
+            new() { Mnemonic = "ROPA", Title = "Rate of Penetration", Unit = "ft/hr" },
+            new() { Mnemonic = "WOB", Title = "Weight on Bit", Unit = "klb" },
+            new() { Mnemonic = "TORQ", Title = "Drilling Torque", Unit = "kft-lb" },
+            new() { Mnemonic = "RPM", Title = "Rotary Speed", Unit = "rpm" }
+        };
+        foreach (var ch in fallbackChannels)
         {
-            foreach (var ch in available)
-            {
-                track.Channels.Add(new VHTrackChannel
-                {
-                    Mnemonic = ch.Mnemonic,
-                    Title = !string.IsNullOrWhiteSpace(ch.Name) ? ch.Name : ch.Mnemonic,
-                    Unit = ch.Unit
-                });
-            }
-        }
-        else
-        {
-            var fallbackChannels = new List<VHTrackChannel>
-            {
-                new() { Mnemonic = "DEPTH", Title = "Hole Depth", Unit = "ft" },
-                new() { Mnemonic = "BIT_DEPTH", Title = "Bit Depth", Unit = "ft" },
-                new() { Mnemonic = "HKLD", Title = "Hookload", Unit = "klb" },
-                new() { Mnemonic = "ROPA", Title = "Rate of Penetration", Unit = "ft/hr" },
-                new() { Mnemonic = "WOB", Title = "Weight on Bit", Unit = "klb" },
-                new() { Mnemonic = "TORQ", Title = "Drilling Torque", Unit = "kft-lb" },
-                new() { Mnemonic = "RPM", Title = "Rotary Speed", Unit = "rpm" }
-            };
-            foreach (var ch in fallbackChannels)
-            {
-                track.Channels.Add(ch);
-            }
+            track.Channels.Add(ch);
         }
 
         console.Tracks.Add(track);
@@ -1977,11 +1992,22 @@ public partial class BroomstickDocumentViewModel : ObservableObject
             var appDataService = appDb?.GetDataService();
             var contextName = _session != null && _session.IsProjectOpen ? $"Project: {_session.ProjectName}" : "Application Master Template";
             var editorVm = new BroomstickProfileEditorViewModel(ds, contextName, appDataService: appDataService, isProjectContext: _session?.IsProjectOpen == true);
+            var owner = Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.GetType().Name == "BroomstickWorkspaceWindow" && w.IsVisible)
+                        ?? Application.Current?.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsVisible)
+                        ?? Application.Current?.MainWindow;
             var dlg = new BroomstickProfileEditorWindow
             {
-                DataContext = editorVm,
-                Owner = Application.Current?.MainWindow
+                DataContext = editorVm
             };
+            if (owner != null && owner.IsVisible)
+            {
+                dlg.Owner = owner;
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            }
+            else
+            {
+                dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            }
             result = dlg.ShowDialog();
         }
 

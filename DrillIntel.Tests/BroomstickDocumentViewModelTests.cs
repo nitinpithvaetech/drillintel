@@ -441,4 +441,87 @@ public class BroomstickDocumentViewModelTests : IDisposable
         Assert.NotNull(vm.TrackBarOverviewPoints);
         Assert.True(vm.TrackBarOverviewPoints.Count > 0);
     }
+
+    [Fact]
+    public async Task WorkspaceViewModel_DuplicateDocument_CreatesCopyAndOpensTab()
+    {
+        var doc = new BroomstickDocument { TemplateId = "test-tpl-dup", DocumentName = "Original Template" };
+        await _repo.SaveTemplateAsync(new BroomstickTemplateItem
+        {
+            TemplateId = "test-tpl-dup",
+            DocumentName = "Original Template",
+            TemplateData = doc.SerializeToBlob(),
+            ModifiedDate = DateTime.Now,
+            CreatedDate = DateTime.Now
+        });
+
+        var workspaceVm = new BroomstickWorkspaceViewModel(_session, _repo, null, null);
+        await workspaceVm.InitializeAsync();
+
+        var initialCount = workspaceVm.AllDocumentNodes.Count;
+        Assert.True(initialCount > 0);
+
+        var firstNode = workspaceVm.AllDocumentNodes.First(n => n.TemplateId == "test-tpl-dup");
+        workspaceVm.SelectedTreeNode = firstNode;
+
+        // Mock prompt handler
+        workspaceVm.PromptNewDocumentNameHandler = (title, msg) => "Cloned Template Test";
+
+        await workspaceVm.DuplicateDocumentCommand.ExecuteAsync(firstNode);
+
+        Assert.Equal(initialCount + 1, workspaceVm.AllDocumentNodes.Count);
+        Assert.Contains(workspaceVm.AllDocumentNodes, n => n.DocumentName == "Cloned Template Test");
+        Assert.NotNull(workspaceVm.ActiveDocument);
+        Assert.Equal("Cloned Template Test", workspaceVm.ActiveDocument.DocumentName);
+    }
+
+    [Fact]
+    public async Task WorkspaceViewModel_RenameDocument_UpdatesNameAndTree()
+    {
+        var doc = new BroomstickDocument { TemplateId = "test-tpl-ren", DocumentName = "Original To Rename" };
+        await _repo.SaveTemplateAsync(new BroomstickTemplateItem
+        {
+            TemplateId = "test-tpl-ren",
+            DocumentName = "Original To Rename",
+            TemplateData = doc.SerializeToBlob(),
+            ModifiedDate = DateTime.Now,
+            CreatedDate = DateTime.Now
+        });
+
+        var workspaceVm = new BroomstickWorkspaceViewModel(_session, _repo, null, null);
+        await workspaceVm.InitializeAsync();
+
+        var firstNode = workspaceVm.AllDocumentNodes.First(n => n.TemplateId == "test-tpl-ren");
+        workspaceVm.SelectedTreeNode = firstNode;
+
+        workspaceVm.PromptNewDocumentNameHandler = (title, msg) => "Renamed Template Unique";
+
+        await workspaceVm.RenameDocumentCommand.ExecuteAsync(firstNode);
+
+        Assert.Equal("Renamed Template Unique", firstNode.DocumentName);
+        var inRepo = await _repo.GetTemplateByIdAsync(firstNode.TemplateId);
+        Assert.NotNull(inRepo);
+        Assert.Equal("Renamed Template Unique", inRepo.DocumentName);
+    }
+
+    [Fact]
+    public void WorkspaceViewModel_WellInfo_AndHeaderProperties_WorkAsExpected()
+    {
+        var workspaceVm = new BroomstickWorkspaceViewModel(_session, _repo, null, null)
+        {
+            CurrentWellId = "W-12345",
+            CurrentWellName = "Discovery Well #1",
+            CurrentFieldName = "North Sea Field",
+            CurrentOperatorName = "Equinor",
+            CurrentLogName = "0.1 OHFF",
+            StatusMessage = "Ready"
+        };
+
+        Assert.True(workspaceVm.HasFieldOrOperator);
+        Assert.Equal("North Sea Field • Equinor", workspaceVm.CurrentFieldAndOperator);
+        Assert.Equal("Default Profile", workspaceVm.ActiveProfileName);
+        Assert.Equal("Discovery Well #1", workspaceVm.CurrentWellName);
+        Assert.Equal("W-12345", workspaceVm.CurrentWellId);
+        Assert.Equal("0.1 OHFF", workspaceVm.CurrentLogName);
+    }
 }

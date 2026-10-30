@@ -11,7 +11,8 @@
         Width="460" Height="380"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
-        ShowInTaskbar="False"
+        ShowInTaskbar="True"
+        Topmost="True"
         Background="#F1F5F9"
         FontFamily="Segoe UI, Segoe UI Variable, Arial"
         FontSize="12">
