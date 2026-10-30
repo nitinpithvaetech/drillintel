@@ -114,6 +114,9 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
     private bool _isDirty;
 
+    [ObservableProperty]
+    private bool _isLegendVisible = true;
+
 
 
     public string WindowTitle => $"Broomstick Document — {DocumentName}{(IsDirty ? " *" : "")}";
@@ -1089,6 +1092,8 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
         UnitSystem = Document.PlotSettings.UnitSystem;
 
+        IsLegendVisible = Document.PlotSettings.ShowLegend;
+
     }
 
 
@@ -1973,6 +1978,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
         if (res == true)
         {
             IsDirty = true;
+            IsLegendVisible = Document.PlotSettings.ShowLegend;
             ApplyRangeFilter();
         }
     }

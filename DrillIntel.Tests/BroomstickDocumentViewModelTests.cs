@@ -443,6 +443,7 @@ public class BroomstickDocumentViewModelTests : IDisposable
     }
 
     [Fact]
+<<<<<<< HEAD
     public async Task WorkspaceViewModel_DuplicateDocument_CreatesCopyAndOpensTab()
     {
         var doc = new BroomstickDocument { TemplateId = "test-tpl-dup", DocumentName = "Original Template" };
@@ -523,5 +524,170 @@ public class BroomstickDocumentViewModelTests : IDisposable
         Assert.Equal("Discovery Well #1", workspaceVm.CurrentWellName);
         Assert.Equal("W-12345", workspaceVm.CurrentWellId);
         Assert.Equal("0.1 OHFF", workspaceVm.CurrentLogName);
+=======
+    public void BroomstickSetupViewModel_LoadsCheckboxValuesFromDocumentAndPlotSettings()
+    {
+        var doc = new BroomstickDocument();
+        doc.Profile.GroupFunctions = "0,2"; // Min and Avg checked, Max unchecked
+        doc.Profile.PkupRigStates = "1,3,5";
+        doc.Profile.FilterByRange = false;
+        doc.PlotSettings.ShowLegend = false;
+        doc.PlotSettings.PlotTimeData = false;
+        doc.PlotSettings.ShowCasingPoints = false;
+        doc.PlotSettings.PointsStyle = "Diamond";
+        doc.PlotSettings.FilterMethod = "Median";
+        doc.PlotSettings.CasingPointStyle = "Circle";
+
+        var setupVm = new BroomstickSetupViewModel(doc);
+
+        Assert.True(setupVm.GroupMin);
+        Assert.False(setupVm.GroupMax);
+        Assert.True(setupVm.GroupAvg);
+        Assert.False(setupVm.FilterByHookloadRange);
+        Assert.False(setupVm.ShowLegend);
+        Assert.False(setupVm.PlotTimeData);
+        Assert.False(setupVm.ShowCasingPoints);
+        Assert.Equal("Diamond", setupVm.PointsStyle);
+        Assert.Equal("Median", setupVm.FilterMethod);
+        Assert.Equal("Circle", setupVm.CasingPointStyle);
+
+        var selectedRs = setupVm.RigStates.Where(r => r.IsSelected).Select(r => r.Number).ToList();
+        Assert.Equal(new[] { 1, 3, 5 }, selectedRs);
+    }
+
+    [Fact]
+    public void BroomstickSetupViewModel_SaveAndApply_PersistsCheckboxValuesToProfileAndPlotSettings()
+    {
+        var doc = new BroomstickDocument();
+        var setupVm = new BroomstickSetupViewModel(doc);
+
+        // Change checkboxes
+        setupVm.GroupMin = false;
+        setupVm.GroupMax = true;
+        setupVm.GroupAvg = false;
+        setupVm.ShowLegend = false;
+        setupVm.PlotTimeData = false;
+        setupVm.ShowCasingPoints = false;
+        setupVm.FilterByHookloadRange = false;
+        setupVm.PointsStyle = "Triangle";
+        setupVm.FilterMethod = "Standard Deviation";
+        setupVm.CasingPointStyle = "Circle";
+
+        foreach (var rs in setupVm.RigStates)
+        {
+            rs.IsSelected = (rs.Number == 2 || rs.Number == 4);
+        }
+
+        setupVm.SaveAndApplyCommand.Execute(null);
+
+        Assert.True(setupVm.DialogResult);
+        Assert.Equal("1", doc.Profile.GroupFunctions); // Only Max
+        Assert.Equal("2,4", doc.Profile.PkupRigStates);
+        Assert.False(doc.Profile.FilterByRange);
+        Assert.False(doc.PlotSettings.ShowLegend);
+        Assert.False(doc.PlotSettings.PlotTimeData);
+        Assert.False(doc.PlotSettings.ShowCasingPoints);
+        Assert.Equal("Triangle", doc.PlotSettings.PointsStyle);
+        Assert.Equal("Standard Deviation", doc.PlotSettings.FilterMethod);
+        Assert.Equal("Circle", doc.PlotSettings.CasingPointStyle);
+
+        // Verify round-trip into a new ViewModel
+        var reloadedVm = new BroomstickSetupViewModel(doc);
+        Assert.False(reloadedVm.GroupMin);
+        Assert.True(reloadedVm.GroupMax);
+        Assert.False(reloadedVm.GroupAvg);
+        Assert.False(reloadedVm.ShowLegend);
+        Assert.False(reloadedVm.PlotTimeData);
+        Assert.False(reloadedVm.ShowCasingPoints);
+        Assert.False(reloadedVm.FilterByHookloadRange);
+        Assert.Equal("Triangle", reloadedVm.PointsStyle);
+        Assert.Equal("Standard Deviation", reloadedVm.FilterMethod);
+        Assert.Equal("Circle", reloadedVm.CasingPointStyle);
+
+        var reloadedSelectedRs = reloadedVm.RigStates.Where(r => r.IsSelected).Select(r => r.Number).ToList();
+        Assert.Equal(new[] { 2, 4 }, reloadedSelectedRs);
+    }
+
+    [Fact]
+    public void BroomstickDocument_GetFilteredPoints_FiltersByPkupRigStatesAndDownsamplesByGroupFunctions()
+    {
+        var doc = new BroomstickDocument();
+        doc.Profile.FilterByRange = false;
+        doc.Profile.PkupRigStates = "1,2";
+
+        doc.BroomstickPointData.Add(new DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.PUSOPoint
+        {
+            Depth = 1000, DynamicValue = 150, RigStates = "1", UserVisible = true
+        });
+        doc.BroomstickPointData.Add(new DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.PUSOPoint
+        {
+            Depth = 1010, DynamicValue = 155, RigStates = "2", UserVisible = true
+        });
+        doc.BroomstickPointData.Add(new DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor.PUSOPoint
+        {
+            Depth = 1020, DynamicValue = 160, RigStates = "6", UserVisible = true // Trip In - filtered out
+        });
+
+        var filtered = doc.GetFilteredPoints();
+        Assert.Equal(2, filtered.Count);
+        Assert.DoesNotContain(filtered, p => p.RigStates == "6");
+    }
+
+    [Fact]
+    public void BroomstickDocumentViewModel_OpenSetup_SyncsIsLegendVisibleWithPlotSettings()
+    {
+        var doc = new BroomstickDocument();
+        doc.PlotSettings.ShowLegend = true;
+        var repo = new BroomstickTemplateRepository(_session);
+        var vm = new BroomstickDocumentViewModel(_session, repo, null, doc);
+
+        Assert.True(vm.IsLegendVisible);
+
+        vm.OpenSetupDialogHandler = (docVm) =>
+        {
+            docVm.Document.PlotSettings.ShowLegend = false;
+            return true;
+        };
+
+        vm.OpenSetup();
+
+        Assert.False(vm.IsLegendVisible);
+        Assert.True(vm.IsDirty);
+    }
+    [Fact]
+    public void BroomstickSetupViewModel_DropdownOptions_ArePopulatedAndRoundtrip()
+    {
+        var doc = new BroomstickDocument();
+        var vm = new BroomstickSetupViewModel(doc);
+
+        Assert.Contains("Rectangle", vm.AvailablePointStyles);
+        Assert.Contains("Circle", vm.AvailablePointStyles);
+        Assert.Contains("Triangle", vm.AvailablePointStyles);
+        Assert.Contains("Diamond", vm.AvailablePointStyles);
+
+        Assert.Contains("Moving Avg.", vm.AvailableFilterMethods);
+        Assert.Contains("Median", vm.AvailableFilterMethods);
+        Assert.Contains("Standard Deviation", vm.AvailableFilterMethods);
+
+        Assert.Contains("Rectangle", vm.AvailableCasingPointStyles);
+        Assert.Contains("Circle", vm.AvailableCasingPointStyles);
+
+        // Test changing dropdown selections and saving
+        vm.PointsStyle = "Circle";
+        vm.FilterMethod = "Median";
+        vm.CasingPointStyle = "Circle";
+
+        vm.SaveAndApplyCommand.Execute(null);
+
+        Assert.Equal("Circle", doc.PlotSettings.PointsStyle);
+        Assert.Equal("Median", doc.PlotSettings.FilterMethod);
+        Assert.Equal("Circle", doc.PlotSettings.CasingPointStyle);
+
+        // Re-load into a fresh ViewModel
+        var vm2 = new BroomstickSetupViewModel(doc);
+        Assert.Equal("Circle", vm2.PointsStyle);
+        Assert.Equal("Median", vm2.FilterMethod);
+        Assert.Equal("Circle", vm2.CasingPointStyle);
+>>>>>>> 36b53e1280167ed1c0e337bf84c4c2238317a3a1
     }
 }

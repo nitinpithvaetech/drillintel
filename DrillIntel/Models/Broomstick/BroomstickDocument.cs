@@ -21,6 +21,25 @@ public class BroomstickPlotSettings
     public string UnitSystem { get; set; } = "klbs";
     public Dictionary<string, bool> SeriesVisibility { get; set; } = new();
 
+    public bool PlotTimeData { get; set; } = true;
+    public bool ShowLegend { get; set; } = true;
+    public bool PlotMakeupTorque { get; set; } = true;
+    public bool PlotTorqueLimit { get; set; } = true;
+    public bool ShowCasingPoints { get; set; } = true;
+    public bool ShowCasingMax { get; set; } = true;
+    public bool ShowCasingMin { get; set; } = false;
+
+    public string PointsStyle { get; set; } = "Rectangle";
+    public int PointSize { get; set; } = 5;
+    public int PointTransparency { get; set; } = 0;
+    public int LineThickness { get; set; } = 3;
+
+    public string FilterMethod { get; set; } = "Moving Avg.";
+
+    public string CasingPointStyle { get; set; } = "Rectangle";
+    public int CasingPointSize { get; set; } = 10;
+    public int CasingPointTransparency { get; set; } = 10;
+
     public BroomstickPlotSettings()
     {
         // Default all series to visible
@@ -164,6 +183,32 @@ public class BroomstickDocument
             });
         }
 
+        // 2b. Rig states filter (if specified in profile)
+        if (!string.IsNullOrWhiteSpace(Profile.PkupRigStates))
+        {
+            var allowedRigStates = new HashSet<int>();
+            foreach (var token in Profile.PkupRigStates.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (int.TryParse(token, out int code))
+                    allowedRigStates.Add(code);
+            }
+
+            if (allowedRigStates.Count > 0)
+            {
+                query = query.Where(p =>
+                {
+                    if (string.IsNullOrWhiteSpace(p.RigStates)) return true;
+                    var parts = p.RigStates.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    foreach (var part in parts)
+                    {
+                        if (int.TryParse(part, out int c) && allowedRigStates.Contains(c))
+                            return true;
+                    }
+                    return false;
+                });
+            }
+        }
+
         // 3. User visibility check
         query = query.Where(p => p.UserVisible);
 
@@ -172,15 +217,30 @@ public class BroomstickDocument
         // 4. Downsampling (if enabled)
         if (Profile.DataPoints > 0 && list.Count > Profile.DataPoints * 5)
         {
-            list = ApplyDownsampling(list, Profile.DataPoints);
+            list = ApplyDownsampling(list, Profile.DataPoints, Profile.GroupFunctions);
         }
 
         return list;
     }
 
-    private static List<PUSOPoint> ApplyDownsampling(List<PUSOPoint> points, int targetBuckets)
+    private static List<PUSOPoint> ApplyDownsampling(List<PUSOPoint> points, int targetBuckets, string groupFunctions = "")
     {
         if (points.Count <= targetBuckets) return points;
+
+        var tokens = (groupFunctions ?? string.Empty).ToUpperInvariant()
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim())
+            .ToList();
+
+        bool incMin = tokens.Count == 0 || tokens.Contains("0") || tokens.Contains("MIN");
+        bool incMax = tokens.Count == 0 || tokens.Contains("1") || tokens.Contains("MAX");
+        bool incAvg = tokens.Count == 0 || tokens.Contains("2") || tokens.Contains("AVG");
+
+        // If all three are unchecked, default to showing min, max, avg
+        if (!incMin && !incMax && !incAvg)
+        {
+            incMin = incMax = incAvg = true;
+        }
 
         var result = new List<PUSOPoint>();
         int bucketSize = (int)Math.Ceiling((double)points.Count / targetBuckets);
@@ -191,13 +251,21 @@ public class BroomstickDocument
             if (bucket.Count == 0) continue;
 
             // Representative points: min, max, and avg
-            var minPt = bucket.OrderBy(p => p.DynamicValue > 0 ? p.DynamicValue : p.Avg).First();
-            var maxPt = bucket.OrderByDescending(p => p.DynamicValue > 0 ? p.DynamicValue : p.Avg).First();
-            var avgPt = bucket[bucket.Count / 2];
-
-            result.Add(minPt);
-            if (!ReferenceEquals(maxPt, minPt)) result.Add(maxPt);
-            if (!ReferenceEquals(avgPt, minPt) && !ReferenceEquals(avgPt, maxPt)) result.Add(avgPt);
+            if (incMin)
+            {
+                var minPt = bucket.OrderBy(p => p.DynamicValue > 0 ? p.DynamicValue : p.Avg).First();
+                result.Add(minPt);
+            }
+            if (incMax)
+            {
+                var maxPt = bucket.OrderByDescending(p => p.DynamicValue > 0 ? p.DynamicValue : p.Avg).First();
+                result.Add(maxPt);
+            }
+            if (incAvg)
+            {
+                var avgPt = bucket[bucket.Count / 2];
+                result.Add(avgPt);
+            }
         }
 
         return result.Distinct().OrderBy(p => p.Depth).ToList();
