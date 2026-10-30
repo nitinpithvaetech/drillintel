@@ -443,7 +443,6 @@ public class BroomstickDocumentViewModelTests : IDisposable
     }
 
     [Fact]
-<<<<<<< HEAD
     public async Task WorkspaceViewModel_DuplicateDocument_CreatesCopyAndOpensTab()
     {
         var doc = new BroomstickDocument { TemplateId = "test-tpl-dup", DocumentName = "Original Template" };
@@ -524,7 +523,9 @@ public class BroomstickDocumentViewModelTests : IDisposable
         Assert.Equal("Discovery Well #1", workspaceVm.CurrentWellName);
         Assert.Equal("W-12345", workspaceVm.CurrentWellId);
         Assert.Equal("0.1 OHFF", workspaceVm.CurrentLogName);
-=======
+    }
+
+    [Fact]
     public void BroomstickSetupViewModel_LoadsCheckboxValuesFromDocumentAndPlotSettings()
     {
         var doc = new BroomstickDocument();
@@ -688,6 +689,5 @@ public class BroomstickDocumentViewModelTests : IDisposable
         Assert.Equal("Circle", vm2.PointsStyle);
         Assert.Equal("Median", vm2.FilterMethod);
         Assert.Equal("Circle", vm2.CasingPointStyle);
->>>>>>> 36b53e1280167ed1c0e337bf84c4c2238317a3a1
     }
 }
