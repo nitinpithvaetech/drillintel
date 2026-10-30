@@ -117,6 +117,13 @@
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
+                <Fluent:RibbonGroupBox Header="Plans">
+                    <Fluent:Button Header="Manage Plan" Command="{Binding OpenBroomstickManagePlanCommand}" ToolTip="Manage and import Broomstick Hookload &amp; Torque plans (CSV/Excel)">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="Hook" Foreground="#10B981" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
+                </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
 
             <!-- Data QC Tab -->
@@ -165,54 +172,6 @@
                             <materialDesign:PackIcon Kind="LinkVariant" Foreground="#00897B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Generate KPIs">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="ChartLine" Foreground="#3F51B5" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon>
-                    </Fluent:Button>
-                </Fluent:RibbonGroupBox>
-                <Fluent:RibbonGroupBox Header="Rig State">
-                    <Fluent:SplitButton Header="Rig State Workspace" 
-                                        Command="{Binding OpenRigStateDocumentCommand}" 
-                                        ToolTip="Open the Rig State Document Workspace (TreeView + Multi-Tab Chart view).">
-                        <Fluent:SplitButton.LargeIcon>
-                            <materialDesign:PackIcon Kind="ChartTimelineVariant" Foreground="#673AB7" Width="32" Height="32" />
-                        </Fluent:SplitButton.LargeIcon>
-                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenRigStateDocumentCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#673AB7" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                        <Fluent:MenuItem Header="New Document..." Command="{Binding NewRigStateDocumentCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="FilePlusOutline" Foreground="#00796B" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                        <Fluent:MenuItem Header="Manage Documents (Tree)..." Command="{Binding ManageRigStateDocumentsCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="FileTree" Foreground="#512DA8" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                    </Fluent:SplitButton>
-                </Fluent:RibbonGroupBox>
-                <Fluent:RibbonGroupBox Header="Broomstick">
-                    <Fluent:SplitButton Header="Broomstick Workspace" 
-                                        Command="{Binding OpenBroomstickWorkspaceCommand}" 
-                                        ToolTip="Open the Broomstick Document Workspace (TreeView + Multi-Tab Chart view).">
-                        <Fluent:SplitButton.LargeIcon>
-                            <materialDesign:PackIcon Kind="ChartScatterPlot" Foreground="#4F46E5" Width="32" Height="32" />
-                        </Fluent:SplitButton.LargeIcon>
-                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenBroomstickWorkspaceCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#4F46E5" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                        <Fluent:MenuItem Header="Manage Templates (Tree)..." Command="{Binding ManageBroomstickTemplatesCommand}">
-                            <Fluent:MenuItem.Icon>
-                                <materialDesign:PackIcon Kind="FileTree" Foreground="#F59E0B" Width="16" Height="16" />
-                            </Fluent:MenuItem.Icon>
-                        </Fluent:MenuItem>
-                    </Fluent:SplitButton>
                 </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Functions">
                     <Fluent:DropDownButton Header="Functions" 
@@ -256,8 +215,8 @@
                 </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
 
-            <!-- Reports Tab -->
-            <Fluent:RibbonTabItem Header="Reports" IsEnabled="{Binding IsProjectOpen}">
+            <!-- Reports & Charts Tab -->
+            <Fluent:RibbonTabItem Header="Reports/Charts" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Drilling">
                     <Fluent:Button Header="Drilling Summary">
                         <Fluent:Button.LargeIcon>
@@ -275,17 +234,46 @@
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
-                <Fluent:RibbonGroupBox Header="Plots">
-                    <Fluent:Button Header="Broomstick Plot">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="Broom" Foreground="#795548" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon>
-                    </Fluent:Button>
-                    <Fluent:Button Header="Manage Plans" Command="{Binding OpenBroomstickManagePlanCommand}" ToolTip="Manage and import Broomstick Hookload &amp; Torque plans (CSV/Excel)">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="Hook" Foreground="#10B981" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon>
-                    </Fluent:Button>
+                <Fluent:RibbonGroupBox Header="Charts">
+                    <Fluent:SplitButton Header="Rig State Workspace" 
+                                        Command="{Binding OpenRigStateDocumentCommand}" 
+                                        ToolTip="Open the Rig State Document Workspace (TreeView + Multi-Tab Chart view).">
+                        <Fluent:SplitButton.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartTimelineVariant" Foreground="#673AB7" Width="32" Height="32" />
+                        </Fluent:SplitButton.LargeIcon>
+                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenRigStateDocumentCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#673AB7" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="New Document..." Command="{Binding NewRigStateDocumentCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FilePlusOutline" Foreground="#00796B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Manage Documents (Tree)..." Command="{Binding ManageRigStateDocumentsCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FileTree" Foreground="#512DA8" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                    </Fluent:SplitButton>
+                    <Fluent:SplitButton Header="Broomstick Workspace" 
+                                        Command="{Binding OpenBroomstickWorkspaceCommand}" 
+                                        ToolTip="Open the Broomstick Document Workspace (TreeView + Multi-Tab Chart view).">
+                        <Fluent:SplitButton.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartScatterPlot" Foreground="#4F46E5" Width="32" Height="32" />
+                        </Fluent:SplitButton.LargeIcon>
+                        <Fluent:MenuItem Header="Open Workspace" Command="{Binding OpenBroomstickWorkspaceCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ViewDashboardOutline" Foreground="#4F46E5" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Manage Templates (Tree)..." Command="{Binding ManageBroomstickTemplatesCommand}">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FileTree" Foreground="#F59E0B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                    </Fluent:SplitButton>
                 </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
             
