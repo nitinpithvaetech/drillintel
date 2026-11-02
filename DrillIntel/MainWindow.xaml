@@ -172,6 +172,11 @@
                             <materialDesign:PackIcon Kind="LinkVariant" Foreground="#00897B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="Process DrlgStandProcess" Command="{Binding ProcessDrillingStandsCommand}" ToolTip="Process drilling stand of entire well and save it to the database">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="FormatListNumbered" Foreground="#1E88E5" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                 </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Functions">
                     <Fluent:DropDownButton Header="Functions" 
@@ -209,6 +214,13 @@
                                          ToolTip="Process drilling connections of entire well and save it to the database">
                             <Fluent:MenuItem.Icon>
                                 <materialDesign:PackIcon Kind="LinkVariant" Foreground="#00897B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Process DrlgStandProcess" 
+                                         Command="{Binding ProcessDrillingStandsCommand}"
+                                         ToolTip="Process drilling stand of entire well and save it to the database">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="FormatListNumbered" Foreground="#1E88E5" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
                     </Fluent:DropDownButton>

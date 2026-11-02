@@ -367,6 +367,7 @@ public partial class MainViewModel : ObservableObject
         ProcessTagCreationCommand.NotifyCanExecuteChanged();
 
         ProcessDrillingConnectionsCommand.NotifyCanExecuteChanged();
+        ProcessDrillingStandsCommand.NotifyCanExecuteChanged();
         ViewTagGraphCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
@@ -809,6 +810,8 @@ public partial class MainViewModel : ObservableObject
 
     public Func<ProcessDrillingConnectionsViewModel, bool?>? OpenProcessDrillingConnectionsDialogHandler { get; set; }
 
+    public Func<ProcessDrillingStandsViewModel, bool?>? OpenProcessDrillingStandsDialogHandler { get; set; }
+
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task ProcessTagCreation()
     {
@@ -869,6 +872,90 @@ public partial class MainViewModel : ObservableObject
         else if (Application.Current != null)
         {
             var window = new Views.ProcessTagCreationWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true)
+        {
+            _session.NotifyDataChanged();
+            if (CurrentViewModel is DashboardViewModel dashboard)
+            {
+                await dashboard.RefreshAsync();
+            }
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task ProcessDrillingStands()
+    {
+        if (!_session.IsProjectOpen) return;
+
+        Well? well = null;
+        TimeLog? timeLog = null;
+
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (dashVm.SelectedNode?.Tag is Well w)
+            {
+                well = w;
+            }
+            else if (dashVm.SelectedWell != null)
+            {
+                well = dashVm.SelectedWell;
+            }
+        }
+
+        var repo = new WellDataRepository(_session);
+
+        if (well == null)
+        {
+            well = await repo.GetProjectWellAsync();
+        }
+
+        if (well == null)
+        {
+            if (Application.Current != null)
+            {
+                MessageBox.Show("No active well found in the project. Please load or select a well first.",
+                    "Drilling Stand Process", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return;
+        }
+
+        if (timeLog == null)
+        {
+            var timeLogs = await repo.GetTimeLogsAsync();
+            timeLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+        }
+
+        if (timeLog == null)
+        {
+            if (Application.Current != null)
+            {
+                MessageBox.Show("No Primary TimeLog found for the active well. Please ensure a timelog is imported.",
+                    "Drilling Stand Process", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            return;
+        }
+
+        var vm = new ProcessDrillingStandsViewModel(_session, well, timeLog);
+        bool? result = false;
+
+        if (OpenProcessDrillingStandsDialogHandler != null)
+        {
+            result = OpenProcessDrillingStandsDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.ProcessDrillingStandsWindow
             {
                 DataContext = vm,
                 Owner = Application.Current?.MainWindow

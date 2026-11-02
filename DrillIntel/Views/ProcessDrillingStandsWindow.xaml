@@ -1,0 +1,183 @@
+<Window x:Class="DrillIntel.Views.ProcessDrillingStandsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:converters="clr-namespace:DrillIntel.Converters"
+        mc:Ignorable="d"
+        Title="Process and Save Drilling Stands" 
+        Height="460" Width="740"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{DynamicResource MaterialDesignFont}">
+
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <!-- 0: Header Banner -->
+            <RowDefinition Height="Auto" />
+            <!-- 1: Info Box -->
+            <RowDefinition Height="Auto" />
+            <!-- 2: Parameters GroupBox -->
+            <RowDefinition Height="Auto" />
+            <!-- 3: Status & Progress -->
+            <RowDefinition Height="*" />
+            <!-- 4: Bottom Action Bar -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 0: Header Banner -->
+        <Border Grid.Row="0" Background="#F4F3F8" CornerRadius="8" Padding="14,12" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                
+                <materialDesign:PackIcon Grid.Column="0" Kind="FormatListNumbered" Width="36" Height="36" 
+                                        Foreground="{DynamicResource PrimaryHueMidBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Process and Save Drilling Stands" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                        <TextBlock Text="Well: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding WellName}" FontWeight="Bold" Foreground="#212121" FontSize="12" Margin="0,0,16,0" />
+                        <TextBlock Text="Log: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding LogName}" Foreground="#212121" FontSize="12" Margin="0,0,16,0" />
+                        <TextBlock Text="Existing Stands: " FontWeight="SemiBold" Foreground="#616161" FontSize="12" />
+                        <TextBlock Text="{Binding ExistingStandsCount}" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" FontSize="12" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- 1: Info Box -->
+        <Border Grid.Row="1" Background="#E8F4FD" BorderBrush="#B6E0FE" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <materialDesign:PackIcon Kind="InformationOutline" Width="18" Height="18" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <TextBlock Grid.Column="1" 
+                           Text="This function allows processing drilling stand of entire well and save it to the database." 
+                           Foreground="#0369A1" FontSize="12" FontWeight="Normal" VerticalAlignment="Center" TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <!-- 2: Parameters GroupBox -->
+        <GroupBox Grid.Row="2" Header="Stand Parameters" materialDesign:ElevationAssist.Elevation="Dp1" Padding="14,12" Margin="0,0,0,14">
+            <StackPanel>
+                <!-- Option 1: Day Time Hours From -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <TextBlock Text="Day Time Hours From" Foreground="#616161" FontSize="13" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    
+                    <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="From " Foreground="#757575" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBox Text="{Binding DayTimeHoursFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                     IsEnabled="{Binding CanStart}"
+                                     Foreground="{DynamicResource MaterialDesignBody}" Background="Transparent" BorderThickness="0" 
+                                     Width="55" FontSize="13" FontWeight="SemiBold" TextAlignment="Center" VerticalContentAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Option 2: Overwrite existing connection information -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <CheckBox IsChecked="{Binding OverwriteExisting}" 
+                              IsEnabled="{Binding CanStart}"
+                              VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="Overwrite existing connection information" 
+                               Foreground="{DynamicResource MaterialDesignBody}" FontSize="13" VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- 3: Progress and Status Area -->
+        <Border Grid.Row="3" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="8" Padding="14,12" Margin="0,0,0,16">
+            <StackPanel VerticalAlignment="Center">
+                <!-- Status Message -->
+                <DockPanel LastChildFill="False" Margin="0,0,0,6">
+                    <TextBlock DockPanel.Dock="Left" Text="{Binding ProgressStatus}" FontSize="12" FontWeight="Medium" Foreground="#424242" TextTrimming="CharacterEllipsis" />
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressPercent, StringFormat='{}{0:F0}%'}" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource PrimaryHueMidBrush}" 
+                               Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </DockPanel>
+
+                <!-- Progress Bar -->
+                <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="8" 
+                             Foreground="{DynamicResource PrimaryHueMidBrush}" Background="#E0E0E0" BorderThickness="0"
+                             materialDesign:TransitionAssist.DisableTransitions="True"
+                             Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}" />
+
+                <!-- Error message if any -->
+                <TextBlock Text="{Binding ErrorMessage}" Foreground="#D32F2F" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" 
+                           Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </StackPanel>
+        </Border>
+
+        <!-- 4: Bottom Action Buttons Bar -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Buttons: Start, Cancel, Clear DB Entries -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Start Button -->
+                <Button Command="{Binding StartCommand}" 
+                        IsEnabled="{Binding CanStart}"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Height="36" Padding="16,0"
+                        Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Play" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Start" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Cancel Button -->
+                <Button Command="{Binding CancelCommand}" 
+                        IsEnabled="{Binding CanCancel}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}" 
+                        Height="36" Padding="14,0"
+                        Margin="0,0,10,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="Close" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Clear DB Entries Button -->
+                <Button Command="{Binding ClearDbEntriesCommand}" 
+                        IsEnabled="{Binding CanStart}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Foreground="#C62828" BorderBrush="#EF9A9A"
+                        Height="36" Padding="14,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="DeleteOutline" Width="18" Height="18" Foreground="#C62828" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Clear DB Entries" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <!-- Right Button: Close -->
+            <Button Grid.Column="1" Command="{Binding CloseCommand}" 
+                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                    Height="36" Padding="16,0" MinWidth="90">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="Close" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Grid>
+</Window>
+
