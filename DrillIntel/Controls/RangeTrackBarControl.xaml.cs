@@ -183,6 +183,18 @@ public partial class RangeTrackBarControl : UserControl
         UpdateVisualLayout();
         UpdateOverviewVisual();
         SyncPeriodComboBox();
+
+        if (TrackBarContainer != null)
+        {
+            TrackBarContainer.SizeChanged -= OnTrackBarContainerSizeChanged;
+            TrackBarContainer.SizeChanged += OnTrackBarContainerSizeChanged;
+        }
+    }
+
+    private void OnTrackBarContainerSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateVisualLayout();
+        UpdateOverviewVisual();
     }
 
     private static void OnBoundsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -385,8 +397,19 @@ public partial class RangeTrackBarControl : UserControl
         double leftRatio = (start - Minimum) / totalRange;
         double widthRatio = (end - start) / totalRange;
 
+        double minWidth = 38.0;
+        double widthPx = Math.Max(minWidth, widthRatio * trackWidth);
+        if (widthPx > trackWidth) widthPx = trackWidth;
+
         double leftPx = leftRatio * trackWidth;
-        double widthPx = Math.Max(16, widthRatio * trackWidth);
+        if (leftPx + widthPx > trackWidth)
+        {
+            leftPx = Math.Max(0.0, trackWidth - widthPx);
+        }
+        if (leftPx < 0.0)
+        {
+            leftPx = 0.0;
+        }
 
         Canvas.SetLeft(SelectionWindow, leftPx);
         SelectionWindow.Width = widthPx;
@@ -505,12 +528,14 @@ public partial class RangeTrackBarControl : UserControl
                     break;
 
                 case DragMode.ResizeLeft:
-                    double resStart = Math.Max(Minimum, Math.Min(_initialSelectionEnd - (totalRange * 0.005), _initialSelectionStart + deltaUnits));
+                    double minSpanLeft = IsTimeLog ? (5.0 / 1440.0) : Math.Max(1.0, totalRange * 0.001);
+                    double resStart = Math.Max(Minimum, Math.Min(_initialSelectionEnd - minSpanLeft, _initialSelectionStart + deltaUnits));
                     SelectionStart = resStart;
                     break;
 
                 case DragMode.ResizeRight:
-                    double resEnd = Math.Min(Maximum, Math.Max(_initialSelectionStart + (totalRange * 0.005), _initialSelectionEnd + deltaUnits));
+                    double minSpanRight = IsTimeLog ? (5.0 / 1440.0) : Math.Max(1.0, totalRange * 0.001);
+                    double resEnd = Math.Min(Maximum, Math.Max(_initialSelectionStart + minSpanRight, _initialSelectionEnd + deltaUnits));
                     SelectionEnd = resEnd;
                     break;
             }

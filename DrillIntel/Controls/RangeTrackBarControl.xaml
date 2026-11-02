@@ -90,7 +90,7 @@
 
                         <!-- Draggable & Resizable Selection Window Frame: [ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ ] -->
                         <Canvas x:Name="SelectionCanvas" ClipToBounds="True">
-                            <Border x:Name="SelectionWindow" Height="34" CornerRadius="3"
+                            <Border x:Name="SelectionWindow" Height="34" CornerRadius="3" MinWidth="38"
                                     Background="#331976D2" BorderBrush="#1976D2" BorderThickness="2"
                                     Cursor="Hand" MouseLeftButtonDown="OnSelectionWindowMouseDown">
                                 <Grid>
