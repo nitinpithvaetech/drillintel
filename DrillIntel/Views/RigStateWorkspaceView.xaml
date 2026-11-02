@@ -186,36 +186,36 @@
                         <!-- Context Menu for Document Tree Nodes -->
                         <ContextMenu x:Key="DocumentNodeContextMenu">
                             <MenuItem Header="Open in Tab" 
-                                      Command="{Binding DataContext.OpenDocumentNodeCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
+                                      Command="{Binding PlacementTarget.Tag.OpenDocumentNodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="TabPlus" Width="16" Height="16" Foreground="#1976D2" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="Open in Detached Window" 
-                                      Command="{Binding DataContext.OpenDetachedWindowCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
-                                      CommandParameter="{Binding DataContext.ActiveDocument, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}">
+                                      Command="{Binding PlacementTarget.Tag.OpenDetachedWindowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                      CommandParameter="{Binding PlacementTarget.Tag.ActiveDocument, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="OpenInNew" Width="16" Height="16" Foreground="#0284C7" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Set as Default" 
-                                      Command="{Binding DataContext.MakeDefaultCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
+                                      Command="{Binding PlacementTarget.Tag.MakeDefaultCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="StarOutline" Width="16" Height="16" Foreground="#F59E0B" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="Edit / Rename..." 
-                                      Command="{Binding DataContext.EditDocumentCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
+                                      Command="{Binding PlacementTarget.Tag.EditDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="PencilOutline" Width="16" Height="16" Foreground="#D97706" />
                                 </MenuItem.Icon>
                             </MenuItem>
                             <MenuItem Header="Duplicate" 
-                                      Command="{Binding DataContext.DuplicateDocumentCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
+                                      Command="{Binding PlacementTarget.Tag.DuplicateDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="ContentCopy" Width="16" Height="16" Foreground="#7C3AED" />
@@ -223,7 +223,7 @@
                             </MenuItem>
                             <Separator />
                             <MenuItem Header="Delete" 
-                                      Command="{Binding DataContext.DeleteDocumentCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
+                                      Command="{Binding PlacementTarget.Tag.DeleteDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                       CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                 <MenuItem.Icon>
                                     <materialDesign:PackIcon Kind="DeleteOutline" Width="16" Height="16" Foreground="#DC2626" />
@@ -359,20 +359,21 @@
                     <Style TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
                         <Setter Property="Padding" Value="8,4" />
                         <Setter Property="MinHeight" Value="32" />
+                        <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}" />
                         <Setter Property="ContextMenu">
                             <Setter.Value>
                                 <ContextMenu>
                                     <MenuItem Header="Open in Detached Window" 
-                                              Command="{Binding DataContext.OpenDetachedWindowCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
-                                              CommandParameter="{Binding}">
+                                              Command="{Binding PlacementTarget.Tag.OpenDetachedWindowCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                         <MenuItem.Icon>
                                             <materialDesign:PackIcon Kind="OpenInNew" Width="16" Height="16" Foreground="#0284C7" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator />
                                     <MenuItem Header="Close Tab" 
-                                              Command="{Binding DataContext.CloseDocumentTabCommand, RelativeSource={RelativeSource AncestorType=views:RigStateWorkspaceView}}"
-                                              CommandParameter="{Binding}">
+                                              Command="{Binding PlacementTarget.Tag.CloseDocumentTabCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
                                         <MenuItem.Icon>
                                             <materialDesign:PackIcon Kind="Close" Width="16" Height="16" Foreground="#DC2626" />
                                         </MenuItem.Icon>

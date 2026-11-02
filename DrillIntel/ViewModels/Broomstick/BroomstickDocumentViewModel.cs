@@ -1564,190 +1564,147 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
 
     [RelayCommand]
-
     public void RangeTrackBarChanged()
-
     {
+        if (_isApplyingPreset) return;
 
         if (IsTimeLog && TrackBarSelectionStart > 1000)
-
         {
-
             var startDt = DateTime.FromOADate(TrackBarSelectionStart);
-
             var endDt = DateTime.FromOADate(TrackBarSelectionEnd);
 
-
-
             FromDate = startDt;
-
             ToDate = endDt;
-
             FromDateTimeText = startDt.ToString("dd-MM-yyyy HH:mm");
-
             ToDateTimeText = endDt.ToString("dd-MM-yyyy HH:mm");
-
             SelectedPreset = "Custom Range";
-
         }
-
         else if (!IsTimeLog)
-
         {
-
             FromDepth = TrackBarSelectionStart;
-
             ToDepth = TrackBarSelectionEnd;
-
             SelectedPreset = "Custom Range";
-
         }
 
-
-
         ApplyRangeFilter();
-
     }
 
-
+    private bool _isApplyingPreset;
 
     [RelayCommand]
-
     public async Task ApplyPresetAsync(string presetName)
-
     {
-
-        if (!IsTimeLog) return;
-
-        DateTime maxRef = LogMaxDate != DateTime.MinValue ? LogMaxDate : DateTime.Now;
-
-        DateTime to = maxRef;
-
-        DateTime from = to.AddHours(-24);
-
-
-
-        switch (presetName)
-
+        if (_isApplyingPreset) return;
+        _isApplyingPreset = true;
+        try
         {
+            if (!IsTimeLog)
+            {
+                if (presetName == "Entire Log")
+                {
+                    FromDepth = TrackBarMin;
+                    ToDepth = TrackBarMax;
+                    TrackBarSelectionStart = TrackBarMin;
+                    TrackBarSelectionEnd = TrackBarMax;
+                    ApplyRangeFilter();
+                    SelectedPreset = "Entire Log";
+                }
+                return;
+            }
 
-            case "Last 1 Hour":
+            if (LogMinDate != DateTime.MinValue && LogMaxDate != DateTime.MinValue && LogMaxDate > LogMinDate)
+            {
+                TrackBarMin = LogMinDate.ToOADate();
+                TrackBarMax = LogMaxDate.ToOADate();
+            }
 
-                from = to.AddHours(-1);
+            DateTime maxRef = LogMaxDate != DateTime.MinValue ? LogMaxDate : DateTime.Now;
+            DateTime to = maxRef;
+            DateTime from = to.AddHours(-24);
 
-                break;
+            switch (presetName)
+            {
+                case "Last 1 Hour":
+                    from = to.AddHours(-1);
+                    break;
+                case "Last 4 Hours":
+                    from = to.AddHours(-4);
+                    break;
+                case "Last 12 Hours":
+                    from = to.AddHours(-12);
+                    break;
+                case "Last 24 Hours":
+                    from = to.AddHours(-24);
+                    break;
+                case "Last 48 Hours":
+                    from = to.AddHours(-48);
+                    break;
+                case "Last 7 Days":
+                    from = to.AddDays(-7);
+                    break;
+                case "Entire Log":
+                    from = LogMinDate != DateTime.MinValue ? LogMinDate : to.AddDays(-7);
+                    to = maxRef;
+                    break;
+            }
 
-            case "Last 4 Hours":
+            if (LogMinDate != DateTime.MinValue && from < LogMinDate) from = LogMinDate;
+            if (to > maxRef) to = maxRef;
 
-                from = to.AddHours(-4);
+            FromDate = from;
+            ToDate = to;
+            FromDateTimeText = from.ToString("dd-MM-yyyy HH:mm");
+            ToDateTimeText = to.ToString("dd-MM-yyyy HH:mm");
 
-                break;
+            TrackBarSelectionStart = from.ToOADate();
+            TrackBarSelectionEnd = to.ToOADate();
 
-            case "Last 12 Hours":
-
-                from = to.AddHours(-12);
-
-                break;
-
-            case "Last 24 Hours":
-
-                from = to.AddHours(-24);
-
-                break;
-
-            case "Last 48 Hours":
-
-                from = to.AddHours(-48);
-
-                break;
-
-            case "Last 7 Days":
-
-                from = to.AddDays(-7);
-
-                break;
-
-            case "Entire Log":
-
-                from = LogMinDate != DateTime.MinValue ? LogMinDate : to.AddDays(-7);
-
-                break;
-
+            ApplyRangeFilter();
+            SelectedPreset = presetName;
         }
-
-
-
-        if (LogMinDate != DateTime.MinValue && from < LogMinDate) from = LogMinDate;
-
-        if (to > maxRef) to = maxRef;
-
-
-
-        FromDate = from;
-
-        ToDate = to;
-
-        FromDateTimeText = from.ToString("dd-MM-yyyy HH:mm");
-
-        ToDateTimeText = to.ToString("dd-MM-yyyy HH:mm");
-
-
-
-        TrackBarSelectionStart = from.ToOADate();
-
-        TrackBarSelectionEnd = to.ToOADate();
-
-
-
-        ApplyRangeFilter();
-
+        finally
+        {
+            _isApplyingPreset = false;
+        }
     }
-
-
 
     [RelayCommand]
-
     public void ResetZoom()
-
     {
-
-        TrackBarSelectionStart = TrackBarMin;
-
-        TrackBarSelectionEnd = TrackBarMax;
-
-        if (IsTimeLog)
-
+        _isApplyingPreset = true;
+        try
         {
-
-            SelectedPreset = "Entire Log";
-
-            if (LogMinDate != DateTime.MinValue) FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
-
-            if (LogMaxDate != DateTime.MinValue) ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
-
+            TrackBarSelectionStart = TrackBarMin;
+            TrackBarSelectionEnd = TrackBarMax;
+            if (IsTimeLog)
+            {
+                SelectedPreset = "Entire Log";
+                if (LogMinDate != DateTime.MinValue) FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+                if (LogMaxDate != DateTime.MinValue) ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+            }
+            else
+            {
+                SelectedPreset = "Entire Log";
+                FromDepth = TrackBarMin;
+                ToDepth = TrackBarMax;
+            }
+            ApplyRangeFilter();
         }
-
-        else
-
+        finally
         {
-
-            FromDepth = TrackBarMin;
-
-            ToDepth = TrackBarMax;
-
+            _isApplyingPreset = false;
         }
-
-        ApplyRangeFilter();
-
     }
 
-
+    private bool _isDataSelectorOpen;
 
     public void OpenDataSelector() => _ = OpenDataSelectorAsync();
 
     [RelayCommand]
     public async Task OpenDataSelectorAsync()
     {
+        if (_isDataSelectorOpen) return;
+        _isDataSelectorOpen = true;
         try
         {
             var console = GetOrCreateConsoleModel();
@@ -1790,6 +1747,10 @@ public partial class BroomstickDocumentViewModel : ObservableObject
         {
             System.Diagnostics.Debug.WriteLine($"[BroomstickDocumentViewModel] Error opening Data Selector: {ex}");
             StatusMessage = $"Error opening Data Selector: {ex.Message}";
+        }
+        finally
+        {
+            _isDataSelectorOpen = false;
         }
     }
 
