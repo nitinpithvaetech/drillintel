@@ -1,0 +1,57 @@
+<Window x:Class="DrillIntel.Views.DrillingStandChartWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:teechart="clr-namespace:Steema.TeeChart.WPF;assembly=TeeChart.Business.WPF"
+        xmlns:controls="clr-namespace:DrillIntel.Controls"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:converters="clr-namespace:DrillIntel.Converters"
+        Title="Drilling Stands" Width="1400" Height="850" WindowStartupLocation="CenterOwner" Background="#F8FAFC">
+    <Window.Resources>
+        <converters:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+    </Window.Resources>
+    <Grid Margin="8">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <DockPanel Grid.Row="0" Margin="8,4,8,8">
+            <TextBlock Text="Drilling Stands" Foreground="#1E293B" FontWeight="Bold" FontSize="16" DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="View" Foreground="#334155" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <RadioButton Content="Normal view" IsChecked="{Binding RigStateView, Converter={StaticResource InverseBooleanConverter}}" Foreground="#334155" GroupName="standView" Margin="0,0,12,0"/>
+                <RadioButton Content="RigState View" IsChecked="{Binding RigStateView}" Foreground="#334155" GroupName="standView"/>
+            </StackPanel>
+        </DockPanel>
+        <Grid x:Name="ChartContainer" Grid.Row="1">
+            <teechart:TChart x:Name="ChartControl" MouseMove="OnChartMouseMove" MouseLeave="OnChartMouseLeave"/>
+            <Border x:Name="BarTooltip" Visibility="Collapsed" IsHitTestVisible="False"
+                    Background="#FFFFFF" BorderBrush="#94A3B8" BorderThickness="1" CornerRadius="4"
+                    Padding="10,7" HorizontalAlignment="Left" VerticalAlignment="Top" Panel.ZIndex="2">
+                <TextBlock x:Name="BarTooltipText" Foreground="#1E293B" FontSize="12"/>
+            </Border>
+        </Grid>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8">
+            <TextBlock Text="Avg. Time (minutes)" Foreground="#0284C7" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Text="{Binding AverageTime, StringFormat={}{0:F2}}" Foreground="#1E293B" Margin="8,0,18,0" VerticalAlignment="Center"/>
+            <TextBlock Text="Avg. Day Time" Foreground="#D97706" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Text="{Binding AverageDayTime, StringFormat={}{0:F2}}" Foreground="#1E293B" Margin="8,0,18,0" VerticalAlignment="Center"/>
+            <TextBlock Text="Avg. Night Time" Foreground="#64748B" FontWeight="Bold" VerticalAlignment="Center"/><TextBlock Text="{Binding AverageNightTime, StringFormat={}{0:F2}}" Foreground="#1E293B" Margin="8,0,18,0" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding Status}" Foreground="#64748B" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Border Grid.Row="3" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1,1,1,0" Padding="10,6" Margin="0,4,0,0">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="Preset Period:" Foreground="#475569" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Grid.Column="1" ItemsSource="{Binding PresetPeriods}" SelectedItem="{Binding SelectedPresetPeriod, Mode=TwoWay}" SelectionChanged="OnPresetPeriodChanged" Width="135" Height="28" VerticalContentAlignment="Center" Margin="0,0,14,0"/>
+                <TextBlock Grid.Column="2" Text="From:" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <DatePicker Grid.Column="3" SelectedDate="{Binding FromDate}" Width="140" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="4" Text="To:" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <DatePicker Grid.Column="5" SelectedDate="{Binding ToDate}" Width="140" Margin="0,0,8,0"/>
+                <Button Grid.Column="7" Content="DataSelector Settings" Click="OnDataSelectorSettingsClick" Padding="12,5" Margin="0,0,8,0"/>
+                <Button Grid.Column="8" Content="Apply" Command="{Binding ApplyCommand}" Padding="18,5"/>
+            </Grid>
+        </Border>
+        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" Padding="8,4" Margin="0,0,0,4">
+            <controls:RangeTrackBarControl x:Name="StandDataSelector" Minimum="{Binding TrackBarMin}" Maximum="{Binding TrackBarMax}"
+                                           SelectionStart="{Binding TrackBarSelectionStart, Mode=TwoWay}" SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
+                                           IsTimeLog="False" OverviewPoints="{Binding TrackBarOverviewPoints}"
+                                           OverviewChannelName="{Binding TrackBarOverviewChannelName}" OverviewStroke="{Binding TrackBarOverviewBrush}"
+                                           OverviewYMin="{Binding TrackBarOverviewMin}" OverviewYMax="{Binding TrackBarOverviewMax}"
+                                           SelectedPeriod="{Binding SelectedPresetPeriod, Mode=TwoWay}" RangeChanged="OnSelectorRangeChanged"/>
+        </Border>
+    </Grid>
+</Window>

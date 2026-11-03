@@ -144,12 +144,12 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                 string dataTableName = paramTimeLog.getDataTableName(objLocalConn);
                 if (string.IsNullOrWhiteSpace(dataTableName) || !objLocalConn.TableExists(dataTableName)) return 0.0;
 
-                string dtCol = RigStateService.GetDateTimeColumnSql(objLocalConn, dataTableName);
+                string dtWhere = GetDateTimeWhereExpression(objLocalConn, dataTableName);
                 string fromStr = fromDate.ToString("dd-MMM-yyyy HH:mm:ss");
                 string toStr = toDate.ToString("dd-MMM-yyyy HH:mm:ss");
 
                 string durCol = RigStateService.IsColumnAvailable(objLocalConn, dataTableName, "TIME_DURATION") ? "[TIME_DURATION]" : "5.0";
-                string timeSql = $"SELECT SUM({durCol}) FROM [{dataTableName}] WHERE {dtCol} >= '{fromStr}' AND {dtCol} <= '{toStr}' AND RIG_STATE IN ({rigStates});";
+                string timeSql = $"SELECT SUM({durCol}) FROM [{dataTableName}] WHERE {dtWhere} >= '{fromStr}' AND {dtWhere} <= '{toStr}' AND RIG_STATE IN ({rigStates});";
                 var timeVal = objLocalConn.GetValue(timeSql);
                 double sumDuration = 0.0;
                 if (timeVal != null && double.TryParse(timeVal.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double parsedDur))
@@ -164,7 +164,7 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
 
                 if (hasNextDepth && hasHdth)
                 {
-                    string depthSql = $"SELECT SUM([HDTH] - [NEXT_DEPTH]) FROM [{dataTableName}] WHERE {dtCol} >= '{fromStr}' AND {dtCol} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [NEXT_DEPTH] > 0 AND [HDTH] >= 0;";
+                    string depthSql = $"SELECT SUM([HDTH] - [NEXT_DEPTH]) FROM [{dataTableName}] WHERE {dtWhere} >= '{fromStr}' AND {dtWhere} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [NEXT_DEPTH] > 0 AND [HDTH] >= 0;";
                     var dVal = objLocalConn.GetValue(depthSql);
                     if (dVal != null && double.TryParse(dVal.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double pd))
                     {
@@ -173,7 +173,7 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                 }
                 else if (hasFootage)
                 {
-                    string depthSql = $"SELECT SUM([FOOTAGE]) FROM [{dataTableName}] WHERE {dtCol} >= '{fromStr}' AND {dtCol} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [FOOTAGE] >= 0;";
+                    string depthSql = $"SELECT SUM([FOOTAGE]) FROM [{dataTableName}] WHERE {dtWhere} >= '{fromStr}' AND {dtWhere} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [FOOTAGE] >= 0;";
                     var dVal = objLocalConn.GetValue(depthSql);
                     if (dVal != null && double.TryParse(dVal.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double pd))
                     {
@@ -182,7 +182,7 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                 }
                 else if (hasHdth)
                 {
-                    string depthSql = $"SELECT (MAX([HDTH]) - MIN([HDTH])) FROM [{dataTableName}] WHERE {dtCol} >= '{fromStr}' AND {dtCol} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [HDTH] >= 0;";
+                    string depthSql = $"SELECT (MAX([HDTH]) - MIN([HDTH])) FROM [{dataTableName}] WHERE {dtWhere} >= '{fromStr}' AND {dtWhere} <= '{toStr}' AND RIG_STATE IN ({rigStates}) AND [HDTH] >= 0;";
                     var dVal = objLocalConn.GetValue(depthSql);
                     if (dVal != null && double.TryParse(dVal.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double pd))
                     {
@@ -212,12 +212,12 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                 if (string.IsNullOrWhiteSpace(dataTableName) || !objLocalConn.TableExists(dataTableName)) return;
 
                 point.RigStates.Clear();
-                string dtCol = RigStateService.GetDateTimeColumnSql(objLocalConn, dataTableName);
+                string dtWhere = GetDateTimeWhereExpression(objLocalConn, dataTableName);
                 string fromStr = point.FromDate.ToString("dd-MMM-yyyy HH:mm:ss");
                 string toStr = point.ToDate.ToString("dd-MMM-yyyy HH:mm:ss");
                 string durCol = RigStateService.IsColumnAvailable(objLocalConn, dataTableName, "TIME_DURATION") ? "[TIME_DURATION]" : "5.0";
 
-                string sql = $"SELECT RIG_STATE, SUM({durCol}) AS TOTAL_DUR FROM [{dataTableName}] WHERE {dtCol} >= '{fromStr}' AND {dtCol} <= '{toStr}' AND RIG_STATE IS NOT NULL GROUP BY RIG_STATE;";
+                string sql = $"SELECT RIG_STATE, SUM({durCol}) AS TOTAL_DUR FROM [{dataTableName}] WHERE {dtWhere} >= '{fromStr}' AND {dtWhere} <= '{toStr}' AND RIG_STATE IS NOT NULL GROUP BY RIG_STATE;";
                 DataTable dt = objLocalConn.GetTable(sql);
                 if (dt != null)
                 {
@@ -230,6 +230,7 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                         }
                     }
                 }
+                int a = 1;
             }
             catch (Exception ex)
             {
@@ -468,6 +469,18 @@ namespace DrillIntel.Data.Objects.DataObjects.DrillingStandProcessor
                 return dt;
 
             return DateTime.MinValue;
+        }
+        private static string GetDateTimeWhereExpression(IDataServiceDIntel db, string tableName)
+        {
+            if (RigStateService.IsColumnAvailable(db, tableName, "DATETIME"))
+                return "[DATETIME]";
+            if (RigStateService.IsColumnAvailable(db, tableName, "DATE") && RigStateService.IsColumnAvailable(db, tableName, "TIME"))
+                return "([DATE] || ' ' || [TIME])";
+            if (RigStateService.IsColumnAvailable(db, tableName, "DATE"))
+                return "[DATE]";
+            if (RigStateService.IsColumnAvailable(db, tableName, "DATE_TIME"))
+                return "[DATE_TIME]";
+            return "[DATETIME]";
         }
     }
 }

@@ -379,6 +379,7 @@ public partial class MainViewModel : ObservableObject
         OpenTimelogEditorCommand.NotifyCanExecuteChanged();
         OpenDepthlogEditorCommand.NotifyCanExecuteChanged();
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
+        OpenDrillingStandChartCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
         OpenBroomstickWorkspaceCommand.NotifyCanExecuteChanged();
@@ -1098,6 +1099,28 @@ public partial class MainViewModel : ObservableObject
     }
 
     private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;
+
+    private Views.DrillingStandChartWindow? _activeDrillingStandChartWindow;
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenDrillingStandChart()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (_activeDrillingStandChartWindow is { IsLoaded: true })
+        {
+            _activeDrillingStandChartWindow.Activate();
+            if (_activeDrillingStandChartWindow.WindowState == WindowState.Minimized)
+                _activeDrillingStandChartWindow.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var vm = new DrillingStandChartViewModel(_session);
+        var window = new Views.DrillingStandChartWindow(vm) { Owner = Application.Current?.MainWindow };
+        _activeDrillingStandChartWindow = window;
+        window.Closed += (_, _) => _activeDrillingStandChartWindow = null;
+        window.Show();
+        await Task.CompletedTask;
+    }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task OpenRigStateDocument()

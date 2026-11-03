@@ -247,6 +247,13 @@
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Charts">
+                    <Fluent:Button Header="Drilling Stand"
+                                   Command="{Binding OpenDrillingStandChartCommand}"
+                                   ToolTip="Chart saved drilling stands with day/night averages and rig-state breakdowns.">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartBar" Foreground="#FF9800" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:SplitButton Header="Rig State Workspace" 
                                         Command="{Binding OpenRigStateDocumentCommand}" 
                                         ToolTip="Open the Rig State Document Workspace (TreeView + Multi-Tab Chart view).">

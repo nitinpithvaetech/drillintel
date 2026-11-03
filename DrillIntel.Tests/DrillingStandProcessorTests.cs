@@ -316,6 +316,140 @@ INSERT INTO [{tableName}] (DATA_INDEX, DATETIME, DEPTH, HDTH, NEXT_DEPTH, RIG_ST
             Assert.Equal(100.0, vm.ProgressPercent);
         }
 
+        [Fact]
+        public void DrillingStandPlot_GetData_PopulatesRigStateData()
+        {
+            string wellId = "WELL_PLOT_TEST_01";
+            DrillingStandProcessor.EnsureTables(_dataService);
+
+            // Add stands
+            var s1 = new KPIDrlgStand { WellID = wellId, Depth = 1000.0, FromDate = new DateTime(2026, 11, 2, 8, 0, 0), ToDate = new DateTime(2026, 11, 2, 9, 0, 0), Time = "D" };
+            var s2 = new KPIDrlgStand { WellID = wellId, Depth = 1090.0, FromDate = new DateTime(2026, 11, 2, 9, 0, 0), ToDate = new DateTime(2026, 11, 2, 10, 0, 0), Time = "N" };
+            long id = 0; string err = "";
+            KPIDrlgStand.addToDatabase(_dataService, s1, ref id, ref err);
+            KPIDrlgStand.addToDatabase(_dataService, s2, ref id, ref err);
+
+            // Create timelog table with dd-MMM-yyyy format
+            string tbl = "DATA_TL_PLOT_TEST";
+            _dataService.ExecuteNonQuery($"CREATE TABLE [{tbl}] (DATA_INDEX INTEGER PRIMARY KEY, DATETIME TEXT, RIG_STATE REAL, TIME_DURATION REAL);");
+            _dataService.ExecuteNonQuery($"INSERT INTO [{tbl}] (DATA_INDEX, DATETIME, RIG_STATE, TIME_DURATION) VALUES " +
+                "(1, '02-Nov-2026 08:30:00', 0.0, 1800.0)," +
+                "(2, '02-Nov-2026 08:45:00', 1.0, 1800.0)," +
+                "(3, '02-Nov-2026 09:30:00', 0.0, 3600.0);");
+
+            var plot = new DrillingStandPlot(_dataService);
+            var data = plot.GetData(wellId, tbl, new DateTime(2026, 11, 2, 0, 0, 0), new DateTime(2026, 11, 2, 23, 59, 59));
+
+            Assert.Equal(2, data.standData.Rows.Count);
+            Assert.Equal(2, data.rigStateData.Rows.Count);
+            string payload0 = data.rigStateData.Rows[0]["RIG_STATES"]?.ToString() ?? "";
+            Assert.Contains("0#30", payload0);
+            Assert.Contains("1#30", payload0);
+        }
+
+        [Fact]
+        public void DrillingStandPlot_GetData_WithIsoDates_PopulatesRigStateData()
+        {
+            string wellId = "WELL_PLOT_TEST_ISO";
+            DrillingStandProcessor.EnsureTables(_dataService);
+
+            var s1 = new KPIDrlgStand { WellID = wellId, Depth = 2000.0, FromDate = new DateTime(2026, 11, 2, 8, 0, 0), ToDate = new DateTime(2026, 11, 2, 9, 0, 0), Time = "D" };
+            long id = 0; string err = "";
+            KPIDrlgStand.addToDatabase(_dataService, s1, ref id, ref err);
+
+            // Create timelog table with ISO format
+            string tbl = "DATA_TL_PLOT_ISO";
+            _dataService.ExecuteNonQuery($"CREATE TABLE [{tbl}] (DATA_INDEX INTEGER PRIMARY KEY, DATETIME TEXT, RIG_STATE REAL, TIME_DURATION REAL);");
+            _dataService.ExecuteNonQuery($"INSERT INTO [{tbl}] (DATA_INDEX, DATETIME, RIG_STATE, TIME_DURATION) VALUES " +
+                "(1, '2026-11-02 08:30:00', 0.0, 1800.0);");
+
+            var plot = new DrillingStandPlot(_dataService);
+            var data = plot.GetData(wellId, tbl, new DateTime(2026, 11, 2, 0, 0, 0), new DateTime(2026, 11, 2, 23, 59, 59));
+
+            Assert.Equal(1, data.standData.Rows.Count);
+            Assert.Equal(1, data.rigStateData.Rows.Count);
+            string payload0 = data.rigStateData.Rows[0]["RIG_STATES"]?.ToString() ?? "";
+            Assert.Contains("0#30", payload0);
+        }
+
+        [Fact]
+        public void DrillingStandPlot_GetData_WithNullTimeLogTable_ResolvesPrimaryLogAndPopulatesRigStates()
+        {
+            string wellId = "WELL_PLOT_TEST_NULL_TABLE";
+            DrillingStandProcessor.EnsureTables(_dataService);
+
+            var s1 = new KPIDrlgStand { WellID = wellId, Depth = 4000.0, FromDate = new DateTime(2026, 11, 2, 8, 0, 0), ToDate = new DateTime(2026, 11, 2, 9, 0, 0), Time = "D" };
+            long id = 0; string err = "";
+            KPIDrlgStand.addToDatabase(_dataService, s1, ref id, ref err);
+
+            string tbl = "DATA_TL_PLOT_NULL";
+            _dataService.ExecuteNonQuery($"CREATE TABLE [{tbl}] (DATA_INDEX INTEGER PRIMARY KEY, DATETIME TEXT, RIG_STATE REAL, TIME_DURATION REAL);");
+            _dataService.ExecuteNonQuery($"INSERT INTO [{tbl}] (DATA_INDEX, DATETIME, RIG_STATE, TIME_DURATION) VALUES (1, '02-Nov-2026 08:30:00', 0.0, 1800.0);");
+
+            // Register in VMX_TIME_LOG
+            _dataService.ExecuteNonQuery("CREATE TABLE IF NOT EXISTS VMX_TIME_LOG (LOG_ID TEXT PRIMARY KEY, WELL_ID TEXT, DATA_TABLE_NAME TEXT, PRIMARY_LOG INTEGER, CREATED_DATE TEXT);");
+            _dataService.ExecuteNonQuery($"INSERT INTO VMX_TIME_LOG (LOG_ID, WELL_ID, DATA_TABLE_NAME, PRIMARY_LOG, CREATED_DATE) VALUES ('TL_P', '{wellId}', '{tbl}', 1, '02-Nov-2026 00:00:00');");
+
+            var plot = new DrillingStandPlot(_dataService);
+            var data = plot.GetData(wellId, null, new DateTime(2026, 11, 2, 0, 0, 0), new DateTime(2026, 11, 2, 23, 59, 59));
+
+            Assert.Equal(1, data.standData.Rows.Count);
+            Assert.Equal(1, data.rigStateData.Rows.Count);
+            string payload0 = data.rigStateData.Rows[0]["RIG_STATES"]?.ToString() ?? "";
+            Assert.Contains("0#30", payload0);
+        }
+
+        [Fact]
+        public void DrillingStandPlot_GetData_WithDateAndTimeColumns_PopulatesRigStateData()
+        {
+            string wellId = "WELL_PLOT_TEST_SPLIT";
+            DrillingStandProcessor.EnsureTables(_dataService);
+
+            var s1 = new KPIDrlgStand { WellID = wellId, Depth = 3000.0, FromDate = new DateTime(2026, 11, 2, 8, 0, 0), ToDate = new DateTime(2026, 11, 2, 9, 0, 0), Time = "D" };
+            long id = 0; string err = "";
+            KPIDrlgStand.addToDatabase(_dataService, s1, ref id, ref err);
+
+            // Create timelog table with DATE and TIME columns instead of DATETIME
+            string tbl = "DATA_TL_PLOT_SPLIT";
+            _dataService.ExecuteNonQuery($"CREATE TABLE [{tbl}] (DATA_INDEX INTEGER PRIMARY KEY, [DATE] TEXT, [TIME] TEXT, RIG_STATE REAL, TIME_DURATION REAL);");
+            _dataService.ExecuteNonQuery($"INSERT INTO [{tbl}] (DATA_INDEX, [DATE], [TIME], RIG_STATE, TIME_DURATION) VALUES " +
+                "(1, '02-Nov-2026', '08:30:00', 0.0, 1800.0);");
+
+            var plot = new DrillingStandPlot(_dataService);
+            var data = plot.GetData(wellId, tbl, new DateTime(2026, 11, 2, 0, 0, 0), new DateTime(2026, 11, 2, 23, 59, 59));
+
+            Assert.Equal(1, data.standData.Rows.Count);
+            Assert.Equal(1, data.rigStateData.Rows.Count);
+            string payload0 = data.rigStateData.Rows[0]["RIG_STATES"]?.ToString() ?? "";
+            Assert.Contains("0#30", payload0);
+        }
+
+        [Fact]
+        public void DrillingStandPlot_GetData_WithSpecialCharacterTableName_PopulatesRigStateData()
+        {
+            string wellId = "WELL_PLOT_TEST_SPECIAL_CHARS";
+            DrillingStandProcessor.EnsureTables(_dataService);
+
+            var s1 = new KPIDrlgStand { WellID = wellId, Depth = 5000.0, FromDate = new DateTime(2026, 11, 2, 8, 0, 0), ToDate = new DateTime(2026, 11, 2, 9, 0, 0), Time = "D" };
+            long id = 0; string err = "";
+            KPIDrlgStand.addToDatabase(_dataService, s1, ref id, ref err);
+
+            // Table name with hash symbol (standard VuMax/eVuMax generated table name format)
+            string tbl = "timeLog23798241#40580182";
+            _dataService.ExecuteNonQuery($"CREATE TABLE [{tbl}] (DATA_INDEX INTEGER PRIMARY KEY, DATETIME TEXT, RIG_STATE REAL, TIME_DURATION REAL);");
+            _dataService.ExecuteNonQuery($"INSERT INTO [{tbl}] (DATA_INDEX, DATETIME, RIG_STATE, TIME_DURATION) VALUES " +
+                "(1, '02-Nov-2026 08:30:00', 0.0, 1800.0);");
+
+            var plot = new DrillingStandPlot(_dataService);
+            var data = plot.GetData(wellId, tbl, new DateTime(2026, 11, 2, 0, 0, 0), new DateTime(2026, 11, 2, 23, 59, 59));
+
+            Assert.Equal(1, data.standData.Rows.Count);
+            Assert.Equal(1, data.rigStateData.Rows.Count);
+            string payload0 = data.rigStateData.Rows[0]["RIG_STATES"]?.ToString() ?? "";
+            Assert.Contains("0#30", payload0);
+            Assert.NotEmpty(data.rigStates.Rows);
+        }
+
         private class MockDrillingStandsService : IProcessDrillingStandsService
         {
             public bool ProcessStandsCalled { get; set; }
