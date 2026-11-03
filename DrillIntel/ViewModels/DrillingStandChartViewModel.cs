@@ -18,19 +18,28 @@ public partial class DrillingStandChartViewModel : ObservableObject
     private readonly ProjectSession _session;
     private readonly WellDataRepository _repository;
     private DrillingStandPlotData _data = new();
-    private bool _changingRange;
+    private bool _isApplyingPreset;
     private string _overviewMnemonic = "TIME";
 
+    [ObservableProperty] private bool _isTimeLog = true;
+    [ObservableProperty] private DateTime _logMinDate = DateTime.MinValue;
+    [ObservableProperty] private DateTime _logMaxDate = DateTime.MinValue;
     [ObservableProperty] private DateTime _fromDate = DateTime.Today.AddDays(-7);
     [ObservableProperty] private DateTime _toDate = DateTime.Now;
+    [ObservableProperty] private string _fromDateTimeText = string.Empty;
+    [ObservableProperty] private string _toDateTimeText = string.Empty;
+    [ObservableProperty] private string _selectedPreset = "Entire Log";
+
     [ObservableProperty] private bool _rigStateView;
     [ObservableProperty] private double _averageTime;
     [ObservableProperty] private double _averageDayTime;
     [ObservableProperty] private double _averageNightTime;
+
     [ObservableProperty] private double _trackBarMin;
     [ObservableProperty] private double _trackBarMax = 100;
     [ObservableProperty] private double _trackBarSelectionStart;
     [ObservableProperty] private double _trackBarSelectionEnd = 100;
+
     [ObservableProperty] private string _status = "Loading drilling stands…";
     [ObservableProperty] private ObservableCollection<double> _depths = new();
     [ObservableProperty] private PointCollection _trackBarOverviewPoints = new();
@@ -38,9 +47,18 @@ public partial class DrillingStandChartViewModel : ObservableObject
     [ObservableProperty] private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
     [ObservableProperty] private double _trackBarOverviewMin;
     [ObservableProperty] private double _trackBarOverviewMax = 1;
-    [ObservableProperty] private string _selectedPresetPeriod = "Entire Log";
 
-    public ObservableCollection<string> PresetPeriods { get; } = new() { "15 Mins", "30 Mins", "1 Hour", "2 Hours", "4 Hours", "8 Hours", "12 Hours", "24 Hours", "Entire Log" };
+    public ObservableCollection<string> RangePresets { get; } = new()
+    {
+        "Last 1 Hour",
+        "Last 4 Hours",
+        "Last 12 Hours",
+        "Last 24 Hours",
+        "Last 48 Hours",
+        "Last 7 Days",
+        "Entire Log",
+        "Custom Range"
+    };
 
     public DataTable StandData => _data.standData;
     public DataTable RigStateData => _data.rigStateData;
@@ -58,8 +76,33 @@ public partial class DrillingStandChartViewModel : ObservableObject
         var logs = await _repository.GetTimeLogsAsync();
         var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
         if (log == null) { Status = "No time log is available for this project."; return; }
+
         var range = await new ChartDataService(_session).GetTimeLogDateRangeAsync(log.ObjectID);
-        if (range.HasValue) { FromDate = range.Value.MinDate; ToDate = range.Value.MaxDate; }
+        if (range.HasValue && range.Value.MinDate > DateTime.MinValue)
+        {
+            LogMinDate = range.Value.MinDate;
+            LogMaxDate = range.Value.MaxDate;
+            TrackBarMin = LogMinDate.ToOADate();
+            TrackBarMax = LogMaxDate.ToOADate();
+            FromDate = LogMinDate;
+            ToDate = LogMaxDate;
+            FromDateTimeText = LogMinDate.ToString("dd-MM-yyyy HH:mm");
+            ToDateTimeText = LogMaxDate.ToString("dd-MM-yyyy HH:mm");
+            TrackBarSelectionStart = TrackBarMin;
+            TrackBarSelectionEnd = TrackBarMax;
+        }
+        else
+        {
+            FromDate = DateTime.Today.AddDays(-7);
+            ToDate = DateTime.Now;
+            FromDateTimeText = FromDate.ToString("dd-MM-yyyy HH:mm");
+            ToDateTimeText = ToDate.ToString("dd-MM-yyyy HH:mm");
+            TrackBarMin = FromDate.ToOADate();
+            TrackBarMax = ToDate.ToOADate();
+            TrackBarSelectionStart = TrackBarMin;
+            TrackBarSelectionEnd = TrackBarMax;
+        }
+
         string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
             ? log.__dataTableName
             : log.getDataTableName(_session.GetDataService());
@@ -69,6 +112,20 @@ public partial class DrillingStandChartViewModel : ObservableObject
     [RelayCommand]
     private async Task ApplyAsync()
     {
+        if (TryParseDateTime(FromDateTimeText, out var dtFrom))
+        {
+            FromDate = dtFrom;
+            if (LogMinDate != DateTime.MinValue && dtFrom.ToOADate() >= TrackBarMin)
+                TrackBarSelectionStart = dtFrom.ToOADate();
+        }
+        if (TryParseDateTime(ToDateTimeText, out var dtTo))
+        {
+            ToDate = dtTo;
+            if (LogMaxDate != DateTime.MinValue && dtTo.ToOADate() <= TrackBarMax)
+                TrackBarSelectionEnd = dtTo.ToOADate();
+        }
+        SelectedPreset = "Custom Range";
+
         var logs = await _repository.GetTimeLogsAsync();
         var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
         if (log != null)
@@ -80,6 +137,102 @@ public partial class DrillingStandChartViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    public async Task ApplyPresetAsync(string presetName)
+    {
+        if (_isApplyingPreset) return;
+        _isApplyingPreset = true;
+        try
+        {
+            DateTime maxRef = LogMaxDate != DateTime.MinValue ? LogMaxDate : DateTime.Now;
+            DateTime to = maxRef;
+            DateTime from = to.AddHours(-24);
+
+            switch (presetName)
+            {
+                case "Last 1 Hour":
+                    from = to.AddHours(-1);
+                    break;
+                case "Last 4 Hours":
+                    from = to.AddHours(-4);
+                    break;
+                case "Last 12 Hours":
+                    from = to.AddHours(-12);
+                    break;
+                case "Last 24 Hours":
+                    from = to.AddHours(-24);
+                    break;
+                case "Last 48 Hours":
+                    from = to.AddHours(-48);
+                    break;
+                case "Last 7 Days":
+                    from = to.AddDays(-7);
+                    break;
+                case "Entire Log":
+                    from = LogMinDate != DateTime.MinValue ? LogMinDate : to.AddDays(-7);
+                    to = maxRef;
+                    break;
+            }
+
+            if (LogMinDate != DateTime.MinValue && from < LogMinDate) from = LogMinDate;
+            if (to > maxRef) to = maxRef;
+
+            FromDate = from;
+            ToDate = to;
+            FromDateTimeText = from.ToString("dd-MM-yyyy HH:mm");
+            ToDateTimeText = to.ToString("dd-MM-yyyy HH:mm");
+
+            if (LogMinDate != DateTime.MinValue && LogMaxDate != DateTime.MinValue)
+            {
+                TrackBarSelectionStart = from.ToOADate();
+                TrackBarSelectionEnd = to.ToOADate();
+            }
+
+            SelectedPreset = presetName;
+
+            var logs = await _repository.GetTimeLogsAsync();
+            var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
+            if (log != null)
+            {
+                string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
+                    ? log.__dataTableName
+                    : log.getDataTableName(_session.GetDataService());
+                await LoadAsync(log.WellID, tableName);
+            }
+        }
+        finally
+        {
+            _isApplyingPreset = false;
+        }
+    }
+
+    public async Task RangeTrackBarChangedAsync()
+    {
+        if (_isApplyingPreset) return;
+
+        if (IsTimeLog && TrackBarSelectionStart > 1000 && TrackBarSelectionEnd > 1000)
+        {
+            var startDt = DateTime.FromOADate(TrackBarSelectionStart);
+            var endDt = DateTime.FromOADate(TrackBarSelectionEnd);
+
+            FromDate = startDt;
+            ToDate = endDt;
+            FromDateTimeText = startDt.ToString("dd-MM-yyyy HH:mm");
+            ToDateTimeText = endDt.ToString("dd-MM-yyyy HH:mm");
+            SelectedPreset = "Custom Range";
+
+            var logs = await _repository.GetTimeLogsAsync();
+            var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
+            if (log != null)
+            {
+                string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
+                    ? log.__dataTableName
+                    : log.getDataTableName(_session.GetDataService());
+                await LoadAsync(log.WellID, tableName);
+            }
+        }
+    }
+
     private async Task LoadAsync(string wellId, string table)
     {
         try
@@ -88,9 +241,6 @@ public partial class DrillingStandChartViewModel : ObservableObject
             _data = await Task.Run(() => new DrillingStandPlot(_session.GetDataService()).GetData(wellId, table, FromDate, ToDate));
             AverageTime = _data.AvgTime; AverageDayTime = _data.AvgDTime; AverageNightTime = _data.AvgNTime;
             Depths = new ObservableCollection<double>(_data.standData.Rows.Cast<DataRow>().Select(r => Convert.ToDouble(r["Depth"], CultureInfo.InvariantCulture)));
-            _changingRange = true;
-            TrackBarMin = 0; TrackBarMax = Math.Max(1, Depths.Count - 1); TrackBarSelectionStart = 0; TrackBarSelectionEnd = TrackBarMax;
-            _changingRange = false;
             UpdateOverview();
             Status = $"{Depths.Count} drilling stands";
             OnPropertyChanged(nameof(StandData)); OnPropertyChanged(nameof(RigStateData)); OnPropertyChanged(nameof(Data));
@@ -100,13 +250,6 @@ public partial class DrillingStandChartViewModel : ObservableObject
     }
 
     partial void OnRigStateViewChanged(bool value) => ChartNeedsRepaint?.Invoke();
-    partial void OnTrackBarSelectionStartChanged(double value) => ApplySelectorRange();
-    partial void OnTrackBarSelectionEndChanged(double value) => ApplySelectorRange();
-    private void ApplySelectorRange()
-    {
-        if (_changingRange) return;
-        ChartNeedsRepaint?.Invoke();
-    }
 
     public VHTrackConsole CreateDataSelectorConsole()
     {
@@ -126,11 +269,6 @@ public partial class DrillingStandChartViewModel : ObservableObject
         UpdateOverview();
     }
 
-    partial void OnSelectedPresetPeriodChanged(string value)
-    {
-        // Period presets are applied to the selector by the view, matching Rig State chart navigation.
-    }
-
     private void UpdateOverview()
     {
         var points = new PointCollection();
@@ -145,10 +283,53 @@ public partial class DrillingStandChartViewModel : ObservableObject
                 _ => Convert.ToDouble(row["Time"], CultureInfo.InvariantCulture)
             };
             values.Add(value);
-            points.Add(new System.Windows.Point(i, value));
+
+            double xCoord;
+            if (row.Table.Columns.Contains("FromDate") && row["FromDate"] is DateTime dt && dt > DateTime.MinValue)
+            {
+                xCoord = dt.ToOADate();
+            }
+            else
+            {
+                xCoord = TrackBarMin + i;
+            }
+            points.Add(new System.Windows.Point(xCoord, value));
         }
         TrackBarOverviewPoints = points;
         TrackBarOverviewMin = values.Count == 0 ? 0 : values.Min();
         TrackBarOverviewMax = values.Count == 0 || values.Max() <= TrackBarOverviewMin ? TrackBarOverviewMin + 1 : values.Max();
+    }
+
+    public static bool TryParseDateTime(string? text, out DateTime result)
+    {
+        result = default;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        string[] formats = new[]
+        {
+            "dd-MM-yyyy HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd/MM/yyyy HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd-MMM-yyyy HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "d-MMM-yyyy HH:mm",
+            "d-MMM-yyyy HH:mm:ss",
+            "yyyy-MM-dd HH:mm",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm",
+            "yyyy/MM/dd HH:mm:ss",
+            "dd-MM-yyyy",
+            "dd/MM/yyyy",
+            "yyyy-MM-dd",
+            "M/d/yyyy h:mm tt",
+            "M/d/yyyy h:mm:ss tt"
+        };
+
+        if (DateTime.TryParseExact(text.Trim(), formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out result))
+            return true;
+        if (DateTime.TryParse(text.Trim(), CultureInfo.CurrentCulture, DateTimeStyles.None, out result))
+            return true;
+        return DateTime.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
     }
 }

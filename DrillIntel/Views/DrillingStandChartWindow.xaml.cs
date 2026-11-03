@@ -11,7 +11,8 @@ public partial class DrillingStandChartWindow : Window
 {
     public DrillingStandChartWindow(DrillingStandChartViewModel vm)
     {
-        InitializeComponent(); DataContext = vm;
+        InitializeComponent();
+        DataContext = vm;
         vm.ChartNeedsRepaint += RenderChart;
         Loaded += async (_, _) => { await vm.InitializeAsync(); RenderChart(); };
     }
@@ -151,18 +152,9 @@ public partial class DrillingStandChartWindow : Window
 
     private static bool IsSelected(DrillingStandChartViewModel vm, double depth)
     {
-        if (vm.Depths.Count == 0) return true;
-        int index = -1;
-        for (int i = 0; i < vm.Depths.Count; i++)
-        {
-            if (Math.Abs(vm.Depths[i] - depth) < 0.01)
-            {
-                index = i;
-                break;
-            }
-        }
-        return index < 0 || (index >= vm.TrackBarSelectionStart && index <= vm.TrackBarSelectionEnd);
+        return true;
     }
+
     private static Color ParseColor(string? color)
     {
         if (string.IsNullOrWhiteSpace(color)) return Color.Gray;
@@ -187,16 +179,23 @@ public partial class DrillingStandChartWindow : Window
             vm.SetOverviewChannel(selectorVm.SelectedChannelMnemonic);
     }
 
-    private void OnPresetPeriodChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private async void OnPresetPeriodChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (DataContext is DrillingStandChartViewModel vm && sender is System.Windows.Controls.ComboBox combo && combo.SelectedItem is string period && StandDataSelector != null)
+        if (DataContext is DrillingStandChartViewModel vm && sender is System.Windows.Controls.ComboBox combo && combo.SelectedItem is string preset)
         {
-            vm.SelectedPresetPeriod = period;
-            StandDataSelector.ApplyPeriodPreset(period);
+            await vm.ApplyPresetAsync(preset);
+            RenderChart();
         }
     }
 
-    private void OnSelectorRangeChanged(object sender, RoutedEventArgs e) => RenderChart();
+    private async void OnSelectorRangeChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DrillingStandChartViewModel vm)
+        {
+            await vm.RangeTrackBarChangedAsync();
+            RenderChart();
+        }
+    }
 
     private void OnChartMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
@@ -214,11 +213,16 @@ public partial class DrillingStandChartWindow : Window
                 .FirstOrDefault(r => Math.Abs(Convert.ToDouble(r["Depth"]) - depth) < 0.01);
             if (row == null) continue;
             double minutes = bar.YValues[pointIndex];
-            string detail = vm.RigStateView
-                ? $"{bar.Title}\nDepth: {depth:F2}\nTime (m): {minutes:F2}"
-                : $"{bar.Title}\nDepth: {depth:F2}\nTime (m): {minutes:F2}";
+            string detail = $"{bar.Title}\nDepth: {depth:F2}\nTime (m): {minutes:F2}";
             if (!vm.RigStateView && bar.Title == "Main")
                 detail += $"\nShift: {(Convert.ToString(row["DayNight"]) == "D" ? "Day" : "Night")}";
+
+            if (row.Table.Columns.Contains("FromDate") && row["FromDate"] is DateTime fromDt &&
+                row.Table.Columns.Contains("ToDate") && row["ToDate"] is DateTime toDt &&
+                fromDt > DateTime.MinValue && toDt > DateTime.MinValue)
+            {
+                detail += $"\nFrom: {fromDt:dd-MM-yyyy HH:mm}\nTo: {toDt:dd-MM-yyyy HH:mm}";
+            }
 
             BarTooltipText.Text = detail;
             BarTooltip.Margin = new Thickness(mouse.X + 14, mouse.Y + 14, 0, 0);
