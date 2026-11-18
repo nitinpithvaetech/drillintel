@@ -67,5 +67,29 @@ public partial class DashboardView : UserControl
         }
         return null;
     }
+
+    private void AdPanel_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm)
+        {
+            vm.PauseAdScroll();
+        }
+    }
+
+    private void AdPanel_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm)
+        {
+            vm.ResumeAdScroll();
+        }
+    }
+
+    private void OnSlideDotClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement elem && elem.DataContext is MarketingAdSlide slide && DataContext is DashboardViewModel vm)
+        {
+            vm.SelectAdSlide(slide.Index);
+        }
+    }
 }
 

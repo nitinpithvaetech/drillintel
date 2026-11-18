@@ -85,182 +85,333 @@
         </ContextMenu>
     </UserControl.Resources>
 
-    <Grid Margin="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="340" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="300" />
-        </Grid.ColumnDefinitions>
+    <Grid Margin="12,10,12,6">
+        <Grid.RowDefinitions>
+            <!-- Row 0: Operational Workspace (Well Tree, Center KPIs, Quick Reports & Activity Log - ends on upper part of Adv Panel) -->
+            <RowDefinition Height="*" MinHeight="260" />
+            <!-- Row 1: Full-Width Bottom Advertisement Panel (As marked in red rectangle) -->
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!-- Left: Well Tree & Explorer -->
-        <materialDesign:Card Grid.Column="0" Margin="8" Padding="16" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
-            <DockPanel LastChildFill="True">
-                <!-- Header -->
-                <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <materialDesign:PackIcon Kind="FileTree" Width="26" Height="26" Foreground="#2196F3" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="Well Tree" FontSize="20" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" />
-                    <Button Grid.Column="2" Style="{StaticResource MaterialDesignToolButton}" Command="{Binding RefreshCommand}" ToolTip="Refresh Well Tree" Width="32" Height="32" Padding="0">
-                        <materialDesign:PackIcon Kind="Refresh" Width="20" Height="20" Foreground="#607D8B" />
-                    </Button>
-                </Grid>
+        <!-- ========================================================================= -->
+        <!-- Row 0: Upper Section (All panels end cleanly at the top of Adv. Panel)    -->
+        <!-- ========================================================================= -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="340" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="320" />
+            </Grid.ColumnDefinitions>
 
-                <Separator DockPanel.Dock="Top" Margin="0,0,0,12" />
+            <!-- Column 0: Well Tree & Explorer -->
+            <materialDesign:Card Grid.Column="0" Margin="6" Padding="16,14" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
+                <DockPanel LastChildFill="True">
+                    <!-- Header -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <materialDesign:PackIcon Kind="FileTree" Width="26" Height="26" Foreground="#2196F3" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="Well Tree" FontSize="20" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Style="{StaticResource MaterialDesignToolButton}" Command="{Binding RefreshCommand}" ToolTip="Refresh Well Tree" Width="32" Height="32" Padding="0">
+                            <materialDesign:PackIcon Kind="Refresh" Width="20" Height="20" Foreground="#607D8B" />
+                        </Button>
+                    </Grid>
 
-                <!-- Bottom: Selected Well Summary -->
-                <Border DockPanel.Dock="Bottom" Margin="0,12,0,0" Padding="12" Background="#F8F9FA" CornerRadius="8" BorderBrush="#E0E0E0" BorderThickness="1">
+                    <Separator DockPanel.Dock="Top" Margin="0,0,0,12" />
+
+                    <!-- Bottom: Selected Well Summary -->
+                    <Border DockPanel.Dock="Bottom" Margin="0,12,0,0" Padding="12" Background="#F8F9FA" CornerRadius="8" BorderBrush="#E0E0E0" BorderThickness="1">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Project Well" FontWeight="SemiBold" FontSize="12" Foreground="Gray" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Style="{StaticResource MaterialDesignToolButton}" Command="{Binding EditWellCommand}" ToolTip="Edit Well Details" Width="24" Height="24" Padding="0">
+                                    <materialDesign:PackIcon Kind="PencilOutline" Width="16" Height="16" Foreground="#757575" />
+                                </Button>
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="18" Height="18" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedWell.WellName, FallbackValue='No well selected'}" FontWeight="Bold" Margin="8,0,0,0" FontSize="14" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                <materialDesign:PackIcon Kind="MapMarker" Foreground="#F44336" Width="18" Height="18" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding SelectedWell.FieldName, FallbackValue='General Field'}" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Center: TreeView or Empty State -->
+                    <Grid>
+                        <!-- Empty State -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16" Visibility="{Binding HasData, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
+                            <materialDesign:PackIcon Kind="DatabaseSearchOutline" Width="48" Height="48" Foreground="#BDBDBD" HorizontalAlignment="Center" Margin="0,0,0,12" />
+                            <TextBlock Text="No Wells or Logs Yet" FontSize="16" FontWeight="SemiBold" Foreground="#757575" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                            <TextBlock Text="Import a Timelog or Depthlog from the ribbon to populate this well tree." FontSize="12" Foreground="#9E9E9E" TextWrapping="Wrap" TextAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- TreeView -->
+                        <TreeView ItemsSource="{Binding WellTree}" 
+                                  SelectedItemChanged="TreeView_SelectedItemChanged" 
+                                  BorderThickness="0" 
+                                  Background="Transparent"
+                                  Visibility="{Binding HasData, Converter={StaticResource BoolToVisibilityConverter}}"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <TreeView.ItemContainerStyle>
+                                <Style TargetType="TreeViewItem" BasedOn="{StaticResource MaterialDesignTreeViewItem}">
+                                    <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}" />
+                                    <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown" />
+                                    <EventSetter Event="ContextMenuOpening" Handler="TreeViewItem_ContextMenuOpening" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasContextMenu}" Value="True">
+                                            <Setter Property="ContextMenu" Value="{StaticResource TreeItemContextMenu}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TreeView.ItemContainerStyle>
+                            <TreeView.ItemTemplate>
+                                <HierarchicalDataTemplate DataType="{x:Type models:WellTreeNode}" ItemsSource="{Binding Children}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Icon -->
+                                        <materialDesign:PackIcon Grid.Column="0" Kind="{Binding IconKind}" Foreground="{Binding IconColor}" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0" />
+
+                                        <!-- Name & Subtitle -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="Gray" Visibility="{Binding Subtitle, Converter={StaticResource StringToVisibilityConverter}}" />
+                                        </StackPanel>
+
+                                        <!-- Badge -->
+                                        <Border Grid.Column="2" Margin="8,0,0,0" Padding="6,1" CornerRadius="10" Background="#EEEEEE" VerticalAlignment="Center" Visibility="{Binding Badge, Converter={StaticResource StringToVisibilityConverter}}">
+                                            <TextBlock Text="{Binding Badge}" FontSize="11" Foreground="#616161" FontWeight="Medium" />
+                                        </Border>
+                                    </Grid>
+                                </HierarchicalDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
+                    </Grid>
+                </DockPanel>
+            </materialDesign:Card>
+
+            <!-- Column 1: Center QC Status & Recent Activity -->
+            <Grid Grid.Column="1" Margin="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                
+                <!-- QC Status Card -->
+                <materialDesign:Card Grid.Row="0" Padding="20,16" Margin="0,0,0,12" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
                     <StackPanel>
-                        <Grid Margin="0,0,0,6">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12" HorizontalAlignment="Center">
+                            <materialDesign:PackIcon Kind="ShieldCheck" Width="30" Height="30" Foreground="{Binding QcColor}" VerticalAlignment="Center" />
+                            <TextBlock Text="QC Status" FontSize="20" FontWeight="Bold" Margin="10,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        
+                        <TextBlock Text="{Binding QcStatus}" FontSize="32" Foreground="{Binding QcColor}" HorizontalAlignment="Center" FontWeight="Heavy" Margin="0,2,0,0" />
+                    </StackPanel>
+                </materialDesign:Card>
+
+                <!-- Recent Activity Card -->
+                <materialDesign:Card Grid.Row="1" Padding="20,16" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
+                    <DockPanel LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                            <materialDesign:PackIcon Kind="DatabaseArrowDown" Width="26" Height="26" Foreground="#FF9800" VerticalAlignment="Center" />
+                            <TextBlock Text="Recent Activity" FontSize="18" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        
+                        <TextBlock Text="{Binding RecentImports}" FontSize="15" Foreground="#616161" Margin="34,0,0,0" TextWrapping="Wrap" />
+                    </DockPanel>
+                </materialDesign:Card>
+            </Grid>
+
+            <!-- Column 2: Quick Reports, Activity Log, and VuMaxPro showcase -->
+            <Grid Grid.Column="2" Margin="6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Quick Reports Card -->
+                <materialDesign:Card Grid.Row="0" Padding="16,14" Margin="0,0,0,12" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <materialDesign:PackIcon Kind="FileDocumentOutline" Width="24" Height="24" Foreground="#9C27B0" VerticalAlignment="Center" />
+                            <TextBlock Text="Quick Reports" FontSize="17" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        
+                        <Button Content="Drilling Summary" Margin="0,3" Style="{StaticResource MaterialDesignOutlinedButton}" materialDesign:ButtonAssist.CornerRadius="6" Height="32" />
+                        <Button Content="Last QC Report" Margin="0,3" Style="{StaticResource MaterialDesignOutlinedButton}" materialDesign:ButtonAssist.CornerRadius="6" Height="32" />
+                    </StackPanel>
+                </materialDesign:Card>
+
+                <!-- Activity Log Card -->
+                <materialDesign:Card Grid.Row="1" Padding="16,14" Margin="0,0,0,12" MinHeight="170" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
+                    <DockPanel LastChildFill="True">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                            <materialDesign:PackIcon Kind="FormatListBulleted" Width="22" Height="22" Foreground="#607D8B" VerticalAlignment="Center" />
+                            <TextBlock Text="Activity Log" FontSize="16" FontWeight="Bold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        
+                        <ListView ItemsSource="{Binding ActivityLog}" BorderThickness="0" Background="Transparent" Foreground="#424242"
+                                  MaxHeight="140" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
+                                    <Setter Property="Padding" Value="0,5" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                        </ListView>
+                    </DockPanel>
+                </materialDesign:Card>
+
+                <!-- VuMaxPro showcase: image first, then details and links -->
+                <materialDesign:Card Grid.Row="2" Padding="12" UniformCornerRadius="12"
+                                     VerticalAlignment="Stretch"
+                                     materialDesign:ElevationAssist.Elevation="Dp3"
+                                     Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1"
+                                     MouseEnter="AdPanel_MouseEnter" MouseLeave="AdPanel_MouseLeave">
+                    <Grid VerticalAlignment="Stretch">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Image Source="pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/banner_vumaxpro.png"
+                                   Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1"
+                                        CornerRadius="8" Padding="7,2" Margin="0,0,6,0">
+                                    <TextBlock Text="{Binding CurrentAdSlide.Badge, FallbackValue='Featured'}"
+                                               FontSize="9" FontWeight="Bold" Foreground="#4F46E5" />
+                                </Border>
+                                <Button Style="{x:Null}" Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1"
+                                        Command="{Binding ToggleAutoScrollCommand}" Padding="6,2" Height="22"
+                                        Cursor="Hand" ToolTip="Pause or resume slides">
+                                    <TextBlock Text="{Binding SlideCountDisplay}" FontSize="9" FontWeight="SemiBold" Foreground="#475569" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1" Background="#0A0E17" CornerRadius="8" BorderBrush="#E2E8F0"
+                                BorderThickness="1" ClipToBounds="True">
+                            <Grid>
+                                <Image Source="{Binding CurrentAdSlide.ImageSource}"
+                                       Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type Border}}}"
+                                       Height="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType={x:Type Border}}}"
+                                       Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                <Button Command="{Binding OpenEtechWebsiteCommand}"
+                                        CommandParameter="{Binding CurrentAdSlide.TargetUrl}"
+                                        Padding="0" Margin="0" Background="Transparent" BorderThickness="0"
+                                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                        Cursor="Hand" ToolTip="Open the VuMaxPro product page">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Button Command="{Binding PreviousAdSlideCommand}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        Margin="6,0,0,0" Width="28" Height="28" Padding="0" Background="#CC000000"
+                                        Foreground="White" BorderThickness="0" Style="{StaticResource MaterialDesignFloatingActionButton}"
+                                        ToolTip="Previous image">
+                                    <materialDesign:PackIcon Kind="ChevronLeft" Width="20" Height="20" />
+                                </Button>
+                                <Button Command="{Binding NextAdSlideCommand}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                        Margin="0,0,6,0" Width="28" Height="28" Padding="0" Background="#CC000000"
+                                        Foreground="White" BorderThickness="0" Style="{StaticResource MaterialDesignFloatingActionButton}"
+                                        ToolTip="Next image">
+                                    <materialDesign:PackIcon Kind="ChevronRight" Width="20" Height="20" />
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding CurrentAdSlide.Title}" FontSize="14" FontWeight="Bold"
+                                       Foreground="#0F172A" TextTrimming="CharacterEllipsis" Margin="0,0,0,3" />
+                            <TextBlock Text="{Binding CurrentAdSlide.Description}" FontSize="11"
+                                       Foreground="#475569" TextWrapping="Wrap" MaxHeight="48" />
+                        </StackPanel>
+
+                        <ItemsControl Grid.Row="3" ItemsSource="{Binding AdSlides}" Margin="0,6,0,8" HorizontalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Style="{x:Null}" Background="Transparent" BorderThickness="0" Padding="2,2"
+                                            Click="OnSlideDotClick" Cursor="Hand" ToolTip="{Binding Title}">
+                                        <Border Height="5" CornerRadius="3">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Width" Value="7" />
+                                                    <Setter Property="Background" Value="#CBD5E1" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                            <Setter Property="Width" Value="20" />
+                                                            <Setter Property="Background" Value="#1976D2" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Grid Grid.Row="4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Project Well" FontWeight="SemiBold" FontSize="12" Foreground="Gray" VerticalAlignment="Center" />
-                            <Button Grid.Column="1" Style="{StaticResource MaterialDesignToolButton}" Command="{Binding EditWellCommand}" ToolTip="Edit Well Details" Width="24" Height="24" Padding="0">
-                                <materialDesign:PackIcon Kind="PencilOutline" Width="16" Height="16" Foreground="#757575" />
+                            <Button Grid.Column="0" Command="{Binding OpenEtechWebsiteCommand}"
+                                    CommandParameter="{Binding CurrentAdSlide.TargetUrl}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}" Background="#1976D2"
+                                    Foreground="White" Height="34" Padding="8,0" Margin="0,0,6,0"
+                                    materialDesign:ButtonAssist.CornerRadius="6"
+                                    ToolTip="Open the VuMaxPro product page">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="Explore VuMaxPro" FontSize="11" FontWeight="Bold" />
+                                    <materialDesign:PackIcon Kind="OpenInNew" Width="12" Height="12" Margin="5,0,0,0" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1" Command="{Binding OpenEtechWebsiteCommand}"
+                                    CommandParameter="https://etechinter.com"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" Height="34"
+                                    Padding="8,0" BorderBrush="#CBD5E1" Foreground="#334155"
+                                    materialDesign:ButtonAssist.CornerRadius="6"
+                                    ToolTip="Visit eTech International">
+                                <TextBlock Text="etechinter.com" FontSize="10" FontWeight="SemiBold" />
                             </Button>
                         </Grid>
-                        <StackPanel Orientation="Horizontal" Margin="0,2">
-                            <materialDesign:PackIcon Kind="Factory" Foreground="#2196F3" Width="18" Height="18" VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding SelectedWell.WellName, FallbackValue='No well selected'}" FontWeight="Bold" Margin="8,0,0,0" FontSize="14" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,2">
-                            <materialDesign:PackIcon Kind="MapMarker" Foreground="#F44336" Width="18" Height="18" VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding SelectedWell.FieldName, FallbackValue='General Field'}" Margin="8,0,0,0" FontSize="13" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- Center: TreeView or Empty State -->
-                <Grid>
-                    <!-- Empty State -->
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="16" Visibility="{Binding HasData, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Invert}">
-                        <materialDesign:PackIcon Kind="DatabaseSearchOutline" Width="48" Height="48" Foreground="#BDBDBD" HorizontalAlignment="Center" Margin="0,0,0,12" />
-                        <TextBlock Text="No Wells or Logs Yet" FontSize="16" FontWeight="SemiBold" Foreground="#757575" HorizontalAlignment="Center" Margin="0,0,0,6" />
-                        <TextBlock Text="Import a Timelog or Depthlog from the ribbon to populate this well tree." FontSize="12" Foreground="#9E9E9E" TextWrapping="Wrap" TextAlignment="Center" />
-                    </StackPanel>
-
-                    <!-- TreeView -->
-                    <TreeView ItemsSource="{Binding WellTree}" 
-                              SelectedItemChanged="TreeView_SelectedItemChanged" 
-                              BorderThickness="0" 
-                              Background="Transparent"
-                              Visibility="{Binding HasData, Converter={StaticResource BoolToVisibilityConverter}}"
-                              ScrollViewer.VerticalScrollBarVisibility="Auto"
-                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem" BasedOn="{StaticResource MaterialDesignTreeViewItem}">
-                                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                                <Setter Property="Padding" Value="4,2" />
-                                <Setter Property="Tag" Value="{Binding DataContext, RelativeSource={RelativeSource AncestorType=TreeView}}" />
-                                <EventSetter Event="PreviewMouseRightButtonDown" Handler="TreeViewItem_PreviewMouseRightButtonDown" />
-                                <EventSetter Event="ContextMenuOpening" Handler="TreeViewItem_ContextMenuOpening" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasContextMenu}" Value="True">
-                                        <Setter Property="ContextMenu" Value="{StaticResource TreeItemContextMenu}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                        <TreeView.ItemTemplate>
-                            <HierarchicalDataTemplate DataType="{x:Type models:WellTreeNode}" ItemsSource="{Binding Children}">
-                                <Grid Margin="0,2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Icon -->
-                                    <materialDesign:PackIcon Grid.Column="0" Kind="{Binding IconKind}" Foreground="{Binding IconColor}" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0" />
-
-                                    <!-- Name & Subtitle -->
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding Subtitle}" FontSize="11" Foreground="Gray" Visibility="{Binding Subtitle, Converter={StaticResource StringToVisibilityConverter}}" />
-                                    </StackPanel>
-
-                                    <!-- Badge -->
-                                    <Border Grid.Column="2" Margin="8,0,0,0" Padding="6,1" CornerRadius="10" Background="#EEEEEE" VerticalAlignment="Center" Visibility="{Binding Badge, Converter={StaticResource StringToVisibilityConverter}}">
-                                        <TextBlock Text="{Binding Badge}" FontSize="11" Foreground="#616161" FontWeight="Medium" />
-                                    </Border>
-                                </Grid>
-                            </HierarchicalDataTemplate>
-                        </TreeView.ItemTemplate>
-                    </TreeView>
-                </Grid>
-            </DockPanel>
-        </materialDesign:Card>
-
-        <!-- Center: QC Status & KPIs -->
-        <Grid Grid.Column="1" Margin="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            
-            <materialDesign:Card Padding="24" Margin="0 0 0 16" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp3">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16" HorizontalAlignment="Center">
-                        <materialDesign:PackIcon Kind="ShieldCheck" Width="32" Height="32" Foreground="#4CAF50" VerticalAlignment="Center" />
-                        <TextBlock Text="QC Status" FontSize="24" FontWeight="Bold" Margin="12 0 0 0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <TextBlock Text="{Binding QcStatus}" FontSize="36" Foreground="{Binding QcColor}" HorizontalAlignment="Center" FontWeight="Heavy" Margin="0 8 0 0" />
-                </StackPanel>
-            </materialDesign:Card>
-
-            <materialDesign:Card Grid.Row="1" Padding="20" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
-                        <materialDesign:PackIcon Kind="DatabaseArrowDown" Width="28" Height="28" Foreground="#FF9800" VerticalAlignment="Center" />
-                        <TextBlock Text="Recent Imports" FontSize="20" FontWeight="Bold" Margin="8 0 0 0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <TextBlock Text="{Binding RecentImports}" FontSize="18" Foreground="#616161" Margin="36 0 0 0" />
-                </StackPanel>
-            </materialDesign:Card>
-        </Grid>
-
-        <!-- Right: Quick Links & Activity Log -->
-        <Grid Grid.Column="2" Margin="8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <materialDesign:Card Grid.Row="0" Padding="20" Margin="0 0 0 16" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
-                        <materialDesign:PackIcon Kind="FileDocumentOutline" Width="28" Height="28" Foreground="#9C27B0" VerticalAlignment="Center" />
-                        <TextBlock Text="Quick Reports" FontSize="20" FontWeight="Bold" Margin="8 0 0 0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <Button Content="Drilling Summary" Margin="0 6" Style="{StaticResource MaterialDesignOutlinedButton}" materialDesign:ButtonAssist.CornerRadius="6" />
-                    <Button Content="Last QC Report" Margin="0 6" Style="{StaticResource MaterialDesignOutlinedButton}" materialDesign:ButtonAssist.CornerRadius="6" />
-                </StackPanel>
-            </materialDesign:Card>
-
-            <materialDesign:Card Grid.Row="1" Padding="20" UniformCornerRadius="12" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                        <materialDesign:PackIcon Kind="FormatListBulleted" Width="24" Height="24" Foreground="#607D8B" VerticalAlignment="Center" />
-                        <TextBlock Text="Activity Log" FontSize="18" FontWeight="Bold" Margin="8 0 0 0" VerticalAlignment="Center" />
-                    </StackPanel>
-                    
-                    <ListView ItemsSource="{Binding ActivityLog}" BorderThickness="0" Background="Transparent" Foreground="#424242">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
-                                <Setter Property="Padding" Value="0 8" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                    </ListView>
-                </StackPanel>
-            </materialDesign:Card>
+                    </Grid>
+                </materialDesign:Card>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

@@ -69,6 +69,23 @@ public partial class DashboardViewModel : ObservableObject
 
     public ObservableCollection<string> ActivityLog { get; } = new();
 
+    private readonly System.Windows.Threading.DispatcherTimer? _adScrollTimer;
+
+    public ObservableCollection<MarketingAdSlide> AdSlides { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlideCountDisplay))]
+    private MarketingAdSlide? _currentAdSlide;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlideCountDisplay))]
+    private int _currentSlideIndex;
+
+    [ObservableProperty]
+    private bool _isAutoScrollPaused;
+
+    public string SlideCountDisplay => AdSlides.Count > 0 ? $"{CurrentSlideIndex + 1} / {AdSlides.Count}" : "1 / 1";
+
     public DashboardViewModel() : this(null, null)
     {
     }
@@ -87,7 +104,130 @@ public partial class DashboardViewModel : ObservableObject
             _session.DataChanged += OnDataChanged;
         }
 
+        InitializeAdSlides();
+
+        if (System.Windows.Application.Current != null)
+        {
+            try
+            {
+                _adScrollTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(3.5)
+                };
+                _adScrollTimer.Tick += (s, e) =>
+                {
+                    if (!IsAutoScrollPaused)
+                    {
+                        NextAdSlide();
+                    }
+                };
+                _adScrollTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DashboardViewModel] Error initializing ad scroll timer: {ex}");
+            }
+        }
+
         _ = LoadDataAsync();
+    }
+
+    private void InitializeAdSlides()
+    {
+        AdSlides.Clear();
+
+        var slides = new List<MarketingAdSlide>
+        {
+            new MarketingAdSlide
+            {
+                Index = 0,
+                Title = "Real-Time KPI Analytics",
+                Badge = "Drilling Optimization",
+                Description = "Live drilling analytics, ROP optimization, and automated rig performance benchmarks.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide1_kpi_dashboard.png",
+                CategoryColor = "#0284C7",
+                AccentIcon = "ChartLineVariant",
+                IsActive = true
+            },
+            new MarketingAdSlide
+            {
+                Index = 1,
+                Title = "Engineering-Grade Analytics",
+                Badge = "High Precision",
+                Description = "Torque, drag, hydraulics modeling, and broomstick hookload curve family analysis.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide2_engineering_analytics.png",
+                CategoryColor = "#4F46E5",
+                AccentIcon = "EngineOutline"
+            },
+            new MarketingAdSlide
+            {
+                Index = 2,
+                Title = "NPT & Rig State Monitoring",
+                Badge = "Operation Tracking",
+                Description = "Automated slip-to-slip cycle classification, invisible lost time, and crew efficiency.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide3_rig_state_monitoring.png",
+                CategoryColor = "#059669",
+                AccentIcon = "ChartTimelineVariant"
+            },
+            new MarketingAdSlide
+            {
+                Index = 3,
+                Title = "VuMax AI Smart Alerts",
+                Badge = "Predictive AI",
+                Description = "Real-time drilling anomaly detection and instant notifications direct to field tablets.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide4_ai_anomaly_tablet.png",
+                CategoryColor = "#D97706",
+                AccentIcon = "TabletDashboard"
+            },
+            new MarketingAdSlide
+            {
+                Index = 4,
+                Title = "Mobile Operations Hub",
+                Badge = "24/7 Mobility",
+                Description = "Executive mobile dashboard bringing live rig telemetry to drillers & superintendents.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide5_mobile_drilling_app.png",
+                CategoryColor = "#7C3AED",
+                AccentIcon = "CellphoneLink"
+            },
+            new MarketingAdSlide
+            {
+                Index = 5,
+                Title = "Stuck Pipe Early Warning",
+                Badge = "Hazard Prevention",
+                Description = "Early detection of pack-off and stuck pipe events to safeguard downhole assemblies.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide6_stuck_pipe_prevention.png",
+                CategoryColor = "#DC2626",
+                AccentIcon = "AlertDecagramOutline"
+            },
+            new MarketingAdSlide
+            {
+                Index = 6,
+                Title = "Sensor Diagnostics",
+                Badge = "Millisecond Telemetry",
+                Description = "High-frequency surface and downhole sensor plots for dynamic vibration diagnosis.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide7_engineering_plots.png",
+                CategoryColor = "#2563EB",
+                AccentIcon = "Waveform"
+            },
+            new MarketingAdSlide
+            {
+                Index = 7,
+                Title = "Autonomous Advisory Suite",
+                Badge = "Next-Gen AI",
+                Description = "Continuous AI guidance reducing non-productive time and accelerating well delivery.",
+                ImageSource = "pack://application:,,,/DrillIntel;component/Assets/VuMaxPro/slide8_vumax_ai_suite.png",
+                CategoryColor = "#0D9488",
+                AccentIcon = "Brain"
+            }
+        };
+
+        foreach (var s in slides)
+        {
+            AdSlides.Add(s);
+        }
+
+        CurrentSlideIndex = 0;
+        CurrentAdSlide = AdSlides.Count > 0 ? AdSlides[0] : null;
     }
 
     private void OnDataChanged(object? sender, EventArgs e)
@@ -779,6 +919,83 @@ public partial class DashboardViewModel : ObservableObject
                 Owner = System.Windows.Application.Current?.MainWindow
             };
             window.ShowDialog();
+        }
+    }
+
+    [RelayCommand]
+    public void NextAdSlide()
+    {
+        if (AdSlides.Count == 0) return;
+        CurrentSlideIndex = (CurrentSlideIndex + 1) % AdSlides.Count;
+        UpdateActiveSlide();
+    }
+
+    [RelayCommand]
+    public void PreviousAdSlide()
+    {
+        if (AdSlides.Count == 0) return;
+        CurrentSlideIndex = (CurrentSlideIndex - 1 + AdSlides.Count) % AdSlides.Count;
+        UpdateActiveSlide();
+    }
+
+    [RelayCommand]
+    public void SelectAdSlide(int index)
+    {
+        if (index >= 0 && index < AdSlides.Count)
+        {
+            CurrentSlideIndex = index;
+            UpdateActiveSlide();
+        }
+    }
+
+    [RelayCommand]
+    public void ToggleAutoScroll()
+    {
+        IsAutoScrollPaused = !IsAutoScrollPaused;
+    }
+
+    [RelayCommand]
+    public void PauseAdScroll()
+    {
+        IsAutoScrollPaused = true;
+    }
+
+    [RelayCommand]
+    public void ResumeAdScroll()
+    {
+        IsAutoScrollPaused = false;
+    }
+
+    private void UpdateActiveSlide()
+    {
+        for (int i = 0; i < AdSlides.Count; i++)
+        {
+            AdSlides[i].IsActive = (i == CurrentSlideIndex);
+        }
+
+        CurrentAdSlide = (CurrentSlideIndex >= 0 && CurrentSlideIndex < AdSlides.Count)
+            ? AdSlides[CurrentSlideIndex]
+            : null;
+    }
+
+    [RelayCommand]
+    public void OpenEtechWebsite(string? url = null)
+    {
+        try
+        {
+            var targetUrl = !string.IsNullOrWhiteSpace(url)
+                ? url
+                : (CurrentAdSlide?.TargetUrl ?? "https://etechinter.com/products/vumaxpro-real-time-drilling-intelligence/");
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = targetUrl,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DashboardViewModel] Error opening website: {ex}");
         }
     }
 }
