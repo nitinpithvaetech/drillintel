@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DrillIntel.DataService\DrillIntel.DataService.csproj" />
+    <ProjectReference Include="..\DrillIntel.Licensing\DrillIntel.Licensing.Client\DrillIntel.Licensing.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

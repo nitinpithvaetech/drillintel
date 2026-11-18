@@ -12,6 +12,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using DrillIntel.Licensing.Client;
+using DrillIntel.Licensing.Core.Verification;
 
 namespace DrillIntel.ViewModels;
 
@@ -30,10 +32,25 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private ObservableObject _currentViewModel;
 
+    [ObservableProperty]
+    private string _licenseInformation = "License: Not activated";
+
     public ProjectSession Session => _session;
     public bool IsProjectOpen => _session.IsProjectOpen;
 
     public ObservableCollection<RecentProject> RecentProjects { get; } = new();
+
+    [RelayCommand]
+    private void OpenLicenseActivation()
+    {
+        var window = new DrillIntel.Views.LicenseActivationWindow
+        {
+            Owner = Application.Current?.MainWindow
+        };
+        window.DevelopmentLicenseVerified += result =>
+            LicenseInformation = FormatLicenseInformation(result);
+        window.ShowDialog();
+    }
 
     private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
 
@@ -141,6 +158,35 @@ public partial class MainViewModel : ObservableObject
         {
             initDb.PropertyChanged += OnDashboardPropertyChanged;
         }
+
+        _ = RestoreDevelopmentLicenseInformationAsync();
+    }
+
+    private async Task RestoreDevelopmentLicenseInformationAsync()
+    {
+#if DEBUG
+        try
+        {
+            using var deviceKey = await Task.Run(DeviceKeyStore.OpenOrCreate).ConfigureAwait(false);
+            var result = await DevelopmentLicenseBundleStore.VerifyStoredAsync(
+                deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
+            if (result?.IsValid == true && Application.Current is { } application)
+                await application.Dispatcher.InvokeAsync(() =>
+                    LicenseInformation = FormatLicenseInformation(result));
+            else if (result is { IsValid: false } && Application.Current is { } currentApplication)
+                await currentApplication.Dispatcher.InvokeAsync(() => LicenseInformation = "License: Not activated");
+        }
+        catch
+        {
+            // Keep startup non-blocking. The user can inspect/retry activation from Setup.
+        }
+#endif
+    }
+
+    private static string FormatLicenseInformation(LicenseVerificationResult result)
+    {
+        var expiry = result.LicenseExpiryUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "Unknown";
+        return $"License: {result.LicenseId} · Valid until {expiry} · Dev test";
     }
 
     partial void OnCurrentViewModelChanged(ObservableObject? oldValue, ObservableObject newValue)
