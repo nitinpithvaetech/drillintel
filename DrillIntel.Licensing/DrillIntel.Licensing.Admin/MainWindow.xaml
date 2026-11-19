@@ -4,6 +4,15 @@
         Title="DrillIntel License Admin"
         Width="1420" Height="900" MinWidth="1080" MinHeight="680"
         WindowStartupLocation="CenterScreen" Background="#F1F5F9">
+    <Window.Resources>
+        <ContextMenu x:Key="LicenseRowContextMenu">
+            <MenuItem Header="📋  Copy License ID" FontWeight="Bold" InputGestureText="Ctrl+C" Click="CopyLicenseIdFromContextMenu_Click" />
+            <MenuItem Header="Copy Entire Row" Click="CopyFullRowFromContextMenu_Click" />
+        </ContextMenu>
+        <Style x:Key="SelectOnRightClickRowStyle" TargetType="DataGridRow">
+            <EventSetter Event="PreviewMouseRightButtonDown" Handler="DataGridRow_PreviewMouseRightButtonDown" />
+        </Style>
+    </Window.Resources>
     <Grid Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -102,14 +111,97 @@
 
                     <TabControl x:Name="DetailsTabs" Grid.Row="1">
                         <TabItem Header="Rigs"><DataGrid x:Name="RigsGrid" /></TabItem>
-                        <TabItem Header="Licenses"><DataGrid x:Name="LicensesGrid" /></TabItem>
-                        <TabItem Header="Devices"><DataGrid x:Name="DevicesGrid" /></TabItem>
-                        <TabItem Header="Entitlement Revisions"><DataGrid x:Name="RevisionsGrid" /></TabItem>
-                        <TabItem Header="Activation Files"><DataGrid x:Name="ActivationFilesGrid" /></TabItem>
-                        <TabItem Header="Requests"><DataGrid x:Name="RequestsGrid" /></TabItem>
-                        <TabItem Header="Request Inbox"><DataGrid x:Name="RequestInboxGrid" /></TabItem>
+                        <TabItem Header="Licenses">
+                            <DockPanel LastChildFill="True">
+                                <Border DockPanel.Dock="Top" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="8,6" Margin="0,0,0,6">
+                                    <DockPanel LastChildFill="True">
+                                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="License Records" FontWeight="SemiBold" Foreground="#334155" VerticalAlignment="Center" Margin="4,0,12,0" />
+                                            <Button x:Name="CopyLicenseIdButton" Content="📋  Copy License ID" Click="CopySelectedLicenseId_Click" IsEnabled="False"
+                                                    ToolTip="Copy the selected row's License ID to the clipboard (Ctrl+C)" />
+                                        </StackPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="Tip: Press Ctrl+C or right-click to copy License ID" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    </DockPanel>
+                                </Border>
+                                <DataGrid x:Name="LicensesGrid" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow"
+                                          SelectionChanged="LicensesGrid_SelectionChanged"
+                                          PreviewKeyDown="LicensesGrid_PreviewKeyDown" MouseDoubleClick="LicensesGrid_MouseDoubleClick"
+                                          ContextMenu="{StaticResource LicenseRowContextMenu}"
+                                          RowStyle="{StaticResource SelectOnRightClickRowStyle}">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="License ID" Width="280">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel LastChildFill="True" Margin="4,2">
+                                                        <Button DockPanel.Dock="Right" Content="Copy" Padding="8,2" MinHeight="22" FontSize="11"
+                                                                Margin="6,0,2,0" Cursor="Hand" Background="#E2E8F0" Foreground="#334155"
+                                                                ToolTip="Copy License ID to clipboard"
+                                                                Click="RowCopyLicenseId_Click" Tag="{Binding LicenseId}" />
+                                                        <TextBlock Text="{Binding LicenseId}" FontFamily="Consolas" FontWeight="SemiBold"
+                                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Rig" Binding="{Binding RigName}" Width="150" />
+                                        <DataGridTextColumn Header="Plan" Binding="{Binding Plan}" Width="90" />
+                                        <DataGridTemplateColumn Header="Status" Width="100">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#F1F5F9" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="active">
+                                                                        <Setter Property="Background" Value="#DCFCE7" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="suspended">
+                                                                        <Setter Property="Background" Value="#FEF3C7" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="expired">
+                                                                        <Setter Property="Background" Value="#FEE2E2" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding Status}" FontWeight="SemiBold" FontSize="11">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="#475569" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="active">
+                                                                            <Setter Property="Foreground" Value="#166534" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="suspended">
+                                                                            <Setter Property="Foreground" Value="#92400E" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Status}" Value="expired">
+                                                                            <Setter Property="Foreground" Value="#991B1B" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Max Devices" Binding="{Binding MaxDevices}" Width="90" />
+                                        <DataGridTextColumn Header="Start (UTC)" Binding="{Binding StartUtc}" Width="160" />
+                                        <DataGridTextColumn Header="Expiry (UTC)" Binding="{Binding ExpiryUtc}" Width="160" />
+                                        <DataGridTextColumn Header="Revision" Binding="{Binding CurrentRevision}" Width="70" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Devices"><DataGrid x:Name="DevicesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
+                        <TabItem Header="Entitlement Revisions"><DataGrid x:Name="RevisionsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
+                        <TabItem Header="Activation Files"><DataGrid x:Name="ActivationFilesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
+                        <TabItem Header="Requests"><DataGrid x:Name="RequestsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
+                        <TabItem Header="Request Inbox"><DataGrid x:Name="RequestInboxGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
                         <TabItem Header="Payments"><DataGrid x:Name="PaymentsGrid" /></TabItem>
-                        <TabItem Header="Audit Log"><DataGrid x:Name="AuditGrid" /></TabItem>
+                        <TabItem Header="Audit Log"><DataGrid x:Name="AuditGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
                     </TabControl>
                 </Grid>
             </Border>

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 using Microsoft.Win32;
 using DrillIntel.Licensing.Issuer.Register;
 using DrillIntel.Licensing.Issuer.Requests;
@@ -387,6 +389,7 @@ public partial class MainWindow : Window
         SelectedCustomerNotes.Text = string.Empty;
         RigCountValue.Text = "0";
         LicenseCountValue.Text = "0";
+        CopyLicenseIdButton.IsEnabled = false;
         RigsGrid.ItemsSource = null;
         LicensesGrid.ItemsSource = null;
         DevicesGrid.ItemsSource = null;
@@ -396,6 +399,152 @@ public partial class MainWindow : Window
         RequestInboxGrid.ItemsSource = null;
         PaymentsGrid.ItemsSource = null;
         AuditGrid.ItemsSource = null;
+    }
+
+    private void LicensesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        CopyLicenseIdButton.IsEnabled = LicensesGrid.SelectedItem is LicenseRecord;
+    }
+
+    private void CopySelectedLicenseId_Click(object sender, RoutedEventArgs e)
+    {
+        if (LicensesGrid.SelectedItem is LicenseRecord record && !string.IsNullOrWhiteSpace(record.LicenseId))
+        {
+            SetClipboardText(record.LicenseId, "License ID");
+        }
+    }
+
+    private void RowCopyLicenseId_Click(object sender, RoutedEventArgs e)
+    {
+        string? licenseId = null;
+        if (sender is FrameworkElement fe)
+        {
+            licenseId = fe.Tag as string ?? (fe.DataContext as LicenseRecord)?.LicenseId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(licenseId))
+        {
+            SetClipboardText(licenseId, "License ID");
+        }
+    }
+
+    private void LicensesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if (LicensesGrid.SelectedItem is LicenseRecord record && !string.IsNullOrWhiteSpace(record.LicenseId))
+            {
+                SetClipboardText(record.LicenseId, "License ID");
+                e.Handled = true; // Overrides default DataGrid row-copy (TSV) behavior!
+            }
+        }
+    }
+
+    private void LicensesGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (LicensesGrid.SelectedItem is LicenseRecord record && !string.IsNullOrWhiteSpace(record.LicenseId))
+        {
+            SetClipboardText(record.LicenseId, "License ID");
+        }
+    }
+
+    private void GenericGrid_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            if (TryCopyLicenseIdFromItem((sender as DataGrid)?.SelectedItem))
+            {
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void CopyLicenseIdFromContextMenu_Click(object sender, RoutedEventArgs e)
+    {
+        var grid = GetCurrentTabActiveGrid();
+        if (grid != null && TryCopyLicenseIdFromItem(grid.SelectedItem))
+        {
+            return;
+        }
+        if (LicensesGrid.SelectedItem is LicenseRecord rec && !string.IsNullOrWhiteSpace(rec.LicenseId))
+        {
+            SetClipboardText(rec.LicenseId, "License ID");
+        }
+    }
+
+    private void CopyFullRowFromContextMenu_Click(object sender, RoutedEventArgs e)
+    {
+        var grid = GetCurrentTabActiveGrid();
+        if (grid?.SelectedItem is object item)
+        {
+            var text = FormatRowAsTsv(item);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                SetClipboardText(text, "Row data");
+            }
+        }
+    }
+
+    private void DataGridRow_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is DataGridRow row)
+        {
+            row.IsSelected = true;
+            row.Focus();
+        }
+    }
+
+    private DataGrid? GetCurrentTabActiveGrid()
+    {
+        if (DetailsTabs.SelectedContent is DataGrid dg)
+            return dg;
+        if (DetailsTabs.SelectedContent is DockPanel dp)
+            return dp.Children.OfType<DataGrid>().FirstOrDefault();
+        return LicensesGrid;
+    }
+
+    private bool TryCopyLicenseIdFromItem(object? item)
+    {
+        if (item is null) return false;
+        var licenseId = item switch
+        {
+            LicenseRecord l => l.LicenseId,
+            DeviceRecord d => d.LicenseId,
+            EntitlementRevisionRecord r => r.LicenseId,
+            ActivationFileRecord a => a.LicenseId,
+            RequestRecord req => req.LicenseId,
+            PendingRequestRecord preq => preq.LicenseId,
+            AuditRecord aud => aud.LicenseId,
+            _ => null
+        };
+
+        if (!string.IsNullOrWhiteSpace(licenseId))
+        {
+            SetClipboardText(licenseId, "License ID");
+            return true;
+        }
+        return false;
+    }
+
+    private static string FormatRowAsTsv(object item)
+    {
+        if (item is LicenseRecord l)
+            return $"{l.LicenseId}\t{l.RigName}\t{l.Plan}\t{l.Status}\t{l.MaxDevices}\t{l.StartUtc}\t{l.ExpiryUtc}\tRev {l.CurrentRevision}";
+        var props = item.GetType().GetProperties();
+        return string.Join("\t", props.Select(p => p.GetValue(item)?.ToString() ?? string.Empty));
+    }
+
+    private void SetClipboardText(string text, string description)
+    {
+        try
+        {
+            Clipboard.SetDataObject(text, true);
+            StatusText.Text = $"Copied {description}: {text}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Could not copy to clipboard: {ex.Message}";
+        }
     }
 
     private long? SelectedCustomerId => (CustomersGrid.SelectedItem as CustomerSummary)?.CustomerId;
