@@ -56,17 +56,29 @@ public partial class MainViewModel : ObservableObject
 
     public object? ActiveDocument { get; set; }
     public Action<string, string>? UserAlertHandler { get; set; }
+    public Func<RecalculateBroomstickPointsViewModel, bool?>? OpenRecalculateBroomstickPointsDialogHandler { get; set; }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
-    private void RecalculateBroomstickPoints()
+    private async Task RecalculateBroomstickPoints()
     {
-        OnCalculateBroomstickPointsClicked();
+        await OpenRecalculateBroomstickPointsDialogAsync();
     }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
-    private void CalculateBroomstickPoints()
+    private async Task CalculateBroomstickPoints()
     {
-        OnCalculateBroomstickPointsClicked();
+        if (ActiveDocument is DrillIntel.Models.HookloadDocument hookloadDoc)
+        {
+            hookloadDoc.CalculateBroomstickPoints();
+        }
+        else if (UserAlertHandler != null)
+        {
+            UserAlertHandler("Please select an active Hookload Document to calculate Broomstick points.", "Broomstick Calculation");
+        }
+        else
+        {
+            await OpenRecalculateBroomstickPointsDialogAsync();
+        }
     }
 
     public void OnCalculateBroomstickPointsClicked()
@@ -83,9 +95,73 @@ public partial class MainViewModel : ObservableObject
             }
             else
             {
-                _ = ExecuteProjectWideBroomstickRecalculationAsync();
+                _ = OpenRecalculateBroomstickPointsDialogAsync();
             }
         }
+    }
+
+    public async Task<bool?> OpenRecalculateBroomstickPointsDialogAsync()
+    {
+        if (!_session.IsProjectOpen) return false;
+
+        Well? well = null;
+        TimeLog? timeLog = null;
+
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (dashVm.SelectedNode?.Tag is Well w)
+            {
+                well = w;
+            }
+            else if (dashVm.SelectedWell != null)
+            {
+                well = dashVm.SelectedWell;
+            }
+        }
+
+        try
+        {
+            var repo = new DrillIntel.Data.WellDataRepository(_session);
+            if (well == null)
+            {
+                well = await repo.GetProjectWellAsync();
+            }
+
+            if (timeLog == null)
+            {
+                var timeLogs = await repo.GetTimeLogsAsync();
+                timeLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+            }
+        }
+        catch { }
+
+        var vm = new RecalculateBroomstickPointsViewModel(_session, well, timeLog);
+        bool? result = false;
+
+        if (OpenRecalculateBroomstickPointsDialogHandler != null)
+        {
+            result = OpenRecalculateBroomstickPointsDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.RecalculateBroomstickPointsWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true || vm.IsCompleted)
+        {
+            _session.NotifyDataChanged();
+        }
+
+        return result;
     }
 
     private async Task ExecuteProjectWideBroomstickRecalculationAsync()

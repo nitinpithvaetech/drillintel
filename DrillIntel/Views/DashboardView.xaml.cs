@@ -91,5 +91,14 @@ public partial class DashboardView : UserControl
             vm.SelectAdSlide(slide.Index);
         }
     }
+
+    private void OnAdImageClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is DashboardViewModel vm)
+        {
+            vm.OpenFullscreenAdDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
 }
 

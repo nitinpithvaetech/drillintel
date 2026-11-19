@@ -13,7 +13,9 @@ using DrillIntel.Data;
 using DrillIntel.Data.Objects.DataObjects.Models;
 using DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection;
 using DrillIntel.Models.TagVisualizer;
+using DrillIntel.Models.TChart;
 using DrillIntel.Projects;
+using Point = System.Windows.Point;
 
 namespace DrillIntel.ViewModels;
 
@@ -104,6 +106,11 @@ public partial class TagVisualizerViewModel : ObservableObject
     [ObservableProperty]
     private bool _invertDepth = true; // Petroleum standard: 0 ft at top, increasing downwards
 
+    partial void OnInvertDepthChanged(bool value)
+    {
+        RequestRepaint?.Invoke();
+    }
+
     [ObservableProperty]
     private bool _showGridLines = true;
 
@@ -137,6 +144,11 @@ public partial class TagVisualizerViewModel : ObservableObject
 
     [ObservableProperty]
     private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+
+    [ObservableProperty]
+    private string _selectedOverviewChannelMnemonic = "DEPTH";
+
+    public Func<DataSelectorViewModel, bool?>? OpenDataSelectorDialogHandler { get; set; }
 
     [ObservableProperty]
     private ObservableCollection<string> _rangePresets = new()
@@ -992,8 +1004,72 @@ public partial class TagVisualizerViewModel : ObservableObject
     [RelayCommand]
     public void AddTag()
     {
-        DateTime start = ViewMinDate.AddSeconds((ViewMaxDate - ViewMinDate).TotalSeconds * 0.4);
-        DateTime end = start.AddHours(2);
+        DateTime start;
+        DateTime end;
+        int isOpen = 0;
+
+        if (SelectedTag != null)
+        {
+            // Add AFTER the selected tag
+            start = SelectedTag.EndDate;
+
+            // Look for subsequent tag starting at or after 'start' (excluding SelectedTag)
+            var nextTag = Tags
+                .Where(t => t != SelectedTag && t.StartDate >= start)
+                .OrderBy(t => t.StartDate)
+                .FirstOrDefault();
+
+            if (nextTag != null && nextTag.StartDate > start)
+            {
+                // Fill the gap between selected tag and next tag
+                end = nextTag.StartDate;
+            }
+            else
+            {
+                // Give standard interval (2h or until DataMaxDate)
+                if (DataMaxDate > start && start.AddHours(2) > DataMaxDate)
+                {
+                    end = DataMaxDate;
+                }
+                else
+                {
+                    end = start.AddHours(2);
+                }
+            }
+
+            isOpen = 0;
+        }
+        else
+        {
+            // No tag selected: add to the last and mark as open tag
+            var lastTag = Tags.OrderBy(t => t.EndDate).LastOrDefault();
+            if (lastTag != null)
+            {
+                start = lastTag.EndDate;
+            }
+            else
+            {
+                start = (DataMinDate != DateTime.MinValue && DataMinDate != DateTime.MaxValue) 
+                    ? DataMinDate 
+                    : ViewMinDate;
+            }
+
+            if (DataMaxDate != DateTime.MinValue && DataMaxDate != DateTime.MaxValue && DataMaxDate > start)
+            {
+                end = DataMaxDate;
+            }
+            else
+            {
+                end = start.AddHours(2);
+            }
+
+            isOpen = 1;
+        }
+
+        if (end <= start)
+        {
+            end = start.AddHours(2);
+        }
 
         long newIndex = Tags.Count > 0 ? Tags.Max(t => t.PhaseIndex) + 1 : 1000;
 
@@ -1006,18 +1082,270 @@ public partial class TagVisualizerViewModel : ObservableObject
             PhaseId = "DRILLING",
             StepId = "DRILLING",
             EmphId = "MAIN",
-            Notes = "User created tag",
+            Notes = isOpen == 1 ? "Open tag added at end of timeline" : "User created tag after selected interval",
+            IsOpen = isOpen,
             IsModified = true,
             StartDepth = InterpolateDepth(start),
             EndDepth = InterpolateDepth(end)
         };
 
         newTag.PropertyChanged += OnTagPropertyChanged;
-        Tags.Add(newTag);
+
+        // Insert in chronological order into Tags collection
+        int insertIndex = -1;
+        for (int i = 0; i < Tags.Count; i++)
+        {
+            if (Tags[i].StartDate > start)
+            {
+                insertIndex = i;
+                break;
+            }
+        }
+
+        if (insertIndex >= 0)
+        {
+            Tags.Insert(insertIndex, newTag);
+        }
+        else
+        {
+            Tags.Add(newTag);
+        }
+
         SelectTag(newTag);
         HasUnsavedChanges = true;
-        StatusMessage = $"Added new tag {newTag.TagDisplayName}.";
+        StatusMessage = isOpen == 1 
+            ? $"Added new open tag {newTag.TagDisplayName} at end of timeline."
+            : $"Added new tag {newTag.TagDisplayName} after selected tag.";
+
+        // Ensure new tag is visible in the view window
+        if (newTag.EndDate > ViewMaxDate || newTag.StartDate < ViewMinDate)
+        {
+            ZoomToSelectedTag();
+        }
+
         RequestRepaint?.Invoke();
+    }
+
+    public VHTrackConsole CreateDataSelectorConsole()
+    {
+        var console = VHTrackConsole.CreateConsoleFromIndexType(enumIndexType.TimeLog);
+        var track = new VHTrack { ID = "TAG_VISUALIZER_TRACK", Title = "Tag Visualizer Overview", DisplayOrder = 0 };
+
+        // Attempt to inspect columns from active log table
+        List<string> colNames = new();
+        if (!string.IsNullOrWhiteSpace(TableName) && _dataService != null && _dataService.TableExists(TableName))
+        {
+            try
+            {
+                var cols = _dataService.GetTable($"PRAGMA table_info([{TableName}]);");
+                if (cols != null)
+                {
+                    colNames = cols.AsEnumerable()
+                        .Select(r => r["name"]?.ToString() ?? "")
+                        .Where(s => !string.IsNullOrWhiteSpace(s))
+                        .ToList();
+                }
+            }
+            catch { }
+        }
+
+        if (colNames.Count > 0)
+        {
+            foreach (var col in colNames)
+            {
+                if (col.Equals("rowid", StringComparison.OrdinalIgnoreCase) ||
+                    col.Equals("ID", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                track.Channels.Add(new VHTrackChannel
+                {
+                    ID = col,
+                    TrackID = track.ID,
+                    Name = col,
+                    Title = col,
+                    Mnemonic = col
+                });
+            }
+        }
+        else
+        {
+            track.Channels.Add(new VHTrackChannel { ID = "DEPTH", TrackID = track.ID, Name = "Bit Depth", Title = "Bit Depth", Mnemonic = "DEPTH" });
+            track.Channels.Add(new VHTrackChannel { ID = "HOLE_DEPTH", TrackID = track.ID, Name = "Hole Depth", Title = "Hole Depth", Mnemonic = "HOLE_DEPTH" });
+            track.Channels.Add(new VHTrackChannel { ID = "ROPA", TrackID = track.ID, Name = "Rate of Penetration", Title = "ROPA", Mnemonic = "ROPA" });
+            track.Channels.Add(new VHTrackChannel { ID = "WOB", TrackID = track.ID, Name = "Weight on Bit", Title = "WOB", Mnemonic = "WOB" });
+            track.Channels.Add(new VHTrackChannel { ID = "RPM", TrackID = track.ID, Name = "Rotary Speed", Title = "RPM", Mnemonic = "RPM" });
+            track.Channels.Add(new VHTrackChannel { ID = "TORQ", TrackID = track.ID, Name = "Torque", Title = "TORQ", Mnemonic = "TORQ" });
+        }
+
+        console.Tracks.Add(track);
+        return console;
+    }
+
+    [RelayCommand]
+    public async Task OpenDataSelectorAsync()
+    {
+        var console = CreateDataSelectorConsole();
+        var vm = new DataSelectorViewModel(console);
+
+        // Requirement: Default X axis DateTime, Y Axis Depth, and Depth Inverted
+        if (vm.AvailableXCoordinates.Contains("DateTime"))
+            vm.XCoordinate = "DateTime";
+        else if (vm.AvailableXCoordinates.Contains("DATETIME"))
+            vm.XCoordinate = "DATETIME";
+
+        var depthOption = vm.AvailableYCoordinates.FirstOrDefault(c =>
+            c.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+            c.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase) ||
+            c.Contains("DEPTH", StringComparison.OrdinalIgnoreCase));
+
+        if (depthOption != null)
+        {
+            vm.YCoordinate = depthOption;
+            var matchSeries = vm.AvailableSeries.FirstOrDefault(s => s.Contains(depthOption, StringComparison.OrdinalIgnoreCase));
+            if (matchSeries != null) vm.TargetSeries = matchSeries;
+        }
+
+        vm.IsYAxisInverted = InvertDepth;
+
+        bool? result = OpenDataSelectorDialogHandler != null
+            ? OpenDataSelectorDialogHandler(vm)
+            : ShowDataSelectorDialog(vm);
+
+        if (result == true)
+        {
+            InvertDepth = vm.IsYAxisInverted;
+            var chosenChannel = !string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic)
+                ? vm.SelectedChannelMnemonic
+                : vm.YCoordinate;
+
+            if (!string.IsNullOrWhiteSpace(chosenChannel))
+            {
+                SelectedOverviewChannelMnemonic = chosenChannel;
+                TrackBarOverviewChannelName = chosenChannel;
+                await ReloadOverviewForChannelAsync(chosenChannel);
+            }
+
+            RequestRepaint?.Invoke();
+        }
+    }
+
+    public void OpenDataSelector() => _ = OpenDataSelectorAsync();
+
+    private static bool? ShowDataSelectorDialog(DataSelectorViewModel vm)
+    {
+        if (Application.Current == null) return false;
+
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.GetType().Name == "TagVisualizerWindow" && w.IsVisible)
+                 ?? Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsVisible)
+                 ?? Application.Current.MainWindow;
+
+        var dlg = new Views.DataSelectorWindow(vm)
+        {
+            Topmost = true,
+            ShowInTaskbar = true
+        };
+        if (owner != null && owner.IsVisible)
+        {
+            dlg.Owner = owner;
+            dlg.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+        else
+        {
+            dlg.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        return dlg.ShowDialog();
+    }
+
+    public async Task ReloadOverviewForChannelAsync(string channelMnemonic)
+    {
+        if (string.IsNullOrWhiteSpace(TableName) || _dataService == null || !_dataService.TableExists(TableName))
+        {
+            return;
+        }
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                var cols = _dataService.GetTable($"PRAGMA table_info([{TableName}]);");
+                if (cols == null) return;
+                var colNames = cols.AsEnumerable().Select(r => r["name"]?.ToString() ?? "").ToList();
+
+                string? matchedCol = colNames.FirstOrDefault(c => c.Equals(channelMnemonic, StringComparison.OrdinalIgnoreCase))
+                                  ?? colNames.FirstOrDefault(c => c.Contains(channelMnemonic, StringComparison.OrdinalIgnoreCase));
+                if (matchedCol == null) return;
+
+                string timeCol = "DATETIME";
+                if (colNames.Any(c => c.Equals("DTIM", StringComparison.OrdinalIgnoreCase))) timeCol = "DTIM";
+                else if (colNames.Any(c => c.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))) timeCol = "DATETIME";
+                else if (colNames.Any(c => c.Equals("TIMEINDEX", StringComparison.OrdinalIgnoreCase))) timeCol = "TIMEINDEX";
+
+                string query = $"SELECT [{timeCol}], [{matchedCol}] FROM [{TableName}] WHERE [{matchedCol}] IS NOT NULL ORDER BY rowid ASC;";
+                var dtRaw = _dataService.GetTable(query);
+                if (dtRaw != null && dtRaw.Rows.Count > 0)
+                {
+                    var rawPoints = new List<DepthDataPoint>(dtRaw.Rows.Count);
+                    foreach (DataRow row in dtRaw.Rows)
+                    {
+                        DateTime dt = ParseDate(row[timeCol]);
+                        double val = DataService.checkNull(row[matchedCol], 0.0);
+                        if (dt != DateTime.MinValue)
+                        {
+                            rawPoints.Add(new DepthDataPoint(dt, val));
+                        }
+                    }
+
+                    rawPoints.Sort((a, b) => a.DateTime.CompareTo(b.DateTime));
+
+                    List<DepthDataPoint> sampled;
+                    if (rawPoints.Count > 3000)
+                    {
+                        int step = Math.Max(1, rawPoints.Count / 3000);
+                        sampled = new List<DepthDataPoint>(3100);
+                        for (int i = 0; i < rawPoints.Count; i += step)
+                        {
+                            sampled.Add(rawPoints[i]);
+                        }
+                        if (rawPoints.Count > 0 && sampled[^1].DateTime != rawPoints[^1].DateTime)
+                        {
+                            sampled.Add(rawPoints[^1]);
+                        }
+                    }
+                    else
+                    {
+                        sampled = rawPoints;
+                    }
+
+                    if (matchedCol.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+                        matchedCol.Equals("HDTH", StringComparison.OrdinalIgnoreCase))
+                    {
+                        DepthPoints = sampled;
+                    }
+
+                    int trackBarStep = Math.Max(1, sampled.Count / 500);
+                    var pts = new PointCollection(sampled.Count / trackBarStep + 2);
+                    for (int i = 0; i < sampled.Count; i += trackBarStep)
+                    {
+                        pts.Add(new Point(sampled[i].DateTime.ToOADate(), sampled[i].Depth));
+                    }
+                    if (pts.Count > 0 && sampled.Count > 0 && pts[^1].X != sampled[^1].DateTime.ToOADate())
+                    {
+                        pts.Add(new Point(sampled[^1].DateTime.ToOADate(), sampled[^1].Depth));
+                    }
+
+                    Application.Current?.Dispatcher.Invoke(() =>
+                    {
+                        TrackBarOverviewPoints = pts;
+                        TrackBarOverviewChannelName = matchedCol;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TagVisualizerViewModel.ReloadOverviewForChannelAsync] {ex.Message}");
+            }
+        });
     }
 
     [RelayCommand]

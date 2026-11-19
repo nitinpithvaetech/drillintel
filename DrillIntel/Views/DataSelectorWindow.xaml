@@ -8,7 +8,7 @@
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=viewmodels:DataSelectorViewModel}"
         Title="Data Selector Window"
-        Width="460" Height="380"
+        Width="460" Height="415"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
@@ -70,7 +70,7 @@
                 </Grid>
 
                 <!-- Y Coordinate -->
-                <Grid Margin="0,0,0,4">
+                <Grid Margin="0,0,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="100" />
                         <ColumnDefinition Width="*" />
@@ -79,6 +79,17 @@
                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableYCoordinates}" 
                               SelectedItem="{Binding YCoordinate, Mode=TwoWay}"
                               Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+                </Grid>
+
+                <!-- Invert Y Axis -->
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Grid.Column="1" Content="Invert Y Axis (Depth 0 at Top ↓)" 
+                              IsChecked="{Binding IsYAxisInverted, Mode=TwoWay}"
+                              FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
                 </Grid>
             </StackPanel>
         </GroupBox>

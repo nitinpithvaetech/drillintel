@@ -79,6 +79,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
     public Func<BroomstickDocumentViewModel, bool?>? OpenSetupDialogHandler { get; set; }
     public Func<BroomstickDocumentViewModel, bool?>? OpenBroomstickSetupDialogHandler { get; set; }
+    public Func<RecalculateBroomstickPointsViewModel, bool?>? OpenRecalculateBroomstickPointsDialogHandler { get; set; }
 
     public Func<BroomstickDocumentManagerViewModel, bool?>? OpenTemplateManagerDialogHandler { get; set; }
 
@@ -2007,59 +2008,57 @@ public partial class BroomstickDocumentViewModel : ObservableObject
     }
 
     [RelayCommand]
-
     public async Task RecalculatePointsAsync()
-
     {
-
         if (_session == null || string.IsNullOrWhiteSpace(WellId)) return;
 
         try
-
         {
-
-            StatusMessage = "Recalculating Broomstick points from well log...";
-
-            var bsDataService = new BroomstickDataService(_session);
-
-            var bsProcessor = new DrillIntel.Services.BroomstickProcessor(bsDataService, _session);
-
-            await bsDataService.ClearBroomstickPointsAsync(WellId);
-
-            var result = await bsProcessor.RecalculatePointsAsync(WellId);
-
-
-
-            var ds = _session.GetDataService();
-
-            if (ds != null)
-
+            TimeLog? timeLog = null;
+            Well? well = null;
+            try
             {
+                var repo = new WellDataRepository(_session);
+                well = await repo.GetProjectWellAsync();
+                var logs = await repo.GetTimeLogsAsync();
+                timeLog = logs.FirstOrDefault(l => l.WellID.Equals(WellId, StringComparison.OrdinalIgnoreCase) && l.PrimaryLog)
+                       ?? logs.FirstOrDefault(l => l.WellID.Equals(WellId, StringComparison.OrdinalIgnoreCase))
+                       ?? logs.FirstOrDefault();
+            }
+            catch { }
 
-                await LoadBroomstickPointsFromDbAsync(ds);
+            var vm = new RecalculateBroomstickPointsViewModel(_session, well, timeLog);
+            bool? dialogResult = false;
 
-                ApplyRangeFilter();
-
+            if (OpenRecalculateBroomstickPointsDialogHandler != null)
+            {
+                dialogResult = OpenRecalculateBroomstickPointsDialogHandler(vm);
+            }
+            else if (Application.Current != null)
+            {
+                var window = new Views.RecalculateBroomstickPointsWindow
+                {
+                    DataContext = vm,
+                    Owner = Application.Current?.MainWindow
+                };
+                dialogResult = window.ShowDialog();
             }
 
-
-
-            StatusMessage = result.Success
-
-                ? $"Ready. {LoadedPointsCount:N0} points loaded."
-
-                : $"Recalculation warning: {result.ErrorMessage}";
-
+            if (dialogResult == true || vm.IsCompleted)
+            {
+                var ds = _session.GetDataService();
+                if (ds != null)
+                {
+                    await LoadBroomstickPointsFromDbAsync(ds);
+                    ApplyRangeFilter();
+                }
+                StatusMessage = $"Ready. {LoadedPointsCount:N0} points loaded.";
+            }
         }
-
         catch (Exception ex)
-
         {
-
             StatusMessage = $"Error recalculating points: {ex.Message}";
-
         }
-
     }
 
 

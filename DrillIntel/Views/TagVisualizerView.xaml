@@ -77,7 +77,7 @@
                     <CheckBox Content="Gridlines" IsChecked="{Binding ShowGridLines}" FontSize="11" Foreground="#475569" Margin="0,0,12,0" VerticalAlignment="Center" />
 
                     <!-- Add Tag Button -->
-                    <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding AddTagCommand}" ToolTip="Insert new tag interval" Height="32" Margin="0,0,8,0">
+                    <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding AddTagCommand}" ToolTip="Tag will be added after Selected Tag" Height="32" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="TagPlusOutline" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,4,0" />
                             <TextBlock Text="Add Tag" FontSize="11" />
@@ -219,6 +219,16 @@
                                     <TextBlock Text="Apply" FontSize="11" VerticalAlignment="Center" />
                                 </StackPanel>
                             </Button>
+
+                            <Button Command="{Binding OpenDataSelectorCommand}" 
+                                    Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                    Height="28" Padding="10,0" Margin="8,0,0,0"
+                                    ToolTip="Open Data Selector &amp; Field Mapping Window">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
+                                    <TextBlock Text="DataSelector Settings" FontSize="11" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -233,6 +243,7 @@
                                                OverviewPoints="{Binding TrackBarOverviewPoints}"
                                                OverviewChannelName="{Binding TrackBarOverviewChannelName}"
                                                OverviewStroke="{Binding TrackBarOverviewBrush}"
+                                               IsOverviewInverted="{Binding InvertDepth}"
                                                RangeChanged="OnRangeTrackBarChanged" />
             </Grid>
 
@@ -301,7 +312,12 @@
                                   SelectedItem="{Binding SelectedTag.EmphId, Mode=TwoWay}"
                                   IsEditable="True"
                                   Text="{Binding SelectedTag.EmphId, Mode=TwoWay}"
-                                  Margin="0,0,0,16" />
+                                  Margin="0,0,0,10" />
+
+                        <!-- Open Tag Checkbox -->
+                        <CheckBox Content="Open Tag (Active / Ongoing Tag)" 
+                                  IsChecked="{Binding SelectedTag.IsOpenTag, Mode=TwoWay}"
+                                  FontWeight="SemiBold" FontSize="11" Foreground="#334155" Margin="0,0,0,16" />
 
                         <!-- ================================================= -->
                         <!-- TIME INTERVAL NUDGE ADJUSTERS                     -->
@@ -515,6 +531,9 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
+
+                    <!-- Open Tag Status -->
+                    <DataGridCheckBoxColumn Header="Open Tag" Binding="{Binding IsOpenTag, Mode=TwoWay}" Width="75" />
 
                     <!-- Notes -->
                     <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="*" />

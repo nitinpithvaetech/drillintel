@@ -59,7 +59,22 @@ public partial class TagVisualizerItem : ObservableObject
     private DateTime? _modifiedDate;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TagDisplayName))]
+    [NotifyPropertyChangedFor(nameof(IsOpenTag))]
     private int _isOpen;
+
+    public bool IsOpenTag
+    {
+        get => IsOpen == 1;
+        set
+        {
+            if (value != (IsOpen == 1))
+            {
+                IsOpen = value ? 1 : 0;
+                IsModified = true;
+            }
+        }
+    }
 
     [ObservableProperty]
     private bool _isSelected;
@@ -90,6 +105,7 @@ public partial class TagVisualizerItem : ObservableObject
 
     /// <summary>
     /// Combined name of Phase + Step + Emph matching requirement.
+    /// Appends [OPEN] if IsOpen is 1.
     /// </summary>
     public string TagDisplayName
     {
@@ -99,13 +115,17 @@ public partial class TagVisualizerItem : ObservableObject
             var s = !string.IsNullOrWhiteSpace(StepId) ? StepId.Trim() : "";
             var e = !string.IsNullOrWhiteSpace(EmphId) ? EmphId.Trim() : "";
 
+            string baseName;
             if (!string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(e))
-                return $"{p} + {s} + {e}";
-            if (!string.IsNullOrEmpty(s))
-                return $"{p} + {s}";
-            if (!string.IsNullOrEmpty(e))
-                return $"{p} + {e}";
-            return p;
+                baseName = $"{p} + {s} + {e}";
+            else if (!string.IsNullOrEmpty(s))
+                baseName = $"{p} + {s}";
+            else if (!string.IsNullOrEmpty(e))
+                baseName = $"{p} + {e}";
+            else
+                baseName = p;
+
+            return IsOpen == 1 ? $"{baseName} [OPEN]" : baseName;
         }
     }
 

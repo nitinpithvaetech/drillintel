@@ -61,6 +61,16 @@ public partial class RangeTrackBarControl : UserControl
         DependencyProperty.Register(nameof(OverviewYMax), typeof(double), typeof(RangeTrackBarControl),
             new FrameworkPropertyMetadata(double.NaN, OnOverviewChanged));
 
+    public static readonly DependencyProperty IsOverviewInvertedProperty =
+        DependencyProperty.Register(nameof(IsOverviewInverted), typeof(bool), typeof(RangeTrackBarControl),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender, OnOverviewAppearanceChanged));
+
+    public bool IsOverviewInverted
+    {
+        get => (bool)GetValue(IsOverviewInvertedProperty);
+        set => SetValue(IsOverviewInvertedProperty, value);
+    }
+
     public static readonly DependencyProperty RangeChangedCommandProperty =
         DependencyProperty.Register(nameof(RangeChangedCommand), typeof(ICommand), typeof(RangeTrackBarControl),
             new PropertyMetadata(null));
@@ -338,7 +348,9 @@ public partial class RangeTrackBarControl : UserControl
 
             double normY = (p.Y - yMin) / yRange;
             normY = Math.Max(0.0, Math.Min(1.0, normY));
-            double yPx = (trackHeight - bottomPadding) - (normY * usableHeight);
+            double yPx = IsOverviewInverted
+                ? topPadding + (normY * usableHeight)
+                : (trackHeight - bottomPadding) - (normY * usableHeight);
 
             screenPoints.Add(new Point(xPx, yPx));
         }
@@ -347,13 +359,14 @@ public partial class RangeTrackBarControl : UserControl
 
         if (OverviewPolygon != null && ShowOverviewFill && screenPoints.Count > 0)
         {
+            double baselineY = IsOverviewInverted ? 0 : trackHeight;
             var polyPoints = new PointCollection(screenPoints.Count + 2);
-            polyPoints.Add(new Point(screenPoints[0].X, trackHeight));
+            polyPoints.Add(new Point(screenPoints[0].X, baselineY));
             foreach (var pt in screenPoints)
             {
                 polyPoints.Add(pt);
             }
-            polyPoints.Add(new Point(screenPoints[screenPoints.Count - 1].X, trackHeight));
+            polyPoints.Add(new Point(screenPoints[screenPoints.Count - 1].X, baselineY));
             OverviewPolygon.Points = polyPoints;
             OverviewPolygon.Visibility = Visibility.Visible;
         }
