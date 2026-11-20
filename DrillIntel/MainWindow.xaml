@@ -129,6 +129,13 @@
             <!-- Data QC Tab -->
             <Fluent:RibbonTabItem Header="QC" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Operations">
+                    <Fluent:Button Header="DQI Explorer"
+                                   Command="{Binding OpenDQIExplorerCommand}"
+                                   ToolTip="Open Data Quality Index (DQI) Explorer with Consistency, Frequency, and Accuracy metrics.">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="#10B981" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:Button Header="Run QC">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="PlayCircleOutline" Foreground="#F44336" Width="32" Height="32" />
@@ -252,13 +259,6 @@
                                    ToolTip="Chart saved drilling stands with day/night averages and rig-state breakdowns.">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="ChartBar" Foreground="#FF9800" Width="32" Height="32" />
-                        </Fluent:Button.LargeIcon>
-                    </Fluent:Button>
-                    <Fluent:Button Header="DQI Explorer"
-                                   Command="{Binding OpenDQIExplorerCommand}"
-                                   ToolTip="Open Data Quality Index (DQI) Explorer with Consistency, Frequency, and Accuracy metrics.">
-                        <Fluent:Button.LargeIcon>
-                            <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="#10B981" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                     <Fluent:SplitButton Header="Rig State Workspace" 
