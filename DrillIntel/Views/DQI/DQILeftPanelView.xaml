@@ -5,17 +5,19 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="#101522" Foreground="#F8FAFC"
+             Background="#F8FAFC"
+             TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+             FontFamily="{DynamicResource MaterialDesignFont}"
              d:DesignWidth="280" d:DesignHeight="800">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
         <!-- Settings Cog Button Style with Hover, Pressed, and Focus states -->
         <Style x:Key="DQISettingsButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#142021"/>
-            <Setter Property="BorderBrush" Value="#1E3A32"/>
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="#10B981"/>
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
@@ -36,21 +38,21 @@
                         <ControlTemplate.Triggers>
                             <!-- Hover State -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#1C3830"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#34D399"/>
-                                <Setter Property="Foreground" Value="#34D399"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#EDE7F6"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#7C3AED"/>
+                                <Setter Property="Foreground" Value="#673AB7"/>
                             </Trigger>
                             <!-- Pressed State -->
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="#0E1F1B"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#059669"/>
-                                <Setter Property="Foreground" Value="#059669"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#D1C4E9"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#512DA8"/>
+                                <Setter Property="Foreground" Value="#311B92"/>
                             </Trigger>
                             <!-- Keyboard Focused State -->
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#34D399"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#673AB7"/>
                                 <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="1.5"/>
-                                <Setter Property="Foreground" Value="#34D399"/>
+                                <Setter Property="Foreground" Value="#512DA8"/>
                             </Trigger>
                             <!-- Disabled State -->
                             <Trigger Property="IsEnabled" Value="False">
@@ -81,12 +83,12 @@
 
             <!-- Brand Icon + Title -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
-                <Border Background="#16382B" BorderBrush="#059669" BorderThickness="1" CornerRadius="6"
+                <Border Background="#EDE7F6" BorderBrush="#B39DDB" BorderThickness="1" CornerRadius="6"
                         Width="28" Height="28" Margin="0,0,8,0">
-                    <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="#34D399" Width="16" Height="16"
+                    <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="{DynamicResource PrimaryHueMidBrush}" Width="16" Height="16"
                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
-                <TextBlock Text="DQI Explorer" Foreground="#F8FAFC" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                <TextBlock Text="DQI Explorer" Foreground="#1E293B" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
             </StackPanel>
 
             <!-- Settings (Gear) Icon Button -->
@@ -101,27 +103,27 @@
 
         <!-- 2. Well Selector -->
         <StackPanel Grid.Row="1" Margin="0,0,0,14">
-            <TextBlock Text="WELL" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
+            <TextBlock Text="WELL" Foreground="#64748B" FontSize="10.5" FontWeight="Bold" Margin="0,0,0,6"/>
             <ComboBox ItemsSource="{Binding Wells}" SelectedItem="{Binding SelectedWell, Mode=TwoWay}"
                       DisplayMemberPath="WellName"
-                      Background="#161F30" Foreground="#F8FAFC" BorderBrush="#334155" BorderThickness="1"
+                      Background="#FFFFFF" Foreground="#111827" BorderBrush="#CBD5E1" BorderThickness="1"
                       Padding="8,6" FontSize="12">
             </ComboBox>
         </StackPanel>
 
         <!-- 3. Channel Search Box -->
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
-            <TextBlock Text="CHANNEL" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
-            <Border Background="#161F30" BorderBrush="#334155" BorderThickness="1" CornerRadius="4" Padding="6,2">
+            <TextBlock Text="CHANNEL" Foreground="#64748B" FontSize="10.5" FontWeight="Bold" Margin="0,0,0,6"/>
+            <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                             Background="Transparent" BorderThickness="0" Foreground="#F8FAFC"
-                             CaretBrush="#F8FAFC" FontSize="12" VerticalAlignment="Center"/>
-                    <materialDesign:PackIcon Grid.Column="1" Kind="Magnify" Foreground="#64748B" Width="16" Height="16" VerticalAlignment="Center"/>
+                             Background="Transparent" BorderThickness="0" Foreground="#111827"
+                             CaretBrush="#111827" FontSize="12" VerticalAlignment="Center"/>
+                    <materialDesign:PackIcon Grid.Column="1" Kind="Magnify" Foreground="#94A3B8" Width="16" Height="16" VerticalAlignment="Center"/>
                 </Grid>
             </Border>
         </StackPanel>
@@ -145,18 +147,19 @@
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
-                                    <Border x:Name="ItemBorder" Background="#161F30" BorderBrush="#334155" BorderThickness="1"
+                                    <Border x:Name="ItemBorder" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1"
                                             CornerRadius="6" Padding="10,8" Cursor="Hand">
                                         <ContentPresenter/>
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="ItemBorder" Property="Background" Value="#1E293B"/>
-                                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#475569"/>
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="#F1F5F9"/>
+                                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#CBD5E1"/>
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="ItemBorder" Property="Background" Value="#132A26"/>
-                                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#10B981"/>
+                                            <Setter TargetName="ItemBorder" Property="Background" Value="#EDE7F6"/>
+                                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                            <Setter TargetName="ItemBorder" Property="BorderThickness" Value="1.5"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -172,8 +175,8 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="{Binding Name}" Foreground="#F8FAFC" FontSize="12" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding Mnemonic}" Foreground="#10B981" FontSize="10" Margin="0,2,0,0"/>
+                                <TextBlock Text="{Binding Name}" Foreground="#1E293B" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Mnemonic}" Foreground="{DynamicResource PrimaryHueMidBrush}" FontSize="10.5" FontWeight="Bold" Margin="0,2,0,0"/>
                             </StackPanel>
                             <materialDesign:PackIcon Grid.Column="1" Kind="SignalCellular3" Foreground="#10B981" Width="16" Height="16" VerticalAlignment="Center"/>
                         </Grid>
@@ -186,9 +189,9 @@
         </Grid>
 
         <!-- 5. WELL AVG INDICES Card -->
-        <Border Grid.Row="4" Background="#161F30" BorderBrush="#334155" BorderThickness="1" CornerRadius="8" Padding="12">
+        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="12">
             <StackPanel>
-                <TextBlock Text="WELL AVG INDICES" Foreground="#94A3B8" FontSize="10" FontWeight="Bold" Margin="0,0,0,10"/>
+                <TextBlock Text="WELL AVG INDICES" Foreground="#64748B" FontSize="10.5" FontWeight="Bold" Margin="0,0,0,10"/>
 
                 <!-- Consistency -->
                 <Grid Margin="0,0,0,8">
@@ -197,11 +200,11 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="40"/>
                     </Grid.ColumnDefinitions>
-                    <materialDesign:PackIcon Kind="ChartBox" Foreground="#38BDF8" Width="14" Height="14" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="Consistency" Foreground="#CBD5E1" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="2" Text="{Binding ConsistencyScore, StringFormat={}{0:F0}%}" Foreground="#38BDF8" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
+                    <materialDesign:PackIcon Kind="ChartBox" Foreground="#0284C7" Width="14" Height="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="Consistency" Foreground="#334155" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding ConsistencyScore, StringFormat={}{0:F0}%}" Foreground="#0284C7" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
-                <ProgressBar Value="{Binding ConsistencyScore}" Maximum="100" Height="4" Foreground="#38BDF8" Background="#1E293B" BorderThickness="0" Margin="0,0,0,10"/>
+                <ProgressBar Value="{Binding ConsistencyScore}" Maximum="100" Height="4" Foreground="#0284C7" Background="#E2E8F0" BorderThickness="0" Margin="0,0,0,10"/>
 
                 <!-- Frequency -->
                 <Grid Margin="0,0,0,8">
@@ -210,11 +213,11 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="40"/>
                     </Grid.ColumnDefinitions>
-                    <materialDesign:PackIcon Kind="HeartPulse" Foreground="#4ADE80" Width="14" Height="14" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="Frequency" Foreground="#CBD5E1" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="2" Text="{Binding FrequencyScore, StringFormat={}{0:F0}%}" Foreground="#4ADE80" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
+                    <materialDesign:PackIcon Kind="HeartPulse" Foreground="#16A34A" Width="14" Height="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="Frequency" Foreground="#334155" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding FrequencyScore, StringFormat={}{0:F0}%}" Foreground="#16A34A" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
-                <ProgressBar Value="{Binding FrequencyScore}" Maximum="100" Height="4" Foreground="#4ADE80" Background="#1E293B" BorderThickness="0" Margin="0,0,0,10"/>
+                <ProgressBar Value="{Binding FrequencyScore}" Maximum="100" Height="4" Foreground="#16A34A" Background="#E2E8F0" BorderThickness="0" Margin="0,0,0,10"/>
 
                 <!-- Accuracy -->
                 <Grid Margin="0,0,0,8">
@@ -223,23 +226,23 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="40"/>
                     </Grid.ColumnDefinitions>
-                    <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#FBBF24" Width="14" Height="14" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="Accuracy" Foreground="#CBD5E1" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="2" Text="{Binding AccuracyScore, StringFormat={}{0:F0}%}" Foreground="#FBBF24" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
+                    <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#D97706" Width="14" Height="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="Accuracy" Foreground="#334155" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="{Binding AccuracyScore, StringFormat={}{0:F0}%}" Foreground="#D97706" FontWeight="Bold" FontSize="11" TextAlignment="Right" VerticalAlignment="Center"/>
                 </Grid>
-                <ProgressBar Value="{Binding AccuracyScore}" Maximum="100" Height="4" Foreground="#FBBF24" Background="#1E293B" BorderThickness="0" Margin="0,0,0,12"/>
+                <ProgressBar Value="{Binding AccuracyScore}" Maximum="100" Height="4" Foreground="#D97706" Background="#E2E8F0" BorderThickness="0" Margin="0,0,0,12"/>
 
                 <!-- OVERALL WELL AVG Card -->
-                <Border Background="#211E3B" BorderBrush="#7C3AED" BorderThickness="1" CornerRadius="6" Padding="10,8">
+                <Border Background="#EDE7F6" BorderBrush="#B39DDB" BorderThickness="1" CornerRadius="6" Padding="10,8">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <materialDesign:PackIcon Kind="LightningBolt" Foreground="#A78BFA" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <materialDesign:PackIcon Kind="LightningBolt" Foreground="{DynamicResource PrimaryHueMidBrush}" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="OVERALL WELL AVG" Foreground="#C4B5FD" FontSize="9" FontWeight="Bold"/>
-                            <TextBlock Text="{Binding OverallWellAvg, StringFormat={}{0:F2}%}" Foreground="#A78BFA" FontSize="16" FontWeight="Black"/>
+                            <TextBlock Text="OVERALL WELL AVG" Foreground="{DynamicResource PrimaryHueMidBrush}" FontSize="9" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding OverallWellAvg, StringFormat={}{0:F2}%}" Foreground="#311B92" FontSize="16" FontWeight="Black"/>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -247,4 +250,3 @@
         </Border>
     </Grid>
 </UserControl>
-

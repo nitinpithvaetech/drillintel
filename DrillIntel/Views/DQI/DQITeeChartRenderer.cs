@@ -10,17 +10,17 @@ namespace DrillIntel.Views.DQI
 {
     public static class DQITeeChartRenderer
     {
-        // Dark Theme Colors matching React screenshot
-        public static readonly Color BackgroundColor = Color.FromArgb(16, 21, 34);       // #101522
-        public static readonly Color WallColor = Color.FromArgb(13, 17, 23);             // #0D1117
-        public static readonly Color GridColor = Color.FromArgb(30, 41, 59);             // #1E293B
-        public static readonly Color AxisLineColor = Color.FromArgb(51, 65, 85);          // #334155
-        public static readonly Color LabelColor = Color.FromArgb(148, 163, 184);         // #94A3B8
+        // Light Theme Colors matching DrillIntel Standard Dialogs
+        public static readonly Color BackgroundColor = Color.FromArgb(255, 255, 255);       // #FFFFFF
+        public static readonly Color WallColor = Color.FromArgb(248, 250, 252);             // #F8FAFC
+        public static readonly Color GridColor = Color.FromArgb(226, 232, 240);             // #E2E8F0
+        public static readonly Color AxisLineColor = Color.FromArgb(203, 213, 225);          // #CBD5E1
+        public static readonly Color LabelColor = Color.FromArgb(71, 85, 105);              // #475569
 
-        // Series Palette
-        public static readonly Color ConsistencyColor = Color.FromArgb(56, 189, 248);    // #38BDF8 (Sky/Blue)
-        public static readonly Color FrequencyColor = Color.FromArgb(74, 222, 128);      // #4ADE80 (Green)
-        public static readonly Color AccuracyColor = Color.FromArgb(251, 191, 36);       // #FBBF24 (Amber)
+        // Series Palette (High contrast vibrant colors for light theme)
+        public static readonly Color ConsistencyColor = Color.FromArgb(2, 132, 199);        // #0284C7 (Rich Sky/Blue)
+        public static readonly Color FrequencyColor = Color.FromArgb(22, 163, 74);          // #16A34A (Rich Green)
+        public static readonly Color AccuracyColor = Color.FromArgb(217, 119, 6);           // #D97706 (Rich Amber)
 
         public static void SetupTrackChart(TChart chart)
         {
@@ -84,7 +84,7 @@ namespace DrillIntel.Views.DQI
                 area.XValues.DateTime = true;
                 area.LinePen.Color = seriesColor;
                 area.LinePen.Width = 2;
-                area.AreaBrush.Color = Color.FromArgb(60, seriesColor.R, seriesColor.G, seriesColor.B);
+                area.AreaBrush.Color = Color.FromArgb(50, seriesColor.R, seriesColor.G, seriesColor.B);
                 area.AreaBrush.Gradient.Visible = false;
                 area.AreaLines.Visible = false;
 

@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Input;
 using DrillIntel.ViewModels.DQI;
 
 namespace DrillIntel.Views.DQI
@@ -15,15 +14,6 @@ namespace DrillIntel.Views.DQI
                 DialogResult = result;
                 Close();
             };
-
-            MouseDown += (s, e) =>
-            {
-                if (e.ChangedButton == MouseButton.Left)
-                {
-                    DragMove();
-                }
-            };
         }
     }
 }
-

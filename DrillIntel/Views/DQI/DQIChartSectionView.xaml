@@ -6,19 +6,118 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
-             Background="#0D1117" Foreground="#F8FAFC"
+             Background="{DynamicResource MaterialDesignPaper}"
+             TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+             FontFamily="{DynamicResource MaterialDesignFont}"
              d:DesignWidth="1000" d:DesignHeight="800">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Primary Action Raised Button Style (Solid Deep Purple with Crisp White Text) -->
+        <Style x:Key="PrimaryActionRaisedButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#673AB7"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#512DA8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="4" Direction="270" ShadowDepth="1" Opacity="0.18" Color="#000000"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#5E35B1"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#4527A0"/>
+                                <Setter TargetName="border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="6" Direction="270" ShadowDepth="2" Opacity="0.25" Color="#5E35B1"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4527A0"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#311B92"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Background" Value="#9E9E9E"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#9E9E9E"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Secondary Outlined Button Style -->
+        <Style x:Key="SecondaryOutlinedButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#475569"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#F1F5F9"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#94A3B8"/>
+                                <Setter Property="Foreground" Value="#0F172A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#64748B"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid>
         <!-- 1. EMPTY STATE (When no well or channel is selected) -->
         <Border Visibility="{Binding IsEmptyStateVisible, Converter={StaticResource BoolToVis}}"
-                Background="#0D1117" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                Background="{DynamicResource MaterialDesignPaper}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="360">
-                <materialDesign:PackIcon Kind="ChartTimelineVariant" Foreground="#475569" Width="64" Height="64" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                <TextBlock Text="No Channel Selected" Foreground="#94A3B8" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" Margin="0,0,0,8"/>
+                <materialDesign:PackIcon Kind="ChartTimelineVariant" Foreground="#94A3B8" Width="64" Height="64" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                <TextBlock Text="No Channel Selected" Foreground="#334155" FontSize="18" FontWeight="SemiBold" TextAlignment="Center" Margin="0,0,0,8"/>
                 <TextBlock Text="{Binding EmptyStateMessage}" Foreground="#64748B" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" LineHeight="20"/>
             </StackPanel>
         </Border>
@@ -42,52 +141,52 @@
 
                 <!-- Channel Name & Mnemonic -->
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,24,0">
-                    <TextBlock Text="{Binding ChannelName}" Foreground="#F8FAFC" FontSize="18" FontWeight="Bold"/>
-                    <TextBlock Text="{Binding Mnemonic}" Foreground="#94A3B8" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ChannelName}" Foreground="#1E293B" FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Mnemonic}" Foreground="#64748B" FontSize="11" FontWeight="SemiBold"/>
                 </StackPanel>
 
                 <!-- 4 KPI Badges: OVERALL, CONS, FREQ, ACCR -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
                     <!-- OVERALL -->
-                    <Border Background="#211E3B" BorderBrush="#7C3AED" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
+                    <Border Background="#EDE7F6" BorderBrush="#B39DDB" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="LightningBolt" Foreground="#A78BFA" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <materialDesign:PackIcon Kind="LightningBolt" Foreground="{DynamicResource PrimaryHueMidBrush}" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <StackPanel>
-                                <TextBlock Text="OVERALL" Foreground="#C4B5FD" FontSize="8" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding OverallChannelDQI, StringFormat={}{0:F2}%}" Foreground="#A78BFA" FontSize="12" FontWeight="Black"/>
+                                <TextBlock Text="OVERALL" Foreground="{DynamicResource PrimaryHueMidBrush}" FontSize="8" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding OverallChannelDQI, StringFormat={}{0:F2}%}" Foreground="#311B92" FontSize="12" FontWeight="Black"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <!-- CONS -->
-                    <Border Background="#102A3C" BorderBrush="#0284C7" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
+                    <Border Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="ChartBox" Foreground="#38BDF8" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <materialDesign:PackIcon Kind="ChartBox" Foreground="#0284C7" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <StackPanel>
-                                <TextBlock Text="CONS" Foreground="#7DD3FC" FontSize="8" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding ConsAvg, StringFormat={}{0:F2}%}" Foreground="#38BDF8" FontSize="12" FontWeight="Black"/>
+                                <TextBlock Text="CONS" Foreground="#0369A1" FontSize="8" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding ConsAvg, StringFormat={}{0:F2}%}" Foreground="#0284C7" FontSize="12" FontWeight="Black"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <!-- FREQ -->
-                    <Border Background="#132E22" BorderBrush="#059669" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
+                    <Border Background="#F0FDF4" BorderBrush="#BBF7D0" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="HeartPulse" Foreground="#4ADE80" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <materialDesign:PackIcon Kind="HeartPulse" Foreground="#16A34A" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <StackPanel>
-                                <TextBlock Text="FREQ" Foreground="#86EFAC" FontSize="8" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding FreqAvg, StringFormat={}{0:F2}%}" Foreground="#4ADE80" FontSize="12" FontWeight="Black"/>
+                                <TextBlock Text="FREQ" Foreground="#15803D" FontSize="8" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding FreqAvg, StringFormat={}{0:F2}%}" Foreground="#16A34A" FontSize="12" FontWeight="Black"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
                     <!-- ACCR -->
-                    <Border Background="#2E2312" BorderBrush="#D97706" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
+                    <Border Background="#FEFCE8" BorderBrush="#FEF08A" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#FBBF24" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#D97706" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
                             <StackPanel>
-                                <TextBlock Text="ACCR" Foreground="#FDE68A" FontSize="8" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding AccrAvg, StringFormat={}{0:F2}%}" Foreground="#FBBF24" FontSize="12" FontWeight="Black"/>
+                                <TextBlock Text="ACCR" Foreground="#B45309" FontSize="8" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding AccrAvg, StringFormat={}{0:F2}%}" Foreground="#D97706" FontSize="12" FontWeight="Black"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -96,35 +195,35 @@
                 <!-- Controls: Line/Area Toggle & Refresh/Process -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Line toggle -->
-                    <Border Background="#161F30" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
+                    <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <Button Command="{Binding SetLineChartCommand}" ToolTip="Line Chart"
                                     Background="Transparent" BorderThickness="0" Padding="8,4" Height="30" Cursor="Hand">
-                                <materialDesign:PackIcon Kind="ChartLine" Foreground="#34D399" Width="16" Height="16"/>
+                                <materialDesign:PackIcon Kind="ChartLine" Foreground="#673AB7" Width="16" Height="16"/>
                             </Button>
-                            <Separator Background="#334155" Width="1" Margin="0,3"/>
+                            <Separator Background="#CBD5E1" Width="1" Margin="0,3"/>
                             <Button Command="{Binding SetAreaChartCommand}" ToolTip="Area Chart"
                                     Background="Transparent" BorderThickness="0" Padding="8,4" Height="30" Cursor="Hand">
-                                <materialDesign:PackIcon Kind="ChartAreaspline" Foreground="#94A3B8" Width="16" Height="16"/>
+                                <materialDesign:PackIcon Kind="ChartAreaspline" Foreground="#64748B" Width="16" Height="16"/>
                             </Button>
                         </StackPanel>
                     </Border>
 
                     <!-- Process DQI Button -->
                     <Button Command="{Binding ProcessDQICommand}" ToolTip="Calculate DQI for Well"
-                            Background="#064E3B" BorderBrush="#059669" BorderThickness="1" Foreground="#34D399"
-                            Padding="12,5" Height="32" Margin="0,0,6,0" Cursor="Hand">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Play" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <TextBlock Text="Process" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            Style="{StaticResource PrimaryActionRaisedButtonStyle}"
+                            Height="32" Padding="14,0" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <materialDesign:PackIcon Kind="Play" Width="14" Height="14" Foreground="White" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Process" Foreground="White" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
 
                     <!-- Refresh Button -->
                     <Button Command="{Binding RefreshCommand}" ToolTip="Refresh Data"
-                            Background="#161F30" BorderBrush="#334155" BorderThickness="1" Foreground="#94A3B8"
-                            Padding="8,5" Height="32" Width="34" Cursor="Hand">
-                        <materialDesign:PackIcon Kind="Refresh" Width="16" Height="16" VerticalAlignment="Center"/>
+                            Style="{StaticResource SecondaryOutlinedButtonStyle}"
+                            Height="32" Width="34" Padding="0">
+                        <materialDesign:PackIcon Kind="Refresh" Foreground="#475569" Width="16" Height="16" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -133,7 +232,7 @@
             <StackPanel Grid.Row="1" Margin="0,0,0,8">
                 <!-- Loading & Progress Bar -->
                 <Border Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"
-                        Background="#102A3C" BorderBrush="#0284C7" BorderThickness="1" CornerRadius="6"
+                        Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6"
                         Padding="12,6" Margin="0,0,0,6">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -141,14 +240,14 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <ProgressBar IsIndeterminate="True" Width="16" Height="16" Margin="0,0,10,0"
-                                     Foreground="#38BDF8" Style="{StaticResource MaterialDesignCircularProgressBar}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Foreground="#7DD3FC" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                     Foreground="#0284C7" Style="{StaticResource MaterialDesignCircularProgressBar}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" Foreground="#0369A1" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     </Grid>
                 </Border>
 
                 <!-- Error Notice Bar -->
                 <Border Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}"
-                        Background="#271C19" BorderBrush="#B45309" BorderThickness="1" CornerRadius="6"
+                        Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1" CornerRadius="6"
                         Padding="10,6">
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -156,10 +255,19 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <materialDesign:PackIcon Kind="InformationOutline" Foreground="#F59E0B" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <TextBlock Grid.Column="1" Text="{Binding ErrorMessage}" Foreground="#FDE68A" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                        <Button Grid.Column="2" Command="{Binding ProcessDQICommand}" Content="Process"
-                                Background="#B45309" Foreground="#FFFBEB" BorderThickness="0" Padding="8,2" Height="24" FontSize="11" FontWeight="Bold" Margin="8,0,0,0" Cursor="Hand"/>
+                        <materialDesign:PackIcon Kind="InformationOutline" Foreground="#DC2626" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding ErrorMessage}" Foreground="#991B1B" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                        <Button Grid.Column="2" Command="{Binding ProcessDQICommand}"
+                                Height="26" Padding="12,0" Margin="8,0,0,0" Cursor="Hand"
+                                Background="#DC2626" BorderBrush="#B91C1C" BorderThickness="1">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                        <TextBlock Text="Process" Foreground="White" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                     </Grid>
                 </Border>
             </StackPanel>
@@ -173,45 +281,45 @@
                 </Grid.RowDefinitions>
 
                 <!-- TRACK 1: Consistency Index -->
-                <Border Grid.Row="0" Background="#101522" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6" Padding="6,4">
+                <Border Grid.Row="0" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6" Padding="6,4">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8,4,0,2">
-                            <materialDesign:PackIcon Kind="ChartBox" Foreground="#38BDF8" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Consistency Index" Foreground="#38BDF8" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <materialDesign:PackIcon Kind="ChartBox" Foreground="#0284C7" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Consistency Index" Foreground="#0284C7" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                         <teechart:TChart Grid.Row="1" x:Name="ConsistencyChart"/>
                     </Grid>
                 </Border>
 
                 <!-- TRACK 2: Data Frequency Index -->
-                <Border Grid.Row="1" Background="#101522" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6" Padding="6,4">
+                <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Margin="0,0,0,6" Padding="6,4">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8,4,0,2">
-                            <materialDesign:PackIcon Kind="HeartPulse" Foreground="#4ADE80" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Data Frequency Index" Foreground="#4ADE80" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <materialDesign:PackIcon Kind="HeartPulse" Foreground="#16A34A" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Data Frequency Index" Foreground="#16A34A" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                         <teechart:TChart Grid.Row="1" x:Name="FrequencyChart"/>
                     </Grid>
                 </Border>
 
                 <!-- TRACK 3: Data Accuracy Index -->
-                <Border Grid.Row="2" Background="#101522" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="8" Padding="6,4">
+                <Border Grid.Row="2" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="8" Padding="6,4">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="8,4,0,2">
-                            <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#FBBF24" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="Data Accuracy Index" Foreground="#FBBF24" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                            <materialDesign:PackIcon Kind="SignalCellular3" Foreground="#D97706" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="Data Accuracy Index" Foreground="#D97706" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                         </StackPanel>
                         <teechart:TChart Grid.Row="1" x:Name="AccuracyChart"/>
                     </Grid>
@@ -220,4 +328,3 @@
         </Grid>
     </Grid>
 </UserControl>
-

@@ -16,6 +16,149 @@
 
     <Window.Resources>
         <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+        <!-- Primary Action Raised Button Style (Solid Deep Purple with Crisp White Text) -->
+        <Style x:Key="PrimaryActionRaisedButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#673AB7"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#512DA8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="4" Direction="270" ShadowDepth="1" Opacity="0.18" Color="#000000"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#5E35B1"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#4527A0"/>
+                                <Setter TargetName="border" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="6" Direction="270" ShadowDepth="2" Opacity="0.25" Color="#5E35B1"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#4527A0"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#311B92"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.5"/>
+                                <Setter TargetName="border" Property="Background" Value="#9E9E9E"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#9E9E9E"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Secondary Outlined Button Style -->
+        <Style x:Key="SecondaryOutlinedButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#374151"/>
+            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#F1F5F9"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#94A3B8"/>
+                                <Setter Property="Foreground" Value="#0F172A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E2E8F0"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#64748B"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Danger Outlined Button Style (Clear DB Entries) -->
+        <Style x:Key="DangerOutlinedButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Foreground" Value="#DC2626"/>
+            <Setter Property="BorderBrush" Value="#FECACA"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FEF2F2"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#F87171"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#FEE2E2"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#EF4444"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="border" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="20">
@@ -58,7 +201,7 @@
         </Border>
 
         <!-- 1: Info Box -->
-        <Border Grid.Row="1" Background="#E8F4FD" BorderBrush="#B6E0FE" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
+        <Border Grid.Row="1" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -81,7 +224,7 @@
                               VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock Text="Skip drilling connections having time more than" 
                                Foreground="{DynamicResource MaterialDesignBody}" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                    <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
                         <TextBox Text="{Binding SkipMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                  IsEnabled="{Binding CanStart}"
                                  Foreground="{DynamicResource MaterialDesignBody}" Background="Transparent" BorderThickness="0" 
@@ -94,7 +237,7 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,12">
                     <TextBlock Text="Day Time Hours From" Foreground="#616161" FontSize="13" VerticalAlignment="Center" Margin="0,0,14,0" />
                     
-                    <Border Background="{DynamicResource MaterialDesignPaper}" BorderBrush="#BDBDBD" BorderThickness="1" CornerRadius="4" Padding="8,4">
+                    <Border Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="4" Padding="8,4">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="From " Foreground="#757575" FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0" />
                             <TextBox Text="{Binding DayTimeHoursFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
@@ -150,50 +293,45 @@
                 <!-- Start Button -->
                 <Button Command="{Binding StartCommand}" 
                         IsEnabled="{Binding CanStart}"
-                        Style="{StaticResource MaterialDesignRaisedButton}"
-                        Height="36" Padding="16,0"
+                        Style="{StaticResource PrimaryActionRaisedButtonStyle}"
                         Margin="0,0,10,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="Play" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Start" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="Play" Width="16" Height="16" Foreground="White" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Start" Foreground="White" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
 
                 <!-- Cancel Button -->
                 <Button Command="{Binding CancelCommand}" 
                         IsEnabled="{Binding CanCancel}"
-                        Style="{StaticResource MaterialDesignOutlinedButton}" 
-                        Height="36" Padding="14,0"
+                        Style="{StaticResource SecondaryOutlinedButtonStyle}" 
                         Margin="0,0,10,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="Close" Width="18" Height="18" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Cancel" Foreground="#475569" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
 
                 <!-- Clear DB Entries Button -->
                 <Button Command="{Binding ClearDbEntriesCommand}" 
                         IsEnabled="{Binding CanStart}"
-                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                        Foreground="#C62828" BorderBrush="#EF9A9A"
-                        Height="36" Padding="14,0">
+                        Style="{StaticResource DangerOutlinedButtonStyle}">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <materialDesign:PackIcon Kind="DeleteOutline" Width="18" Height="18" Foreground="#C62828" VerticalAlignment="Center" Margin="0,0,6,0" />
-                        <TextBlock Text="Clear DB Entries" VerticalAlignment="Center" />
+                        <materialDesign:PackIcon Kind="DeleteOutline" Width="16" Height="16" Foreground="#DC2626" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Clear DB Entries" Foreground="#DC2626" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
             </StackPanel>
 
             <!-- Right Button: Close -->
             <Button Grid.Column="1" Command="{Binding CloseCommand}" 
-                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                    Height="36" Padding="16,0" MinWidth="90">
+                    Style="{StaticResource SecondaryOutlinedButtonStyle}"
+                    MinWidth="90">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <materialDesign:PackIcon Kind="Close" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
-                    <TextBlock Text="Close" VerticalAlignment="Center" />
+                    <materialDesign:PackIcon Kind="Close" Width="15" Height="15" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="Close" Foreground="#475569" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
         </Grid>
     </Grid>
 </Window>
-

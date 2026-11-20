@@ -6,7 +6,9 @@
         Title="Data Quality Index (DQI) Explorer"
         Width="1440" Height="880" MinWidth="1100" MinHeight="680"
         WindowStartupLocation="CenterScreen"
-        Background="#0D1117" Foreground="#F8FAFC">
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{DynamicResource MaterialDesignFont}">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="280" MinWidth="240" MaxWidth="360"/>
@@ -18,7 +20,7 @@
         <views:DQILeftPanelView Grid.Column="0" DataContext="{Binding LeftPanel}"/>
 
         <!-- Splitter Line -->
-        <Border Grid.Column="1" Background="#1E293B"/>
+        <Border Grid.Column="1" Background="#E2E8F0"/>
 
         <!-- Right Chart Section -->
         <views:DQIChartSectionView Grid.Column="2" DataContext="{Binding ChartSection}"/>
