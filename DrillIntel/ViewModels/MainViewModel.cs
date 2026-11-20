@@ -380,6 +380,7 @@ public partial class MainViewModel : ObservableObject
         OpenDepthlogEditorCommand.NotifyCanExecuteChanged();
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         OpenDrillingStandChartCommand.NotifyCanExecuteChanged();
+        OpenDQIExplorerCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
         OpenBroomstickWorkspaceCommand.NotifyCanExecuteChanged();
@@ -1101,6 +1102,7 @@ public partial class MainViewModel : ObservableObject
     private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;
 
     private Views.DrillingStandChartWindow? _activeDrillingStandChartWindow;
+    private Views.DQI.DQIExplorerWindow? _activeDQIExplorerWindow;
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task OpenDrillingStandChart()
@@ -1118,6 +1120,33 @@ public partial class MainViewModel : ObservableObject
         var window = new Views.DrillingStandChartWindow(vm) { Owner = Application.Current?.MainWindow };
         _activeDrillingStandChartWindow = window;
         window.Closed += (_, _) => _activeDrillingStandChartWindow = null;
+        window.Show();
+        await Task.CompletedTask;
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenDQIExplorer()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (_activeDQIExplorerWindow is { IsLoaded: true })
+        {
+            _activeDQIExplorerWindow.Activate();
+            if (_activeDQIExplorerWindow.WindowState == WindowState.Minimized)
+                _activeDQIExplorerWindow.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var repo = new DrillIntel.Data.DQIRepository(_session);
+        var service = new DrillIntel.Services.DQIService(repo, _session);
+        var sharedState = new DrillIntel.Services.DQISharedStateService();
+        var vm = new DrillIntel.ViewModels.DQI.DQIExplorerViewModel(service, sharedState, _session);
+
+        var window = new Views.DQI.DQIExplorerWindow(vm, service, sharedState)
+        {
+            Owner = Application.Current?.MainWindow
+        };
+        _activeDQIExplorerWindow = window;
+        window.Closed += (_, _) => _activeDQIExplorerWindow = null;
         window.Show();
         await Task.CompletedTask;
     }

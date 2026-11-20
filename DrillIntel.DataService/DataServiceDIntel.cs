@@ -462,7 +462,7 @@ namespace DrillIntel.Data
         public bool TableExists(string tableName)
         {
             var value = GetValueFromDatabase(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name;",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=@name COLLATE NOCASE;",
                 new Dictionary<string, object?> { ["@name"] = tableName });
             return value != null && Convert.ToInt64(value) > 0;
         }

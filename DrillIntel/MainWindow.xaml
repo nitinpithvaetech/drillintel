@@ -254,6 +254,13 @@
                             <materialDesign:PackIcon Kind="ChartBar" Foreground="#FF9800" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
+                    <Fluent:Button Header="DQI Explorer"
+                                   Command="{Binding OpenDQIExplorerCommand}"
+                                   ToolTip="Open Data Quality Index (DQI) Explorer with Consistency, Frequency, and Accuracy metrics.">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="#10B981" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
                     <Fluent:SplitButton Header="Rig State Workspace" 
                                         Command="{Binding OpenRigStateDocumentCommand}" 
                                         ToolTip="Open the Rig State Document Workspace (TreeView + Multi-Tab Chart view).">

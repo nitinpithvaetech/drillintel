@@ -20,10 +20,26 @@
         
         <DockPanel Grid.Row="0" Margin="8,4,8,8">
             <TextBlock Text="Drilling Stands" Foreground="#1E293B" FontWeight="Bold" FontSize="16" DockPanel.Dock="Top" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <TextBlock Text="View" Foreground="#334155" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <RadioButton Content="Normal view" IsChecked="{Binding RigStateView, Converter={StaticResource InverseBooleanConverter}}" Foreground="#334155" GroupName="standView" Margin="0,0,12,0"/>
-                <RadioButton Content="RigState View" IsChecked="{Binding RigStateView}" Foreground="#334155" GroupName="standView"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="View" Foreground="#334155" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <RadioButton Content="Normal view" 
+                             IsChecked="{Binding RigStateView, Converter={StaticResource InverseBooleanConverter}}" 
+                             Foreground="#334155" 
+                             FontSize="12.5"
+                             GroupName="standView" 
+                             VerticalAlignment="Center" 
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,16,0"
+                             Cursor="Hand"/>
+                <RadioButton Content="RigState View" 
+                             IsChecked="{Binding RigStateView}" 
+                             Foreground="#334155" 
+                             FontSize="12.5"
+                             GroupName="standView" 
+                             VerticalAlignment="Center" 
+                             VerticalContentAlignment="Center"
+                             Margin="0,0,0,0"
+                             Cursor="Hand"/>
             </StackPanel>
         </DockPanel>
         

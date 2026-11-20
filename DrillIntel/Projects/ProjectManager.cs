@@ -795,7 +795,118 @@ CREATE TABLE IF NOT EXISTS VMX_PHASE_LIST (
 );
 
 CREATE INDEX IF NOT EXISTS IX_VMX_PHASE_LIST_WELL_START ON VMX_PHASE_LIST(WELL_ID, START_DATE);
+
+-- ----------------------------------------------------------------------------
+-- DQI (Data Quality Index) Master & Processing Tables
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS eVuMaxDQIChannels (
+    Mnemonic TEXT NOT NULL PRIMARY KEY,
+    Name     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxDQIDataBoundaries (
+    Mnemonic TEXT NOT NULL PRIMARY KEY,
+    Name     TEXT NOT NULL,
+    Unit     TEXT,
+    Min      REAL NOT NULL DEFAULT 0.0,
+    Max      REAL NOT NULL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxDQINullValues (
+    nullValues TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxWellDQI (
+    WellId   TEXT NOT NULL,
+    Mnemonic TEXT NOT NULL,
+    ConsIdx  REAL NOT NULL DEFAULT 0.0,
+    FreqIdx  REAL NOT NULL DEFAULT 0.0,
+    AccrIdx  REAL NOT NULL DEFAULT 0.0,
+    DQI      REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (WellId, Mnemonic)
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxWellDQITracking (
+    WellId    TEXT NOT NULL PRIMARY KEY,
+    LastIndex DATETIME
+);
+
+INSERT OR IGNORE INTO eVuMaxDQIChannels (Mnemonic, Name) VALUES
+('BPOS', 'Block Position'),
+('CIRC', 'Circulation'),
+('HKLD', 'Hookload'),
+('SPPA', 'Pump Pressure');
+
+INSERT OR IGNORE INTO eVuMaxDQIDataBoundaries (Mnemonic, Name, Unit, Min, Max) VALUES
+('BPOS', 'Block Position', 'ft', 0.0, 120.0),
+('CIRC', 'Circulation', '', 0.0, 1.0),
+('HKLD', 'Hookload', 'klbs', 0.0, 1000.0),
+('SPPA', 'Pump Pressure', 'psi', 0.0, 6000.0);
+
+INSERT OR IGNORE INTO eVuMaxDQINullValues (nullValues) VALUES ('-999.25, -999.0');
 ";
+    
+
+        public static void EnsureDQITables(IDataServiceDIntel dataService)
+        {
+            if (dataService == null) return;
+
+            dataService.ExecuteNonQuery(@"
+CREATE TABLE IF NOT EXISTS eVuMaxDQIChannels (
+    Mnemonic TEXT NOT NULL PRIMARY KEY,
+    Name     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxDQIDataBoundaries (
+    Mnemonic TEXT NOT NULL PRIMARY KEY,
+    Name     TEXT NOT NULL,
+    Unit     TEXT,
+    Min      REAL NOT NULL DEFAULT 0.0,
+    Max      REAL NOT NULL DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxDQINullValues (
+    nullValues TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxWellDQI (
+    WellId   TEXT NOT NULL,
+    Mnemonic TEXT NOT NULL,
+    ConsIdx  REAL NOT NULL DEFAULT 0.0,
+    FreqIdx  REAL NOT NULL DEFAULT 0.0,
+    AccrIdx  REAL NOT NULL DEFAULT 0.0,
+    DQI      REAL NOT NULL DEFAULT 0.0,
+    PRIMARY KEY (WellId, Mnemonic)
+);
+
+CREATE TABLE IF NOT EXISTS eVuMaxWellDQITracking (
+    WellId    TEXT NOT NULL PRIMARY KEY,
+    LastIndex DATETIME
+);");
+
+            var dt = dataService.GetTable("SELECT COUNT(1) FROM eVuMaxDQIChannels;");
+            if (dt != null && dt.Rows.Count > 0 && Convert.ToInt64(dt.Rows[0][0]) == 0)
+            {
+                dataService.ExecuteNonQuery(@"
+INSERT OR IGNORE INTO eVuMaxDQIChannels (Mnemonic, Name) VALUES
+('BPOS', 'Block Position'),
+('CIRC', 'Circulation'),
+('HKLD', 'Hookload'),
+('SPPA', 'Pump Pressure');
+
+INSERT OR IGNORE INTO eVuMaxDQIDataBoundaries (Mnemonic, Name, Unit, Min, Max) VALUES
+('BPOS', 'Block Position', 'ft', 0.0, 120.0),
+('CIRC', 'Circulation', '', 0.0, 1.0),
+('HKLD', 'Hookload', 'klbs', 0.0, 1000.0),
+('SPPA', 'Pump Pressure', 'psi', 0.0, 6000.0);");
+            }
+
+            var dtNulls = dataService.GetTable("SELECT COUNT(1) FROM eVuMaxDQINullValues;");
+            if (dtNulls != null && dtNulls.Rows.Count > 0 && Convert.ToInt64(dtNulls.Rows[0][0]) == 0)
+            {
+                dataService.ExecuteNonQuery("INSERT OR IGNORE INTO eVuMaxDQINullValues (nullValues) VALUES ('-999.25, -999.0');");
+            }
+        }
     }
 
     // =====================================================================
@@ -1126,6 +1237,8 @@ CREATE TABLE IF NOT EXISTS VMX_PHASE_LIST (
                 // Copy master Broomstick profiles from Application Database into the new project
                 CopyMasterBsGlobalProfilesToProject(_session.GetDataService());
 
+                SchemaInitializer.EnsureDQITables(_session.GetDataService());
+
                 // Save well and linked wellbore information through the repository
                 var repo = new DrillIntel.Data.WellDataRepository(_session);
                 var wellId = Guid.NewGuid().ToString();
@@ -1244,6 +1357,8 @@ CREATE TABLE IF NOT EXISTS VMX_PHASE_LIST (
 
                 // Ensure project profile has authentic eVumaxPro defaults seeded/updated
                 BroomstickProfile.EnsureMasterProfileSeeded(projectDataService, isProjectDatabase: true, forceUpdate: true);
+
+                SchemaInitializer.EnsureDQITables(projectDataService);
             }
             catch (Exception ex)
             {
