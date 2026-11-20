@@ -324,5 +324,32 @@ public class AutoTagCreationTests : IDisposable
             Assert.True(tags.Count > 0);
         }
     }
+
+    [Fact]
+    public async Task Test_EtechFeb26_Detection()
+    {
+        string dbPath = @"C:\Users\etech\OneDrive\Desktop\DrillIntelProjects\EtechFeb26_backup.dintel";
+        if (!File.Exists(dbPath)) return;
+
+        var ds = new DataServiceDIntel(dbPath);
+        var process = new AutoTagCreationProcess
+        {
+            objDataService = ds,
+            WellID = "27b40176-43b5-4d2d-90da-dadc0a35d3b0",
+            ClearExistingTags = true
+        };
+        var pct = new Progress<double>(p => { });
+        var msg = new Progress<string>(m => { });
+        bool ok = await process.ExecuteAsync(pct, msg, default);
+        
+        string logFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DrillIntel", "logs", "AutoTagProcess.log");
+        string logContent = File.Exists(logFile) ? File.ReadAllText(logFile) : "NO LOG FILE";
+        
+        // Write diagnostic output to a file so we can read it
+        string diagFile = @"C:\Users\etech\OneDrive\Desktop\DrillIntelProjects\diag.txt";
+        File.WriteAllText(diagFile, $"OK: {ok}\nTags: {process.DetectedTagsCount}\nLastError: {process.LastError}\n\nLOG:\n{logContent}");
+        
+        Assert.True(ok, process.LastError);
+    }
 }
 

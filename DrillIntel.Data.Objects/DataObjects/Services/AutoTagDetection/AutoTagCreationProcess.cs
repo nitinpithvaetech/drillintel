@@ -413,8 +413,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
 
                 Dictionary<string, TagMapping> tagMappings = new Dictionary<string, TagMapping>(StringComparer.OrdinalIgnoreCase);
 
-                var objBulkExecutor = new BulkCommandExecutor(objDataService, 100);
-
+               
                 ReportProgress("Starting tag auto detection engine...", 5.0);
                 logger.Debug("Starting tag auto detection process ... ");
 
@@ -626,9 +625,23 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
                     objVirtualData.FieldList = "DATETIME,DEPTH,HDTH,RIG_STATE,TIME_DURATION";
                     objVirtualData.KeyField = "DATETIME";
                     objVirtualData.KeyFieldFormatted = "DATETIME";
+                    objVirtualData.OrderBy = "rowid ASC";
                     objVirtualData.FrameSize = 1000;
                     objVirtualData.dataTableName = dataTableName;
-                    objVirtualData.Condition = $"DATETIME>='{activityProcessFromDate:dd-MMM-yyyy HH:mm:ss}'";
+
+                    if (ClearExistingTags || activityProcessFromDate <= processFromDate)
+                    {
+                        objVirtualData.Condition = "";
+                    }
+                    else
+                    {
+                        string idxCol = RigStateService.GetDataIndexColumnName(objDataService, dataTableName);
+                        var (minIdx, maxIdx, count) = RigStateService.GetMinMaxDateFromTableWithCount(objDataService, dataTableName);
+                        long minRow = 1;
+                        long maxRow = count > 0 ? count : 1000000;
+                        long startIdx = RigStateService.FindDataIndexForDate(objDataService, dataTableName, activityProcessFromDate, findFirst: true, minRow, maxRow);
+                        objVirtualData.Condition = $"[{idxCol}] >= {startIdx}";
+                    }
                     objVirtualData.loadData();
 
                     logger.Debug("Data loaded, starting processing ... ");
@@ -1063,7 +1076,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
                     if (objVirtualDataActivity.RecordCount > 0)
                     {
                         int startIdx = 0;
-                        if (processFromDate != DateTime.MinValue)
+                        if (!ClearExistingTags && processFromDate != DateTime.MinValue && lastExistingTagEndDate != DateTime.MinValue)
                         {
                             for (int k = 0; k < objVirtualDataActivity.RecordCount; k++)
                             {
@@ -1076,10 +1089,10 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
                         }
 
                         DateTime firstRecDate = objVirtualDataActivity.getDateTimeValue(startIdx, "DATETIME");
-                        DateTime currentTagStartDate = (lastExistingTagEndDate != DateTime.MinValue && lastExistingTagEndDate >= firstRecDate) 
+                        DateTime currentTagStartDate = (!ClearExistingTags && lastExistingTagEndDate != DateTime.MinValue && lastExistingTagEndDate >= firstRecDate) 
                             ? lastExistingTagEndDate 
                             : firstRecDate;
-                        double lastTagId = lastExistingTagId;
+                        double lastTagId = ClearExistingTags ? 0 : lastExistingTagId;
 
                         double lastActivity = objVirtualDataActivity.getDoubleValueWithNull(startIdx, ActivityColumnName, -1d);
                         DateTime lastDate = firstRecDate;
@@ -1463,12 +1476,25 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
 
                     #region Merge the tags that were detected and has time period less than or equal to 30 seconds
 
-                    if (sortedTags.Count > 0)
+                    DataTable objTagsToMergeRaw = objDataService.GetTable($"SELECT PHASE_INDEX,START_DATE,END_DATE,PHASE_ID,STEP_ID,EMPH_ID FROM VMX_PHASE_LIST WHERE WELL_ID='{WellID.Replace("'", "''")}';");
+
+                    var sortedTagsToMerge = objTagsToMergeRaw?.AsEnumerable()
+                        .Select(r => new {
+                            Row = r,
+                            Start = ParseDate(r["START_DATE"]),
+                            End = ParseDate(r["END_DATE"])
+                        })
+                        .Where(t => t.Start != DateTime.MinValue)
+                        .OrderBy(t => t.Start)
+                        .Select(t => t.Row)
+                        .ToList() ?? new List<DataRow>();
+
+                    if (sortedTagsToMerge.Count > 0)
                     {
-                        for (int i = 0; i < sortedTags.Count; i++)
+                        for (int i = 0; i < sortedTagsToMerge.Count; i++)
                         {
                             if (_stopRequested) break;
-                            DataRow objRow = sortedTags[i];
+                            DataRow objRow = sortedTagsToMerge[i];
 
                             DateTime tagStartDate = ParseDate(objRow["START_DATE"]);
                             DateTime tagEndDate = ParseDate(objRow["END_DATE"]);
@@ -1478,10 +1504,10 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
 
                             if (timeDiff <= 30.0)
                             {
-                                if (i < sortedTags.Count - 1)
+                                if (i < sortedTagsToMerge.Count - 1)
                                 {
                                     // Merge forward into next tag
-                                    int nextPhaseIndex = DataService.checkNull(sortedTags[i + 1]["PHASE_INDEX"], 0);
+                                    int nextPhaseIndex = DataService.checkNull(sortedTagsToMerge[i + 1]["PHASE_INDEX"], 0);
 
                                     strSQL = $"UPDATE VMX_PHASE_LIST SET START_DATE='{tagStartDate:dd-MMM-yyyy HH:mm:ss}' WHERE WELL_ID='{WellID.Replace("'", "''")}' AND PHASE_INDEX={nextPhaseIndex};";
                                     objDataService.ExecuteNonQuery(strSQL);
@@ -1492,7 +1518,7 @@ namespace DrillIntel.Data.Objects.DataObjects.Services.AutoTagDetection
                                 else if (i > 0)
                                 {
                                     // Merge backward into previous tag
-                                    int prevPhaseIndex = DataService.checkNull(sortedTags[i - 1]["PHASE_INDEX"], 0);
+                                    int prevPhaseIndex = DataService.checkNull(sortedTagsToMerge[i - 1]["PHASE_INDEX"], 0);
 
                                     strSQL = $"UPDATE VMX_PHASE_LIST SET END_DATE='{tagEndDate:dd-MMM-yyyy HH:mm:ss}' WHERE WELL_ID='{WellID.Replace("'", "''")}' AND PHASE_INDEX={prevPhaseIndex};";
                                     objDataService.ExecuteNonQuery(strSQL);

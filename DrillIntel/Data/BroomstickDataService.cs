@@ -22,6 +22,11 @@ public interface IBroomstickDataService
     Task<bool> ClearBroomstickPointsAsync(string wellId, CancellationToken ct = default);
 
     /// <summary>
+    /// Gets the count of existing broomstick points for a specified well.
+    /// </summary>
+    Task<int> GetBroomstickPointsCountAsync(string wellId, CancellationToken ct = default);
+
+    /// <summary>
     /// Synchronously clears existing broomstick points and processing info for a specified well.
     /// </summary>
     bool ClearBroomstickPoints(string wellId);
@@ -197,6 +202,23 @@ public class BroomstickDataService : IBroomstickDataService
         {
             _logger.LogError($"Error clearing broomstick database entries for WellID '{wellId}': {ex.Message}", ex);
             throw;
+        }
+    }
+
+    public async Task<int> GetBroomstickPointsCountAsync(string wellId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(wellId)) return 0;
+        try
+        {
+            await EnsureTablesExistAsync(ct);
+            var connection = GetEffectiveDbConnection();
+            const string sql = "SELECT COUNT(*) FROM VMX_BROOMSTICK_POINTS WHERE WELL_ID = @WellID;";
+            return await connection.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { WellID = wellId.Trim() }, cancellationToken: ct));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning($"Could not query Broomstick points count: {ex.Message}");
+            return 0;
         }
     }
 

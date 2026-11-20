@@ -7,6 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\app_icon.ico</ApplicationIcon>
+    <Title>DrillIntel</Title>
+    <Product>DrillIntel</Product>
+    <Company>e-Tech International</Company>
+    <Version>1.0.0</Version>
+    <Description>DrillIntel - The rig's second brain - drill smarter, not harder</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DrillIntel.DataService\DrillIntel.DataService.csproj" />
+    <ProjectReference Include="..\DrillIntel.Licensing\DrillIntel.Licensing.Client\DrillIntel.Licensing.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

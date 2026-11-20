@@ -32,7 +32,9 @@ public interface IBroomstickProcessor
     Task<CalculationResult> RecalculatePointsAsync(
         string wellId,
         IProgress<CalculationProgress>? progress = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        DateTime? startDate = null,
+        DateTime? endDate = null);
 }
 
 /// <summary>
@@ -76,7 +78,9 @@ public class BroomstickProcessor : IBroomstickProcessor
     public async Task<CalculationResult> RecalculatePointsAsync(
         string wellId,
         IProgress<CalculationProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        DateTime? startDate = null,
+        DateTime? endDate = null)
     {
         if (string.IsNullOrWhiteSpace(wellId))
             throw new ArgumentException("WellID cannot be null or empty.", nameof(wellId));
@@ -88,11 +92,12 @@ public class BroomstickProcessor : IBroomstickProcessor
 
         try
         {
+            ct.ThrowIfCancellationRequested();
             var ds = _dataService.GetDataService() ?? (_session?.IsProjectOpen == true ? _session.GetDataService() : null);
 
             if (ds != null)
             {
-                progress?.Report(new CalculationProgress(20, "Loading well logs and configuration...", 2, 5));
+                progress?.Report(new CalculationProgress(15, "Loading well logs and configuration...", 2, 5));
 
                 TimeLog? timeLog = null;
                 if (_session != null && _session.IsProjectOpen)
@@ -116,7 +121,7 @@ public class BroomstickProcessor : IBroomstickProcessor
                     timeLog = new TimeLog { WellID = wellId, ObjectID = "TL_01", nameLog = "Default Timelog" };
                 }
 
-                progress?.Report(new CalculationProgress(40, "Executing BroomStickProcessor.ProcessPoints()...", 3, 5));
+                progress?.Report(new CalculationProgress(25, "Preparing connection detection and point classification...", 3, 5));
 
                 var loggerAdapter = new BroomstickLoggerBridge(_logger);
                 var processor = new LowLevelBroomstickProcessor(
@@ -127,6 +132,26 @@ public class BroomstickProcessor : IBroomstickProcessor
                     loggerAdapter);
 
                 processor.TaskID = Guid.NewGuid().ToString("N");
+                processor.CancellationToken = ct;
+
+                if (startDate.HasValue && startDate.Value != DateTime.MinValue)
+                    processor.CustomFromDate = startDate.Value;
+                if (endDate.HasValue && endDate.Value != DateTime.MinValue)
+                    processor.CustomToDate = endDate.Value;
+
+                if (progress != null)
+                {
+                    processor.ProgressReporter = new Progress<double>(pct =>
+                    {
+                        double mapped = 25.0 + (pct * 0.70);
+                        if (mapped > 95.0) mapped = 95.0;
+                        progress.Report(new CalculationProgress(mapped, $"Processing Broomstick connection points: {pct:F1}%...", 4, 5));
+                    });
+                    processor.StatusReporter = new Progress<string>(msg =>
+                    {
+                        progress.Report(new CalculationProgress(25.0, msg, 4, 5));
+                    });
+                }
 
                 // Execute ProcessPoints internally
                 await Task.Run(() => processor.ProcessPoints(), ct);

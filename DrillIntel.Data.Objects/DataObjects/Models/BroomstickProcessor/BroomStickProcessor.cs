@@ -713,6 +713,12 @@ namespace DrillIntel.Data.Objects.DataObjects.Models.BroomstickProcessor
 
         public IDataServiceDIntel objDataService;
 
+        public CancellationToken CancellationToken { get; set; } = CancellationToken.None;
+        public IProgress<double>? ProgressReporter { get; set; }
+        public IProgress<string>? StatusReporter { get; set; }
+        public DateTime CustomFromDate { get; set; } = DateTime.MinValue;
+        public DateTime CustomToDate { get; set; } = DateTime.MinValue;
+
 
 
 
@@ -3423,7 +3429,7 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
 
 
-                var fromDate = DateTime.MinValue;
+                var fromDate = CustomFromDate != DateTime.MinValue ? CustomFromDate : DateTime.MinValue;
 
 
 
@@ -3431,7 +3437,7 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
 
 
-                var toDate = DateTime.MinValue;
+                var toDate = CustomToDate != DateTime.MinValue ? CustomToDate : DateTime.MinValue;
 
 
 
@@ -5894,6 +5900,11 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
 
                     {
+                        if (CancellationToken.IsCancellationRequested)
+                        {
+                            processLogger?.Info("BroomStick processing cancelled by user.");
+                            throw new OperationCanceledException(CancellationToken);
+                        }
 
 
 
@@ -6046,6 +6057,8 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
 
                         processLogger?.Debug("Progress: " + progress);
+                        ProgressReporter?.Report(progress);
+                        StatusReporter?.Report($"Processing connection {connectionsProcessed} of {totalConnections} ({progress:F1}%)...");
 
 
 
@@ -6156,6 +6169,12 @@ CREATE INDEX IF NOT EXISTS IDX_VMX_BS_PRC_INFO ON VMX_BROOMSTICK_PRC_INFO(WELL_I
 
 
 
+
+                    if (CancellationToken.IsCancellationRequested)
+                    {
+                        processLogger?.Info("BroomStick processing cancelled before saving points.");
+                        throw new OperationCanceledException(CancellationToken);
+                    }
 
                     // First clear the data points
 

@@ -12,6 +12,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using DrillIntel.Licensing.Client;
+using DrillIntel.Licensing.Core.Verification;
 
 namespace DrillIntel.ViewModels;
 
@@ -30,26 +32,53 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private ObservableObject _currentViewModel;
 
+    [ObservableProperty]
+    private string _licenseInformation = "License: Not activated";
+
     public ProjectSession Session => _session;
     public bool IsProjectOpen => _session.IsProjectOpen;
 
     public ObservableCollection<RecentProject> RecentProjects { get; } = new();
 
+    [RelayCommand]
+    private void OpenLicenseActivation()
+    {
+        var window = new DrillIntel.Views.LicenseActivationWindow
+        {
+            Owner = Application.Current?.MainWindow
+        };
+        window.DevelopmentLicenseVerified += result =>
+            LicenseInformation = FormatLicenseInformation(result);
+        window.ShowDialog();
+    }
+
     private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
 
     public object? ActiveDocument { get; set; }
     public Action<string, string>? UserAlertHandler { get; set; }
+    public Func<RecalculateBroomstickPointsViewModel, bool?>? OpenRecalculateBroomstickPointsDialogHandler { get; set; }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
-    private void RecalculateBroomstickPoints()
+    private async Task RecalculateBroomstickPoints()
     {
-        OnCalculateBroomstickPointsClicked();
+        await OpenRecalculateBroomstickPointsDialogAsync();
     }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
-    private void CalculateBroomstickPoints()
+    private async Task CalculateBroomstickPoints()
     {
-        OnCalculateBroomstickPointsClicked();
+        if (ActiveDocument is DrillIntel.Models.HookloadDocument hookloadDoc)
+        {
+            hookloadDoc.CalculateBroomstickPoints();
+        }
+        else if (UserAlertHandler != null)
+        {
+            UserAlertHandler("Please select an active Hookload Document to calculate Broomstick points.", "Broomstick Calculation");
+        }
+        else
+        {
+            await OpenRecalculateBroomstickPointsDialogAsync();
+        }
     }
 
     public void OnCalculateBroomstickPointsClicked()
@@ -66,9 +95,73 @@ public partial class MainViewModel : ObservableObject
             }
             else
             {
-                _ = ExecuteProjectWideBroomstickRecalculationAsync();
+                _ = OpenRecalculateBroomstickPointsDialogAsync();
             }
         }
+    }
+
+    public async Task<bool?> OpenRecalculateBroomstickPointsDialogAsync()
+    {
+        if (!_session.IsProjectOpen) return false;
+
+        Well? well = null;
+        TimeLog? timeLog = null;
+
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog tl)
+            {
+                timeLog = tl;
+            }
+            else if (dashVm.SelectedNode?.Tag is Well w)
+            {
+                well = w;
+            }
+            else if (dashVm.SelectedWell != null)
+            {
+                well = dashVm.SelectedWell;
+            }
+        }
+
+        try
+        {
+            var repo = new DrillIntel.Data.WellDataRepository(_session);
+            if (well == null)
+            {
+                well = await repo.GetProjectWellAsync();
+            }
+
+            if (timeLog == null)
+            {
+                var timeLogs = await repo.GetTimeLogsAsync();
+                timeLog = timeLogs.FirstOrDefault(t => t.PrimaryLog) ?? timeLogs.FirstOrDefault();
+            }
+        }
+        catch { }
+
+        var vm = new RecalculateBroomstickPointsViewModel(_session, well, timeLog);
+        bool? result = false;
+
+        if (OpenRecalculateBroomstickPointsDialogHandler != null)
+        {
+            result = OpenRecalculateBroomstickPointsDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.RecalculateBroomstickPointsWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current?.MainWindow
+            };
+            result = window.ShowDialog();
+        }
+
+        if (result == true || vm.IsCompleted)
+        {
+            _session.NotifyDataChanged();
+        }
+
+        return result;
     }
 
     private async Task ExecuteProjectWideBroomstickRecalculationAsync()
@@ -141,6 +234,35 @@ public partial class MainViewModel : ObservableObject
         {
             initDb.PropertyChanged += OnDashboardPropertyChanged;
         }
+
+        _ = RestoreDevelopmentLicenseInformationAsync();
+    }
+
+    private async Task RestoreDevelopmentLicenseInformationAsync()
+    {
+#if DEBUG
+        try
+        {
+            using var deviceKey = await Task.Run(DeviceKeyStore.OpenOrCreate).ConfigureAwait(false);
+            var result = await DevelopmentLicenseBundleStore.VerifyStoredAsync(
+                deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
+            if (result?.IsValid == true && Application.Current is { } application)
+                await application.Dispatcher.InvokeAsync(() =>
+                    LicenseInformation = FormatLicenseInformation(result));
+            else if (result is { IsValid: false } && Application.Current is { } currentApplication)
+                await currentApplication.Dispatcher.InvokeAsync(() => LicenseInformation = "License: Not activated");
+        }
+        catch
+        {
+            // Keep startup non-blocking. The user can inspect/retry activation from Setup.
+        }
+#endif
+    }
+
+    private static string FormatLicenseInformation(LicenseVerificationResult result)
+    {
+        var expiry = result.LicenseExpiryUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "Unknown";
+        return $"License: {result.LicenseId} · Valid until {expiry} · Dev test";
     }
 
     partial void OnCurrentViewModelChanged(ObservableObject? oldValue, ObservableObject newValue)

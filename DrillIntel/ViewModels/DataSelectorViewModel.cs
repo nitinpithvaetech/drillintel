@@ -26,6 +26,9 @@ public partial class DataSelectorViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedChannelMnemonic = string.Empty;
 
+    [ObservableProperty]
+    private bool _isYAxisInverted = true;
+
     partial void OnTargetSeriesChanged(string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
@@ -96,11 +99,13 @@ public partial class DataSelectorViewModel : ObservableObject
         AvailableLabelFields.Add("SampleIndex");
         LabelsField = "Timestamp";
 
+        AvailableXCoordinates.Add("DateTime");
+        AvailableXCoordinates.Add("DATETIME");
         AvailableXCoordinates.Add("DayIndex");
         AvailableXCoordinates.Add("TimeOADate");
         AvailableXCoordinates.Add("ElapsedHours");
         AvailableXCoordinates.Add("MeasuredDepth");
-        XCoordinate = _console.IndexType == enumIndexType.TimeLog ? "DayIndex" : "MeasuredDepth";
+        XCoordinate = _console.IndexType == enumIndexType.TimeLog ? "DateTime" : "MeasuredDepth";
 
         // Y Coordinates
         foreach (var ch in channels)
@@ -110,13 +115,20 @@ public partial class DataSelectorViewModel : ObservableObject
                 AvailableYCoordinates.Add(ch.Mnemonic);
             }
         }
+        if (!AvailableYCoordinates.Contains("DEPTH")) AvailableYCoordinates.Insert(0, "DEPTH");
         if (!AvailableYCoordinates.Contains("TotalSales")) AvailableYCoordinates.Add("TotalSales");
         if (!AvailableYCoordinates.Contains("ROPA")) AvailableYCoordinates.Add("ROPA");
         if (!AvailableYCoordinates.Contains("WOB")) AvailableYCoordinates.Add("WOB");
         if (!AvailableYCoordinates.Contains("TORQ")) AvailableYCoordinates.Add("TORQ");
 
-        YCoordinate = AvailableYCoordinates.FirstOrDefault() ?? "TotalSales";
+        var depthOption = AvailableYCoordinates.FirstOrDefault(y => 
+            y.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) || 
+            y.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase) || 
+            y.Contains("DEPTH", StringComparison.OrdinalIgnoreCase));
+
+        YCoordinate = depthOption ?? AvailableYCoordinates.FirstOrDefault() ?? "DEPTH";
         SelectedChannelMnemonic = YCoordinate;
+        IsYAxisInverted = true;
     }
 
     [RelayCommand]

@@ -358,6 +358,15 @@
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
 
+                <Fluent:RibbonGroupBox Header="License">
+                    <Fluent:Button Header="PC Activation" Command="{Binding OpenLicenseActivationCommand}"
+                                   ToolTip="Check this PC's device key or export a signed activation request">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="KeyChain" Foreground="#1976D2" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
+                </Fluent:RibbonGroupBox>
+
 
             </Fluent:RibbonTabItem>
         </Fluent:Ribbon>
@@ -368,6 +377,10 @@
         <!-- Bottom Industrial Status & Branding Bar -->
         <Border Grid.Row="2" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16,6">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
@@ -375,7 +388,7 @@
                 </Grid.ColumnDefinitions>
                 
                 <!-- Left: Status & Active Project -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <materialDesign:PackIcon Kind="CheckCircleOutline" Foreground="#4CAF50" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,6,0" />
                     <TextBlock Text="System Ready" FontSize="11" Foreground="#616161" VerticalAlignment="Center" />
                     <TextBlock Text="|" Foreground="#BDBDBD" Margin="10,0" VerticalAlignment="Center" />
@@ -383,13 +396,22 @@
                 </StackPanel>
 
                 <!-- Center: Marketing & Industrial Tagline -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <materialDesign:PackIcon Kind="Brain" Foreground="#1976D2" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock Text="The rig's second brain — drill smarter, not harder" FontSize="12" FontWeight="SemiBold" Foreground="#1976D2" VerticalAlignment="Center" />
                 </StackPanel>
 
+                <!-- License information remains visible after the activation dialog closes. -->
+                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Orientation="Horizontal"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,4,0,0"
+                            ToolTip="PC license activation status">
+                    <materialDesign:PackIcon Kind="KeyChain" Foreground="#607D8B" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,5,0" />
+                    <TextBlock Text="{Binding LicenseInformation}" FontSize="10" Foreground="#616161"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
                 <!-- Right: Platform Info -->
-                <TextBlock Grid.Column="2" Text="DrillIntel v1.0 • VuMax Architecture" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="DrillIntel v1.0 • VuMax Architecture" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
             </Grid>
         </Border>
     </Grid>

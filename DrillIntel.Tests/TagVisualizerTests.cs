@@ -529,4 +529,137 @@ public class TagVisualizerTests : IDisposable
         Assert.Equal("DRILLING", vm.Tags[0].PhaseId);
         Assert.Equal("TRIP_OUT", vm.Tags[1].PhaseId);
     }
+
+    [Fact]
+    public void AddTag_WhenTagSelected_AddsAfterSelectedTag_WithIsOpenZero()
+    {
+        var vm = new TagVisualizerViewModel();
+        Assert.True(vm.Tags.Count >= 2);
+
+        // Select the first tag
+        var selected = vm.Tags[0];
+        vm.SelectedTag = selected;
+        int initialCount = vm.Tags.Count;
+        var expectedStart = selected.EndDate;
+
+        // Execute AddTag
+        vm.AddTagCommand.Execute(null);
+
+        Assert.Equal(initialCount + 1, vm.Tags.Count);
+        var newlyAdded = vm.SelectedTag;
+        Assert.NotNull(newlyAdded);
+        Assert.NotEqual(selected, newlyAdded);
+
+        // Starts after the selected tag
+        Assert.Equal(expectedStart, newlyAdded.StartDate);
+        Assert.True(newlyAdded.EndDate > newlyAdded.StartDate);
+
+        // Not marked as open tag
+        Assert.Equal(0, newlyAdded.IsOpen);
+        Assert.False(newlyAdded.IsOpenTag);
+        Assert.DoesNotContain("[OPEN]", newlyAdded.TagDisplayName);
+        Assert.True(vm.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public void AddTag_WhenNoTagSelected_AddsToLast_WithIsOpenOne_AndMarkedAsOpenTag()
+    {
+        var vm = new TagVisualizerViewModel();
+        Assert.True(vm.Tags.Count > 0);
+
+        var lastTagBefore = vm.Tags.OrderBy(t => t.EndDate).Last();
+        var expectedStart = lastTagBefore.EndDate;
+
+        // Deselect any tag
+        vm.SelectedTag = null;
+        int initialCount = vm.Tags.Count;
+
+        // Execute AddTag
+        vm.AddTagCommand.Execute(null);
+
+        Assert.Equal(initialCount + 1, vm.Tags.Count);
+        var newlyAdded = vm.SelectedTag;
+        Assert.NotNull(newlyAdded);
+
+        // Should start at or after the last tag's EndDate
+        Assert.True(newlyAdded.StartDate >= expectedStart);
+        Assert.True(newlyAdded.EndDate > newlyAdded.StartDate);
+
+        // Must be marked as open tag (IsOpen = 1)
+        Assert.Equal(1, newlyAdded.IsOpen);
+        Assert.True(newlyAdded.IsOpenTag);
+        Assert.Contains("[OPEN]", newlyAdded.TagDisplayName);
+        Assert.True(vm.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public async Task OpenDataSelector_InitializesDefaultXDateTime_YDepth_AndInvertTrue()
+    {
+        var vm = new TagVisualizerViewModel();
+        DataSelectorViewModel? capturedSelectorVm = null;
+
+        vm.OpenDataSelectorDialogHandler = (selectorVm) =>
+        {
+            capturedSelectorVm = selectorVm;
+            // Verify requirements:
+            // 1. Default X Axis Datetime (or DATETIME)
+            // 2. Default Y Axis Depth (or BIT_DEPTH / DEPTH)
+            // 3. Default Depth Inverted = true
+            Assert.True(selectorVm.XCoordinate.Equals("DateTime", StringComparison.OrdinalIgnoreCase));
+            Assert.True(selectorVm.YCoordinate.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) ||
+                        selectorVm.YCoordinate.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+            Assert.True(selectorVm.IsYAxisInverted);
+
+            // Simulate user changing inversion to false and accepting dialog
+            selectorVm.IsYAxisInverted = false;
+            return true;
+        };
+
+        await vm.OpenDataSelectorAsync();
+
+        Assert.NotNull(capturedSelectorVm);
+        Assert.False(vm.InvertDepth); // InvertDepth synchronized from dialog result
+    }
+
+    [Fact]
+    public void TagVisualizerItem_IsOpenTag_PropertySyncsWithIsOpenIntAndTagDisplayName()
+    {
+        var item = new TagVisualizerItem
+        {
+            PhaseId = "DRILLING",
+            StepId = "ROTARY",
+            EmphId = "MAIN",
+            IsOpen = 0
+        };
+
+        Assert.False(item.IsOpenTag);
+        Assert.Equal("DRILLING + ROTARY + MAIN", item.TagDisplayName);
+
+        // Mark as open
+        item.IsOpenTag = true;
+        Assert.Equal(1, item.IsOpen);
+        Assert.True(item.IsOpenTag);
+        Assert.Equal("DRILLING + ROTARY + MAIN [OPEN]", item.TagDisplayName);
+
+        // Close tag
+        item.IsOpenTag = false;
+        Assert.Equal(0, item.IsOpen);
+        Assert.False(item.IsOpenTag);
+        Assert.Equal("DRILLING + ROTARY + MAIN", item.TagDisplayName);
+    }
+
+    [Fact]
+    public void RangeTrackBar_IsOverviewInvertedProperty_DefaultsToFalse_AndCanBeToggled()
+    {
+        var thread = new System.Threading.Thread(() =>
+        {
+            var ctrl = new DrillIntel.Controls.RangeTrackBarControl();
+            Assert.False(ctrl.IsOverviewInverted);
+            ctrl.IsOverviewInverted = true;
+            Assert.True(ctrl.IsOverviewInverted);
+        });
+        thread.SetApartmentState(System.Threading.ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+    }
 }

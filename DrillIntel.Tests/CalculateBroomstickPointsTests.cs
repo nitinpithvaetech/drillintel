@@ -269,4 +269,101 @@ public class CalculateBroomstickPointsTests : IDisposable
         SqliteConnection.ClearAllPools();
         try { if (File.Exists(legacyDb)) File.Delete(legacyDb); } catch { }
     }
+
+    [Fact]
+    public async Task RecalculateBroomstickPointsViewModel_InitializesMetadataAndCommands()
+    {
+        var session = new ProjectSession();
+        var well = new DrillIntel.Data.Objects.DataObjects.Models.Well { ObjectID = "W_TEST_01", name = "Test Well A" };
+        var timeLog = new DrillIntel.Data.Objects.DataObjects.Models.TimeLog { ObjectID = "TL_01", nameLog = "5-Sec Log", WellID = "W_TEST_01" };
+
+        var vm = new RecalculateBroomstickPointsViewModel(session, well, timeLog, _processor, _bsDataService);
+
+        Assert.Equal("Test Well A", vm.WellName);
+        Assert.Equal("W_TEST_01", vm.WellId);
+        Assert.Equal("5-Sec Log", vm.LogName);
+        Assert.True(vm.ClearExistingPoints);
+        Assert.True(vm.IsEntireWell);
+        Assert.False(vm.IsCustomRange);
+        Assert.True(vm.CanStart);
+        Assert.False(vm.CanStop);
+        Assert.Equal("Cancel", vm.CancelButtonText);
+    }
+
+    [Fact]
+    public async Task RecalculateBroomstickPointsViewModel_StartCommand_ExecutesRecalculationAndCompletes()
+    {
+        await _bsDataService.EnsureTablesExistAsync();
+
+        var session = new ProjectSession();
+        var well = new DrillIntel.Data.Objects.DataObjects.Models.Well { ObjectID = "W_RECALC_VM", name = "VM Well" };
+        var timeLog = new DrillIntel.Data.Objects.DataObjects.Models.TimeLog { ObjectID = "TL_VM", nameLog = "TL VM", WellID = "W_RECALC_VM" };
+
+        var vm = new RecalculateBroomstickPointsViewModel(session, well, timeLog, _processor, _bsDataService);
+
+        // Pre-populate a dummy point
+        using (var conn = new SqliteConnection(_connString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("INSERT INTO VMX_BROOMSTICK_POINTS (WELL_ID, DEPTH, TYPE) VALUES ('W_RECALC_VM', 500.0, 1);");
+        }
+        await vm.RefreshExistingCountAsync();
+        Assert.Equal(1, vm.ExistingPointsCount);
+
+        // Start recalculation with ClearExistingPoints = true
+        await vm.StartCommand.ExecuteAsync(null);
+
+        Assert.True(vm.IsCompleted);
+        Assert.False(vm.IsRunning);
+        Assert.False(vm.HasError);
+        Assert.Equal(100.0, vm.ProgressPercent);
+        Assert.Equal("Close", vm.CancelButtonText);
+    }
+
+    [Fact]
+    public async Task RecalculateBroomstickPointsViewModel_ClearDbEntries_PromptsConfirmationAndClears()
+    {
+        await _bsDataService.EnsureTablesExistAsync();
+
+        var session = new ProjectSession();
+        var well = new DrillIntel.Data.Objects.DataObjects.Models.Well { ObjectID = "W_CLEAR_VM", name = "Clear VM Well" };
+        var vm = new RecalculateBroomstickPointsViewModel(session, well, null, _processor, _bsDataService);
+
+        using (var conn = new SqliteConnection(_connString))
+        {
+            await conn.OpenAsync();
+            await conn.ExecuteAsync("INSERT INTO VMX_BROOMSTICK_POINTS (WELL_ID, DEPTH, TYPE) VALUES ('W_CLEAR_VM', 1234.0, 2);");
+        }
+        await vm.RefreshExistingCountAsync();
+        Assert.Equal(1, vm.ExistingPointsCount);
+
+        // Simulate confirmation
+        vm.ConfirmationHandler = (msg, title) => true;
+        await vm.ClearDbEntriesCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, vm.ExistingPointsCount);
+    }
+
+    [Fact]
+    public async Task MainViewModel_RecalculateBroomstickPoints_OpensDialogViaHandler()
+    {
+        var session = new ProjectSession();
+        var projService = new ProjectService(session);
+        var vm = new MainViewModel(session, projService, null, null);
+
+        bool dialogOpened = false;
+        vm.OpenRecalculateBroomstickPointsDialogHandler = recalcVm =>
+        {
+            dialogOpened = true;
+            return true;
+        };
+
+        await vm.OpenRecalculateBroomstickPointsDialogAsync();
+        Assert.False(dialogOpened); // Project not open yet
+
+        // Simulate open project
+        session.Load(_tempDbPath);
+        await vm.OpenRecalculateBroomstickPointsDialogAsync();
+        Assert.True(dialogOpened);
+    }
 }

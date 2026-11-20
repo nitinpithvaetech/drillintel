@@ -966,6 +966,46 @@ public partial class DashboardViewModel : ObservableObject
         IsAutoScrollPaused = false;
     }
 
+    public Func<AdvertisementFullscreenViewModel, bool?>? OpenFullscreenAdDialogHandler { get; set; }
+
+    [RelayCommand]
+    public void OpenFullscreenAdDialog()
+    {
+        PauseAdScroll();
+
+        var vm = new AdvertisementFullscreenViewModel(AdSlides, CurrentSlideIndex);
+        bool? result = false;
+
+        if (OpenFullscreenAdDialogHandler != null)
+        {
+            result = OpenFullscreenAdDialogHandler(vm);
+        }
+        else if (System.Windows.Application.Current != null)
+        {
+            try
+            {
+                var window = new DrillIntel.Views.AdvertisementFullscreenWindow
+                {
+                    DataContext = vm
+                };
+                if (System.Windows.Application.Current.MainWindow != null &&
+                    System.Windows.Application.Current.MainWindow.IsVisible)
+                {
+                    window.Owner = System.Windows.Application.Current.MainWindow;
+                }
+                result = window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DashboardViewModel] Error showing AdvertisementFullscreenWindow: {ex}");
+            }
+        }
+
+        // Sync back current slide from the fullscreen dialog
+        SelectAdSlide(vm.CurrentSlideIndex);
+        ResumeAdScroll();
+    }
+
     private void UpdateActiveSlide()
     {
         for (int i = 0; i < AdSlides.Count; i++)
