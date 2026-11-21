@@ -116,16 +116,6 @@ ToolTip="Reset Zoom to Extents">
 <TextBlock Text="Reset Zoom" FontSize="10.5" VerticalAlignment="Center" />
 </StackPanel>
 </Button>
-<!-- Data Selector Window (Matching RigStateDocument) -->
-<Button Command="{Binding OpenDataSelectorCommand}" 
-Style="{StaticResource MaterialDesignOutlinedButton}" 
-Height="28" Padding="10,0" Margin="0,0,6,0"
-ToolTip="Open Data Selector &amp; Field Mapping Window">
-<StackPanel Orientation="Horizontal">
-<materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" Foreground="#0284C7" VerticalAlignment="Center" Margin="0,0,4,0" />
-<TextBlock Text="Data Selector" FontSize="10.5" VerticalAlignment="Center" />
-</StackPanel>
-</Button>
 <!-- Calculate Points Button -->
 <Button Command="{Binding RecalculatePointsCommand}" 
 Style="{StaticResource MaterialDesignRaisedButton}" 
@@ -367,8 +357,11 @@ SelectionStart="{Binding TrackBarSelectionStart, Mode=TwoWay}"
 SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
 IsTimeLog="{Binding IsTimeLog}"
 OverviewPoints="{Binding TrackBarOverviewPoints}"
+OverviewPointColors="{Binding TrackBarOverviewColors}"
+IsOverviewInverted="{Binding InvertDepthAxis}"
 OverviewChannelName="{Binding TrackBarOverviewChannelName}"
 OverviewStroke="{Binding TrackBarOverviewBrush}"
+SettingsRequested="OnDataSelectorSettingsRequested"
 RangeChanged="OnRangeTrackBarChanged" />
 <!-- 4: Bottom Status Bar -->
 <Border Grid.Row="4" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="1" CornerRadius="4" Padding="12,6">

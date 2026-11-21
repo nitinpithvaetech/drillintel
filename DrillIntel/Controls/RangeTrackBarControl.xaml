@@ -63,6 +63,8 @@
                     <ColumnDefinition Width="*" />
                     <!-- 2: Stepper Right [ ► ] -->
                     <ColumnDefinition Width="Auto" />
+                    <!-- 3: Settings action belongs to the selector -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- 0: Stepper Left [ ◄ ] -->
@@ -127,6 +129,16 @@
                 <!-- 2: Stepper Right [ ► ] -->
                 <Button Grid.Column="2" Click="OnStepRightClick" Style="{StaticResource StepperButtonStyle}" ToolTip="Scroll Forward (Right)">
                     <materialDesign:PackIcon Kind="ChevronRight" Width="18" Height="18" VerticalAlignment="Center" />
+                </Button>
+
+                <Button Grid.Column="3" Click="OnSettingsClick" Margin="6,0,0,0" Padding="9,0"
+                        Height="34" Background="#FFFFFF" Foreground="#334155"
+                        BorderBrush="#94A3B8" BorderThickness="1" Cursor="Hand"
+                        ToolTip="Configure Data Selector channels and axes">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="TuneVariant" Width="15" Height="15" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="Settings" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
                 </Button>
 
 

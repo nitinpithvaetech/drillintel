@@ -19,8 +19,10 @@ public partial class DrillingStandChartViewModel : ObservableObject
     private readonly WellDataRepository _repository;
     private DrillingStandPlotData _data = new();
     private bool _isApplyingPreset;
-    private string _overviewMnemonic = "TIME";
+    private string _overviewMnemonic = "BIT_DEPTH";
     private string? _activeWellId;
+    private string? _activeWellboreId;
+    private string? _activeLogId;
     private string? _activeTableName;
     private CancellationTokenSource? _rangeCts;
 
@@ -46,6 +48,9 @@ public partial class DrillingStandChartViewModel : ObservableObject
     [ObservableProperty] private string _status = "Loading drilling stands…";
     [ObservableProperty] private ObservableCollection<double> _depths = new();
     [ObservableProperty] private PointCollection _trackBarOverviewPoints = new();
+    [ObservableProperty] private List<int>? _trackBarOverviewColors;
+    [ObservableProperty] private bool _colorCodeAsRigState = true;
+    [ObservableProperty] private bool _isOverviewYAxisInverted = true;
     [ObservableProperty] private string _trackBarOverviewChannelName = "Main Stand Time";
     [ObservableProperty] private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
     [ObservableProperty] private double _trackBarOverviewMin;
@@ -66,6 +71,7 @@ public partial class DrillingStandChartViewModel : ObservableObject
     public DataTable StandData => _data.standData;
     public DataTable RigStateData => _data.rigStateData;
     public DrillingStandPlotData Data => _data;
+    public string OverviewMnemonic => _overviewMnemonic;
     public event Action? ChartNeedsRepaint;
 
     public DrillingStandChartViewModel(ProjectSession session)
@@ -110,6 +116,8 @@ public partial class DrillingStandChartViewModel : ObservableObject
             ? log.__dataTableName
             : log.getDataTableName(_session.GetDataService());
         _activeWellId = log.WellID;
+        _activeWellboreId = log.WellboreID;
+        _activeLogId = log.ObjectID;
         _activeTableName = tableName;
         await LoadAsync(_activeWellId, _activeTableName);
     }
@@ -123,6 +131,8 @@ public partial class DrillingStandChartViewModel : ObservableObject
             if (log != null)
             {
                 _activeWellId = log.WellID;
+                _activeWellboreId = log.WellboreID;
+                _activeLogId = log.ObjectID;
                 _activeTableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
                     ? log.__dataTableName
                     : log.getDataTableName(_session.GetDataService());
@@ -266,39 +276,156 @@ public partial class DrillingStandChartViewModel : ObservableObject
         try
         {
             Status = "Loading drilling stands…";
-            _data = await Task.Run(() => new DrillingStandPlot(_session.GetDataService()).GetData(wellId, table, FromDate, ToDate));
+            _data = await Task.Run(() => new DrillingStandPlot(_session.GetDataService())
+                .GetData(wellId, table, FromDate, ToDate, includeRigStateData: RigStateView));
             AverageTime = _data.AvgTime; AverageDayTime = _data.AvgDTime; AverageNightTime = _data.AvgNTime;
             Depths = new ObservableCollection<double>(_data.standData.Rows.Cast<DataRow>().Select(r => Convert.ToDouble(r["Depth"], CultureInfo.InvariantCulture)));
-            UpdateOverview();
-            Status = $"{Depths.Count} drilling stands";
+            await UpdateOverviewAsync();
+            Status = Depths.Count == 0
+                ? "No processed stand records in this range. Process drilling stands or widen the range."
+                : $"{Depths.Count} drilling stands";
             OnPropertyChanged(nameof(StandData)); OnPropertyChanged(nameof(RigStateData)); OnPropertyChanged(nameof(Data));
             ChartNeedsRepaint?.Invoke();
         }
         catch (Exception ex) { Status = $"Unable to load drilling stands: {ex.Message}"; }
     }
 
-    partial void OnRigStateViewChanged(bool value) => ChartNeedsRepaint?.Invoke();
+    partial void OnRigStateViewChanged(bool value)
+    {
+        if (!string.IsNullOrWhiteSpace(_activeWellId) && !string.IsNullOrWhiteSpace(_activeTableName))
+            _ = LoadAsync(_activeWellId, _activeTableName);
+        else
+            ChartNeedsRepaint?.Invoke();
+    }
 
     public VHTrackConsole CreateDataSelectorConsole()
     {
         var console = VHTrackConsole.CreateConsoleFromIndexType(enumIndexType.Deptlog);
         var track = new VHTrack { ID = "DRLG_STAND_TRACK", Title = "Drilling Stand", DisplayOrder = 0 };
-        track.Channels.Add(new VHTrackChannel { ID = "MAIN_TIME", TrackID = track.ID, Name = "Main Stand Time", Title = "Main Stand Time", Mnemonic = "TIME" });
-        track.Channels.Add(new VHTrackChannel { ID = "OFFSET_TIME", TrackID = track.ID, Name = "Offset Stand Time", Title = "Offset Stand Time", Mnemonic = "OFFSET_TIME" });
-        track.Channels.Add(new VHTrackChannel { ID = "DEPTH", TrackID = track.ID, Name = "Depth", Title = "Depth", Mnemonic = "DEPTH" });
+        track.Channels.Add(new VHTrackChannel { ID = "MAIN_TIME", TrackID = track.ID, Name = "Main Stand Time", Title = "Main Stand Time", Mnemonic = "TIME", ColorCodeAsRigState = RigStateView });
+        track.Channels.Add(new VHTrackChannel { ID = "OFFSET_TIME", TrackID = track.ID, Name = "Offset Stand Time", Title = "Offset Stand Time", Mnemonic = "OFFSET_TIME", ColorCodeAsRigState = RigStateView });
+        track.Channels.Add(new VHTrackChannel { ID = "BIT_DEPTH", TrackID = track.ID, Name = "Bit Depth", Title = "Bit Depth", Mnemonic = "BIT_DEPTH", Unit = "ft", ColorCodeAsRigState = ColorCodeAsRigState });
+        track.Channels.Add(new VHTrackChannel { ID = "DEPTH", TrackID = track.ID, Name = "Depth", Title = "Depth", Mnemonic = "DEPTH", ColorCodeAsRigState = RigStateView });
         console.Tracks.Add(track);
+        return console;
+    }
+
+    public async Task<VHTrackConsole> CreateDataSelectorConsoleAsync()
+    {
+        var console = CreateDataSelectorConsole();
+        if (string.IsNullOrWhiteSpace(_activeTableName)) return console;
+
+        try
+        {
+            string tableName = _activeTableName;
+            var channelNames = await Task.Run(() =>
+            {
+                var escapedTableName = tableName.Replace("]", "]]", StringComparison.Ordinal);
+                var info = _session.GetDataService().GetTable($"PRAGMA table_info([{escapedTableName}]);");
+                return info.Rows.Cast<DataRow>()
+                    .Select(row => Convert.ToString(row["name"], CultureInfo.InvariantCulture) ?? string.Empty)
+                    .Where(name => !string.IsNullOrWhiteSpace(name) && !new[]
+                    {
+                        "ID", "DATETIME", "DTIM", "TIMEINDEX", "RIG_STATE", "RIGSTATE", "RIG_STATE_COLOR"
+                    }.Contains(name, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            });
+            var track = console.Tracks.FirstOrDefault();
+            if (track != null)
+            {
+                foreach (string mnemonic in channelNames)
+                {
+                    if (track.Channels.Any(c => c.Mnemonic.Equals(mnemonic, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+
+                    track.Channels.Add(new VHTrackChannel
+                    {
+                        ID = mnemonic,
+                        TrackID = track.ID,
+                        Name = mnemonic,
+                        Title = mnemonic,
+                        Mnemonic = mnemonic,
+                        ColorCodeAsRigState = ColorCodeAsRigState
+                    });
+                }
+            }
+        }
+        catch { }
+
         return console;
     }
 
     public void SetOverviewChannel(string mnemonic)
     {
         _overviewMnemonic = mnemonic;
-        TrackBarOverviewChannelName = mnemonic switch { "OFFSET_TIME" => "Offset Stand Time", "DEPTH" => "Stand Depth", _ => "Main Stand Time" };
-        UpdateOverview();
     }
 
-    private void UpdateOverview()
+    public Task ReloadOverviewAsync() => UpdateOverviewAsync();
+
+    private async Task UpdateOverviewAsync()
     {
+        if (!string.Equals(_overviewMnemonic, "TIME", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(_overviewMnemonic, "OFFSET_TIME", StringComparison.OrdinalIgnoreCase))
+        {
+            await LoadRawLogOverviewAsync(_overviewMnemonic);
+            if (TrackBarOverviewPoints.Count > 0) return;
+        }
+
+        UpdateStandMetricOverview();
+    }
+
+    private async Task LoadRawLogOverviewAsync(string mnemonic)
+    {
+        TrackBarOverviewPoints = new PointCollection();
+        TrackBarOverviewColors = null;
+        if (string.IsNullOrWhiteSpace(_activeWellId) || string.IsNullOrWhiteSpace(_activeLogId)) return;
+
+        try
+        {
+            var service = new ChartDataService(_session);
+            var data = await service.GetTimelogDataAsync(
+                _activeWellId,
+                _activeWellboreId ?? string.Empty,
+                _activeLogId,
+                new[] { mnemonic, "BIT_DEPTH", "DEPTH" }.Distinct(StringComparer.OrdinalIgnoreCase),
+                maxPoints: 800);
+
+            string valueMnemonic = data.ChannelValues.TryGetValue(mnemonic, out var selectedValues) && selectedValues.Count == data.IndexValues.Count
+                ? mnemonic
+                : data.ChannelValues.TryGetValue("BIT_DEPTH", out var bitDepthValues) && bitDepthValues.Count == data.IndexValues.Count
+                    ? "BIT_DEPTH"
+                    : "DEPTH";
+            if (!data.ChannelValues.TryGetValue(valueMnemonic, out var values) || values.Count != data.IndexValues.Count)
+                return;
+
+            var points = new PointCollection(data.IndexValues.Count);
+            for (int i = 0; i < data.IndexValues.Count; i++)
+                points.Add(new System.Windows.Point(data.IndexValues[i], values[i]));
+            if (points.CanFreeze) points.Freeze();
+
+            TrackBarOverviewPoints = points;
+            TrackBarOverviewColors = ColorCodeAsRigState && data.RigStateColors.Count == points.Count
+                ? data.RigStateColors
+                : null;
+            string title = valueMnemonic.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase)
+                ? "Bit Depth"
+                : valueMnemonic;
+            TrackBarOverviewChannelName = ColorCodeAsRigState ? $"{title} (Rig State)" : title;
+            TrackBarOverviewMin = values.Count == 0 ? 0 : values.Min();
+            TrackBarOverviewMax = values.Count == 0 || values.Max() <= TrackBarOverviewMin ? TrackBarOverviewMin + 1 : values.Max();
+            TrackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
+        }
+        catch
+        {
+            TrackBarOverviewPoints = new PointCollection();
+            TrackBarOverviewColors = null;
+        }
+    }
+
+    private void UpdateStandMetricOverview()
+    {
+        TrackBarOverviewColors = null;
         var points = new PointCollection();
         var values = new List<double>();
         for (int i = 0; i < _data.standData.Rows.Count; i++)
@@ -307,7 +434,7 @@ public partial class DrillingStandChartViewModel : ObservableObject
             double value = _overviewMnemonic switch
             {
                 "OFFSET_TIME" => Convert.ToDouble(row["OffsetTime"], CultureInfo.InvariantCulture),
-                "DEPTH" => Convert.ToDouble(row["Depth"], CultureInfo.InvariantCulture),
+                "DEPTH" or "BIT_DEPTH" => Convert.ToDouble(row["Depth"], CultureInfo.InvariantCulture),
                 _ => Convert.ToDouble(row["Time"], CultureInfo.InvariantCulture)
             };
             values.Add(value);
@@ -326,6 +453,12 @@ public partial class DrillingStandChartViewModel : ObservableObject
         TrackBarOverviewPoints = points;
         TrackBarOverviewMin = values.Count == 0 ? 0 : values.Min();
         TrackBarOverviewMax = values.Count == 0 || values.Max() <= TrackBarOverviewMin ? TrackBarOverviewMin + 1 : values.Max();
+        TrackBarOverviewChannelName = _overviewMnemonic switch
+        {
+            "OFFSET_TIME" => "Offset Stand Time",
+            "DEPTH" or "BIT_DEPTH" => "Bit Depth",
+            _ => "Main Stand Time"
+        };
     }
 
     public static bool TryParseDateTime(string? text, out DateTime result)

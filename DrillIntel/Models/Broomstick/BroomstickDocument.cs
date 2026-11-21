@@ -15,6 +15,8 @@ namespace DrillIntel.Models.Broomstick;
 public class BroomstickPlotSettings
 {
     public bool InvertDepthAxis { get; set; } = true;
+    public bool DataSelectorColorByRigState { get; set; } = true;
+    public string DataSelectorChannelMnemonic { get; set; } = "BIT_DEPTH";
     public bool HighlightFormationTop { get; set; } = false;
     public bool ShowSection { get; set; } = false;
     public bool ViewCasing { get; set; } = false;

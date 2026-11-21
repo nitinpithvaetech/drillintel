@@ -252,10 +252,16 @@ public partial class RigStateDocumentViewModel : ObservableObject
 
     // TrackBar Background Overview Plot Properties
     [ObservableProperty]
-    private string _selectedOverviewChannelMnemonic = string.Empty;
+    private string _selectedOverviewChannelMnemonic = "BIT_DEPTH";
 
     [ObservableProperty]
     private PointCollection? _trackBarOverviewPoints;
+
+    [ObservableProperty]
+    private List<int>? _trackBarOverviewColors;
+
+    [ObservableProperty]
+    private bool _dataSelectorYAxisInverted = true;
 
     [ObservableProperty]
     private string _trackBarOverviewChannelName = string.Empty;
@@ -811,6 +817,7 @@ public partial class RigStateDocumentViewModel : ObservableObject
         if (allChannels.Count == 0 && string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
         {
             TrackBarOverviewPoints = null;
+            TrackBarOverviewColors = null;
             TrackBarOverviewChannelName = string.Empty;
             return;
         }
@@ -836,6 +843,7 @@ public partial class RigStateDocumentViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(mnemonic))
         {
             TrackBarOverviewPoints = null;
+            TrackBarOverviewColors = null;
             TrackBarOverviewChannelName = string.Empty;
             return;
         }
@@ -909,11 +917,15 @@ public partial class RigStateDocumentViewModel : ObservableObject
                 }
                 if (pts.CanFreeze) pts.Freeze();
                 TrackBarOverviewPoints = pts;
+                TrackBarOverviewColors = targetChannel?.ColorCodeAsRigState == true && overviewData.RigStateColors.Count == pts.Count
+                    ? overviewData.RigStateColors
+                    : null;
                 return;
             }
         }
 
         TrackBarOverviewPoints = null;
+        TrackBarOverviewColors = null;
     }
 
     private static Brush ParseColorBrush(string? colorStr)
@@ -954,6 +966,11 @@ public partial class RigStateDocumentViewModel : ObservableObject
             if (vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
                 vm.YCoordinate = SelectedOverviewChannelMnemonic;
         }
+        var selectedChannel = ConsoleModel.Tracks.SelectMany(t => t.Channels).FirstOrDefault(c =>
+            string.Equals(c.Mnemonic, SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(c.Title, SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+        vm.ColorCodeAsRigState = selectedChannel?.ColorCodeAsRigState ?? true;
+        vm.IsYAxisInverted = DataSelectorYAxisInverted;
 
         bool? result;
         if (OpenDataSelectorDialogHandler != null)
@@ -976,6 +993,11 @@ public partial class RigStateDocumentViewModel : ObservableObject
             {
                 SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
             }
+            DataSelectorYAxisInverted = vm.IsYAxisInverted;
+            var configuredChannel = ConsoleModel.Tracks.SelectMany(t => t.Channels).FirstOrDefault(c =>
+                string.Equals(c.Mnemonic, SelectedOverviewChannelMnemonic, StringComparison.OrdinalIgnoreCase));
+            if (configuredChannel != null)
+                configuredChannel.ColorCodeAsRigState = vm.ColorCodeAsRigState;
             await RefreshDataAsync();
         }
     }
@@ -1162,6 +1184,11 @@ public partial class RigStateDocumentViewModel : ObservableObject
             ConsoleModel.realTime = docData.ConsoleModel.realTime;
             ConsoleModel.crossHair = docData.ConsoleModel.crossHair;
 
+            SelectedOverviewChannelMnemonic = string.IsNullOrWhiteSpace(docData.SelectedOverviewChannelMnemonic)
+                ? "BIT_DEPTH"
+                : docData.SelectedOverviewChannelMnemonic;
+            DataSelectorYAxisInverted = docData.DataSelectorYAxisInverted;
+
             if (!string.IsNullOrWhiteSpace(docData.SelectedPreset))
                 SelectedPreset = docData.SelectedPreset;
             if (docData.MaxPoints > 0)
@@ -1199,6 +1226,8 @@ public partial class RigStateDocumentViewModel : ObservableObject
             ToDate = ToDate,
             ToTime = ToTime,
             MaxPoints = MaxPoints,
+            SelectedOverviewChannelMnemonic = SelectedOverviewChannelMnemonic,
+            DataSelectorYAxisInverted = DataSelectorYAxisInverted,
             SelectedWellId = ConsoleModel.WellID,
             SelectedLogId = LogId
         };

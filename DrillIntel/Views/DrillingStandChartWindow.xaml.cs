@@ -170,13 +170,33 @@ public partial class DrillingStandChartWindow : Window
         }
     }
 
-    private void OnDataSelectorSettingsClick(object sender, RoutedEventArgs e)
+    private async void OnDataSelectorSettingsClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not DrillingStandChartViewModel vm) return;
-        var selectorVm = new DataSelectorViewModel(vm.CreateDataSelectorConsole());
+        var selectorConsole = await vm.CreateDataSelectorConsoleAsync();
+        var selectorVm = new DataSelectorViewModel(selectorConsole);
+        string selectedMnemonic = vm.OverviewMnemonic;
+        if (selectorVm.AvailableYCoordinates.Contains(selectedMnemonic))
+            selectorVm.YCoordinate = selectedMnemonic;
+        selectorVm.ColorCodeAsRigState = vm.ColorCodeAsRigState;
+        selectorVm.IsYAxisInverted = vm.IsOverviewYAxisInverted;
         var dialog = new DataSelectorWindow(selectorVm) { Owner = this };
-        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(selectorVm.SelectedChannelMnemonic))
-            vm.SetOverviewChannel(selectorVm.SelectedChannelMnemonic);
+        if (dialog.ShowDialog() == true)
+        {
+            bool rigStateModeChanged = vm.RigStateView != selectorVm.ColorCodeAsRigState;
+            string selectedChannel = selectorVm.SelectedChannelMnemonic;
+            if (!string.IsNullOrWhiteSpace(selectedChannel))
+                vm.SetOverviewChannel(selectedChannel);
+
+            vm.ColorCodeAsRigState = selectorVm.ColorCodeAsRigState;
+            vm.IsOverviewYAxisInverted = selectorVm.IsYAxisInverted;
+
+            // Drilling Stands exposes state coloring as its RigState View mode.
+            if (rigStateModeChanged)
+                vm.RigStateView = selectorVm.ColorCodeAsRigState;
+            else
+                await vm.ReloadOverviewAsync();
+        }
     }
 
     private async void OnPresetPeriodChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

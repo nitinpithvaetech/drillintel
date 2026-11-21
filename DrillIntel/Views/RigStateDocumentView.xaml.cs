@@ -79,6 +79,12 @@ public partial class RigStateDocumentView : UserControl
         }
     }
 
+    private void OnDataSelectorSettingsRequested(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is RigStateDocumentViewModel vm)
+            vm.OpenDataSelector();
+    }
+
     private void OnChartMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (_renderer == null) return;

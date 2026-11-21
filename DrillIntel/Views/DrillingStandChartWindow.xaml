@@ -114,9 +114,6 @@
                         </StackPanel>
                     </Button>
 
-                    <Button Content="DataSelector Settings" Click="OnDataSelectorSettingsClick" 
-                            Height="28" Padding="12,0" FontSize="11"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" BorderBrush="#CBD5E1" Foreground="#475569" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -130,11 +127,14 @@
                                            SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
                                            IsTimeLog="{Binding IsTimeLog}" 
                                            OverviewPoints="{Binding TrackBarOverviewPoints}"
+                                           OverviewPointColors="{Binding TrackBarOverviewColors}"
+                                           IsOverviewInverted="{Binding IsOverviewYAxisInverted}"
                                            OverviewChannelName="{Binding TrackBarOverviewChannelName}" 
                                            OverviewStroke="{Binding TrackBarOverviewBrush}"
                                            OverviewYMin="{Binding TrackBarOverviewMin}" 
                                            OverviewYMax="{Binding TrackBarOverviewMax}"
                                            SelectedPeriod="{Binding SelectedPreset, Mode=TwoWay}" 
+                                           SettingsRequested="OnDataSelectorSettingsClick"
                                            RangeChanged="OnSelectorRangeChanged"/>
         </Border>
     </Grid>

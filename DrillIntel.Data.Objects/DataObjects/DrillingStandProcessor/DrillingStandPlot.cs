@@ -16,7 +16,7 @@ public sealed class DrillingStandPlot
     /// Converts the legacy report's VMX_AKPI_DRLG_STAND aggregation to parameterized SQLite queries.
     /// The result retains the legacy standData columns and summary field names for easy UI binding.
     /// </summary>
-    public DrillingStandPlotData GetData(string wellId, string? timeLogTable, DateTime fromDate, DateTime toDate)
+    public DrillingStandPlotData GetData(string wellId, string? timeLogTable, DateTime fromDate, DateTime toDate, bool includeRigStateData = true)
     {
         if (string.IsNullOrWhiteSpace(wellId)) throw new ArgumentException("A well ID is required.", nameof(wellId));
         KPIDrlgStand.EnsureTableExists(_db);
@@ -46,8 +46,11 @@ FROM VMX_AKPI_DRLG_STAND WHERE WELL_ID=@WellID ORDER BY DEPTH",
         double total = 0, dayTotal = 0, nightTotal = 0;
         int count = 0, dayCount = 0, nightCount = 0;
         var offsetWell = GetFirstOffsetWell(wellId);
+        var offsetStands = string.IsNullOrWhiteSpace(offsetWell)
+            ? new List<OffsetStandRow>()
+            : LoadOffsetStands(offsetWell);
         List<RigStateLogRow>? allRigStateRows = null;
-        if (!string.IsNullOrWhiteSpace(safeLogTable))
+        if (includeRigStateData && !string.IsNullOrWhiteSpace(safeLogTable))
         {
             allRigStateRows = LoadAllRigStateRows(safeLogTable);
         }
@@ -62,16 +65,13 @@ FROM VMX_AKPI_DRLG_STAND WHERE WELL_ID=@WellID ORDER BY DEPTH",
             string dayNight = Convert.ToString(row["TIME"]) == "N" ? "N" : "D";
             double offsetTime = 0;
             string offsetDayNight = "D";
-            if (!string.IsNullOrWhiteSpace(offsetWell))
+            if (offsetStands.Count > 0)
             {
-                var offsetRows = _db.GetTable(@"SELECT FROM_DATE, TO_DATE, TIME FROM VMX_AKPI_DRLG_STAND
-WHERE WELL_ID=@WellID AND DEPTH>=@Low AND DEPTH<=@High ORDER BY ABS(DEPTH-@Depth) LIMIT 1",
-                    new Dictionary<string, object?> { ["@WellID"] = offsetWell, ["@Low"] = depth - 50, ["@High"] = depth + 50, ["@Depth"] = depth });
-                if (offsetRows.Rows.Count > 0)
+                var offset = FindNearestOffsetStand(offsetStands, depth);
+                if (offset != null)
                 {
-                    var off = offsetRows.Rows[0];
-                    offsetTime = Math.Abs((ReadDate(off["TO_DATE"]) - ReadDate(off["FROM_DATE"])).TotalMinutes);
-                    offsetDayNight = Convert.ToString(off["TIME"]) == "N" ? "N" : "D";
+                    offsetTime = offset.Minutes;
+                    offsetDayNight = offset.DayNight;
                 }
             }
 
@@ -80,10 +80,13 @@ WHERE WELL_ID=@WellID AND DEPTH>=@Low AND DEPTH<=@High ORDER BY ABS(DEPTH-@Depth
             if (dayNight == "D") { dayTotal += minutes; dayCount++; } else { nightTotal += minutes; nightCount++; }
 
             // Query stand's time-log window and sum TIME_DURATION by RIG_STATE.
-            var stateDurations = PopulateRigStatesFromCache(allRigStateRows, start, end);
-            foreach (double state in stateDurations.Keys) allRigStateNumbers.Add(state);
-            string statePayload = string.Join(",", stateDurations.Select(s => $"{s.Key.ToString(CultureInfo.InvariantCulture)}#{Math.Round(s.Value / 60, 3).ToString(CultureInfo.InvariantCulture)}"));
-            result.rigStateData.Rows.Add(Math.Round(depth, 2), statePayload);
+            if (includeRigStateData)
+            {
+                var stateDurations = PopulateRigStatesFromCache(allRigStateRows, start, end);
+                foreach (double state in stateDurations.Keys) allRigStateNumbers.Add(state);
+                string statePayload = string.Join(",", stateDurations.Select(s => $"{s.Key.ToString(CultureInfo.InvariantCulture)}#{Math.Round(s.Value / 60, 3).ToString(CultureInfo.InvariantCulture)}"));
+                result.rigStateData.Rows.Add(Math.Round(depth, 2), statePayload);
+            }
         }
 
         result.AvgTime = count == 0 ? 0 : Math.Round(total / count, 2);
@@ -92,8 +95,48 @@ WHERE WELL_ID=@WellID AND DEPTH>=@Low AND DEPTH<=@High ORDER BY ABS(DEPTH-@Depth
         result.AvgDayTime = result.AvgDTime;
         result.AvgNightTime = result.AvgNTime;
         // The legacy chart's normal view shows Main and Offset; rig-state view uses state-coded bars.
-        result.rigStates = LoadRigStateNames(wellId, safeLogTable, allRigStateNumbers);
+        if (includeRigStateData)
+            result.rigStates = LoadRigStateNames(wellId, safeLogTable, allRigStateNumbers);
         return result;
+    }
+
+    private List<OffsetStandRow> LoadOffsetStands(string wellId)
+    {
+        var result = new List<OffsetStandRow>();
+        try
+        {
+            var rows = _db.GetTable(@"SELECT DEPTH, FROM_DATE, TO_DATE, TIME
+FROM VMX_AKPI_DRLG_STAND WHERE WELL_ID=@WellID ORDER BY DEPTH",
+                new Dictionary<string, object?> { ["@WellID"] = wellId });
+            foreach (DataRow row in rows.Rows)
+            {
+                DateTime from = ReadDate(row["FROM_DATE"]);
+                DateTime to = ReadDate(row["TO_DATE"]);
+                result.Add(new OffsetStandRow(
+                    ReadDouble(row["DEPTH"]),
+                    Math.Abs((to - from).TotalMinutes),
+                    Convert.ToString(row["TIME"]) == "N" ? "N" : "D"));
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    private static OffsetStandRow? FindNearestOffsetStand(IReadOnlyList<OffsetStandRow> stands, double depth)
+    {
+        int low = 0, high = stands.Count - 1;
+        while (low <= high)
+        {
+            int mid = low + ((high - low) / 2);
+            if (stands[mid].Depth < depth) low = mid + 1;
+            else high = mid - 1;
+        }
+
+        OffsetStandRow? nearest = null;
+        if (low < stands.Count) nearest = stands[low];
+        if (high >= 0 && (nearest == null || Math.Abs(stands[high].Depth - depth) < Math.Abs(nearest.Depth - depth)))
+            nearest = stands[high];
+        return nearest != null && Math.Abs(nearest.Depth - depth) <= 50 ? nearest : null;
     }
 
     private static SortedDictionary<double, double> PopulateRigStatesFromCache(List<RigStateLogRow>? allRows, DateTime fromDate, DateTime toDate)
@@ -275,6 +318,7 @@ WHERE WELL_ID=@WellID AND DEPTH>=@Low AND DEPTH<=@High ORDER BY ABS(DEPTH-@Depth
         catch { return false; }
     }
     private sealed record RigStateLogRow(DateTime DateTime, double State, double DurationSeconds);
+    private sealed record OffsetStandRow(double Depth, double Minutes, string DayNight);
     private bool IsValidTable(string? value) => !string.IsNullOrWhiteSpace(value) && _db.TableExists(value);
     private static string EscapeTable(string table) => $"[{table.Replace("]", "]]")}]";
     // New SQLite conversion: this matches the date text written by the project's legacy stand/log tables.

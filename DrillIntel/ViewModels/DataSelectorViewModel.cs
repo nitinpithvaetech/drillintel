@@ -15,16 +15,19 @@ public partial class DataSelectorViewModel : ObservableObject
     private string _targetSeries = string.Empty;
 
     [ObservableProperty]
-    private string _labelsField = "Timestamp";
+    private string _labelsField = "DateTime";
 
     [ObservableProperty]
-    private string _xCoordinate = "DayIndex";
+    private string _xCoordinate = "DateTime";
 
     [ObservableProperty]
-    private string _yCoordinate = "TotalSales";
+    private string _yCoordinate = "BIT_DEPTH";
 
     [ObservableProperty]
     private string _selectedChannelMnemonic = string.Empty;
+
+    [ObservableProperty]
+    private bool _colorCodeAsRigState;
 
     [ObservableProperty]
     private bool _isYAxisInverted = true;
@@ -74,7 +77,7 @@ public partial class DataSelectorViewModel : ObservableObject
             foreach (var ch in channels)
             {
                 string name = !string.IsNullOrWhiteSpace(ch.Title) ? ch.Title : ch.Mnemonic;
-                if (!string.IsNullOrWhiteSpace(name))
+                if (!string.IsNullOrWhiteSpace(name) && !AvailableSeries.Contains(name, StringComparer.OrdinalIgnoreCase))
                 {
                     AvailableSeries.Add(name);
                 }
@@ -93,11 +96,12 @@ public partial class DataSelectorViewModel : ObservableObject
         TargetSeries = AvailableSeries.FirstOrDefault() ?? "LineSeries1";
 
         // Field mapping options matching drilling analytics & user reference
+        AvailableLabelFields.Add("DateTime");
         AvailableLabelFields.Add("Timestamp");
         AvailableLabelFields.Add("DateTime (UTC)");
         AvailableLabelFields.Add("FormattedDate");
         AvailableLabelFields.Add("SampleIndex");
-        LabelsField = "Timestamp";
+        LabelsField = "DateTime";
 
         AvailableXCoordinates.Add("DateTime");
         AvailableXCoordinates.Add("DATETIME");
@@ -105,7 +109,7 @@ public partial class DataSelectorViewModel : ObservableObject
         AvailableXCoordinates.Add("TimeOADate");
         AvailableXCoordinates.Add("ElapsedHours");
         AvailableXCoordinates.Add("MeasuredDepth");
-        XCoordinate = _console.IndexType == enumIndexType.TimeLog ? "DateTime" : "MeasuredDepth";
+        XCoordinate = "DateTime";
 
         // Y Coordinates
         foreach (var ch in channels)
@@ -115,19 +119,23 @@ public partial class DataSelectorViewModel : ObservableObject
                 AvailableYCoordinates.Add(ch.Mnemonic);
             }
         }
-        if (!AvailableYCoordinates.Contains("DEPTH")) AvailableYCoordinates.Insert(0, "DEPTH");
-        if (!AvailableYCoordinates.Contains("TotalSales")) AvailableYCoordinates.Add("TotalSales");
-        if (!AvailableYCoordinates.Contains("ROPA")) AvailableYCoordinates.Add("ROPA");
-        if (!AvailableYCoordinates.Contains("WOB")) AvailableYCoordinates.Add("WOB");
-        if (!AvailableYCoordinates.Contains("TORQ")) AvailableYCoordinates.Add("TORQ");
-
-        var depthOption = AvailableYCoordinates.FirstOrDefault(y => 
-            y.Equals("DEPTH", StringComparison.OrdinalIgnoreCase) || 
-            y.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase) || 
-            y.Contains("DEPTH", StringComparison.OrdinalIgnoreCase));
+        // Prefer the canonical bit-depth mnemonic, then the app's legacy DEPTH channel.
+        // Both options stay in the list when present so existing documents remain selectable.
+        if (!AvailableYCoordinates.Contains("BIT_DEPTH", StringComparer.OrdinalIgnoreCase)) AvailableYCoordinates.Insert(0, "BIT_DEPTH");
+        if (!AvailableYCoordinates.Contains("DEPTH", StringComparer.OrdinalIgnoreCase)) AvailableYCoordinates.Insert(1, "DEPTH");
+        var depthChannel = channels.FirstOrDefault(c =>
+            c.Title.Contains("Bit Depth", StringComparison.OrdinalIgnoreCase) ||
+            c.Name.Contains("Bit Depth", StringComparison.OrdinalIgnoreCase))
+            ?? channels.FirstOrDefault(c => c.Mnemonic.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase))
+            ?? channels.FirstOrDefault(c => c.Mnemonic.Equals("DEPTH", StringComparison.OrdinalIgnoreCase));
+        var depthOption = depthChannel?.Mnemonic
+            ?? AvailableYCoordinates.FirstOrDefault(y => y.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase))
+            ?? AvailableYCoordinates.FirstOrDefault(y => y.Equals("DEPTH", StringComparison.OrdinalIgnoreCase))
+            ?? AvailableYCoordinates.FirstOrDefault(y => y.Contains("DEPTH", StringComparison.OrdinalIgnoreCase));
 
         YCoordinate = depthOption ?? AvailableYCoordinates.FirstOrDefault() ?? "DEPTH";
         SelectedChannelMnemonic = YCoordinate;
+        ColorCodeAsRigState = true;
         IsYAxisInverted = true;
     }
 
@@ -140,6 +148,7 @@ public partial class DataSelectorViewModel : ObservableObject
         if (exactChannel != null)
         {
             SelectedChannelMnemonic = exactChannel.Mnemonic;
+            exactChannel.ColorCodeAsRigState = ColorCodeAsRigState;
         }
         else
         {
@@ -152,6 +161,9 @@ public partial class DataSelectorViewModel : ObservableObject
                 channel.Mnemonic = YCoordinate;
                 channel.Title = TargetSeries;
             }
+
+            if (channel != null)
+                channel.ColorCodeAsRigState = ColorCodeAsRigState;
 
             SelectedChannelMnemonic = !string.IsNullOrWhiteSpace(YCoordinate)
                 ? YCoordinate

@@ -140,13 +140,19 @@ public partial class TagVisualizerViewModel : ObservableObject
     private PointCollection? _trackBarOverviewPoints;
 
     [ObservableProperty]
+    private List<int>? _trackBarOverviewColors;
+
+    [ObservableProperty]
     private string _trackBarOverviewChannelName = "Bit Depth";
 
     [ObservableProperty]
     private Brush _trackBarOverviewBrush = new SolidColorBrush(Color.FromRgb(25, 118, 210));
 
     [ObservableProperty]
-    private string _selectedOverviewChannelMnemonic = "DEPTH";
+    private string _selectedOverviewChannelMnemonic = "BIT_DEPTH";
+
+    [ObservableProperty]
+    private bool _colorCodeAsRigState = true;
 
     public Func<DataSelectorViewModel, bool?>? OpenDataSelectorDialogHandler { get; set; }
 
@@ -1204,6 +1210,14 @@ public partial class TagVisualizerViewModel : ObservableObject
             var matchSeries = vm.AvailableSeries.FirstOrDefault(s => s.Contains(depthOption, StringComparison.OrdinalIgnoreCase));
             if (matchSeries != null) vm.TargetSeries = matchSeries;
         }
+        vm.ColorCodeAsRigState = ColorCodeAsRigState;
+
+        // Reopen this chart's last channel choice; new charts retain the shared depth default.
+        if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic) &&
+            vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
+        {
+            vm.YCoordinate = SelectedOverviewChannelMnemonic;
+        }
 
         vm.IsYAxisInverted = InvertDepth;
 
@@ -1213,6 +1227,7 @@ public partial class TagVisualizerViewModel : ObservableObject
 
         if (result == true)
         {
+            ColorCodeAsRigState = vm.ColorCodeAsRigState;
             InvertDepth = vm.IsYAxisInverted;
             var chosenChannel = !string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic)
                 ? vm.SelectedChannelMnemonic
@@ -1259,6 +1274,7 @@ public partial class TagVisualizerViewModel : ObservableObject
 
     public async Task ReloadOverviewForChannelAsync(string channelMnemonic)
     {
+        TrackBarOverviewColors = null;
         if (string.IsNullOrWhiteSpace(TableName) || _dataService == null || !_dataService.TableExists(TableName))
         {
             return;
@@ -1274,6 +1290,10 @@ public partial class TagVisualizerViewModel : ObservableObject
 
                 string? matchedCol = colNames.FirstOrDefault(c => c.Equals(channelMnemonic, StringComparison.OrdinalIgnoreCase))
                                   ?? colNames.FirstOrDefault(c => c.Contains(channelMnemonic, StringComparison.OrdinalIgnoreCase));
+                if (matchedCol == null && channelMnemonic.Contains("DEPTH", StringComparison.OrdinalIgnoreCase))
+                    matchedCol = colNames.FirstOrDefault(c => c.Equals("BIT_DEPTH", StringComparison.OrdinalIgnoreCase))
+                              ?? colNames.FirstOrDefault(c => c.Equals("DEPTH", StringComparison.OrdinalIgnoreCase))
+                              ?? colNames.FirstOrDefault(c => c.Equals("HDTH", StringComparison.OrdinalIgnoreCase));
                 if (matchedCol == null) return;
 
                 string timeCol = "DATETIME";
@@ -1281,11 +1301,18 @@ public partial class TagVisualizerViewModel : ObservableObject
                 else if (colNames.Any(c => c.Equals("DATETIME", StringComparison.OrdinalIgnoreCase))) timeCol = "DATETIME";
                 else if (colNames.Any(c => c.Equals("TIMEINDEX", StringComparison.OrdinalIgnoreCase))) timeCol = "TIMEINDEX";
 
-                string query = $"SELECT [{timeCol}], [{matchedCol}] FROM [{TableName}] WHERE [{matchedCol}] IS NOT NULL ORDER BY rowid ASC;";
+                string? rigStateCol = colNames.FirstOrDefault(c => c.Equals("RIG_STATE", StringComparison.OrdinalIgnoreCase)
+                    || c.Equals("RIGSTATE", StringComparison.OrdinalIgnoreCase));
+                string? rigStateColorCol = colNames.FirstOrDefault(c => c.Equals("RIG_STATE_COLOR", StringComparison.OrdinalIgnoreCase));
+                var selectColumns = new List<string> { $"[{timeCol}]", $"[{matchedCol}]" };
+                if (rigStateCol != null) selectColumns.Add($"[{rigStateCol}]");
+                if (rigStateColorCol != null) selectColumns.Add($"[{rigStateColorCol}]");
+                string query = $"SELECT {string.Join(", ", selectColumns)} FROM [{TableName}] WHERE [{matchedCol}] IS NOT NULL ORDER BY rowid ASC;";
                 var dtRaw = _dataService.GetTable(query);
                 if (dtRaw != null && dtRaw.Rows.Count > 0)
                 {
                     var rawPoints = new List<DepthDataPoint>(dtRaw.Rows.Count);
+                    var rawColors = new List<int>(dtRaw.Rows.Count);
                     foreach (DataRow row in dtRaw.Rows)
                     {
                         DateTime dt = ParseDate(row[timeCol]);
@@ -1293,28 +1320,48 @@ public partial class TagVisualizerViewModel : ObservableObject
                         if (dt != DateTime.MinValue)
                         {
                             rawPoints.Add(new DepthDataPoint(dt, val));
+                            int color = 0;
+                            if (rigStateColorCol != null)
+                                int.TryParse(Convert.ToString(row[rigStateColorCol], CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out color);
+                            if (color == 0 && rigStateCol != null &&
+                                int.TryParse(Convert.ToString(row[rigStateCol], CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out int state))
+                            {
+                                var stateItem = DrillIntel.Data.Objects.DataObjects.Services.RigStateService.DefaultRigStateItems
+                                    .FirstOrDefault(item => item.Number == state);
+                                color = stateItem.Color;
+                            }
+                            rawColors.Add(color);
                         }
                     }
 
-                    rawPoints.Sort((a, b) => a.DateTime.CompareTo(b.DateTime));
+                    // Keep the point colors aligned while sorting by timestamp.
+                    var coloredPoints = rawPoints.Select((point, index) => (point, color: rawColors[index]))
+                        .OrderBy(pair => pair.point.DateTime).ToList();
+                    rawPoints = coloredPoints.Select(pair => pair.point).ToList();
+                    rawColors = coloredPoints.Select(pair => pair.color).ToList();
 
                     List<DepthDataPoint> sampled;
+                    List<int> sampledColors;
                     if (rawPoints.Count > 3000)
                     {
                         int step = Math.Max(1, rawPoints.Count / 3000);
                         sampled = new List<DepthDataPoint>(3100);
+                        sampledColors = new List<int>(3100);
                         for (int i = 0; i < rawPoints.Count; i += step)
                         {
                             sampled.Add(rawPoints[i]);
+                            sampledColors.Add(rawColors[i]);
                         }
                         if (rawPoints.Count > 0 && sampled[^1].DateTime != rawPoints[^1].DateTime)
                         {
                             sampled.Add(rawPoints[^1]);
+                            sampledColors.Add(rawColors[^1]);
                         }
                     }
                     else
                     {
                         sampled = rawPoints;
+                        sampledColors = rawColors;
                     }
 
                     if (matchedCol.Contains("DEPTH", StringComparison.OrdinalIgnoreCase) ||
@@ -1325,18 +1372,22 @@ public partial class TagVisualizerViewModel : ObservableObject
 
                     int trackBarStep = Math.Max(1, sampled.Count / 500);
                     var pts = new PointCollection(sampled.Count / trackBarStep + 2);
+                    var pointColors = new List<int>(sampled.Count / trackBarStep + 2);
                     for (int i = 0; i < sampled.Count; i += trackBarStep)
                     {
                         pts.Add(new Point(sampled[i].DateTime.ToOADate(), sampled[i].Depth));
+                        pointColors.Add(sampledColors[i]);
                     }
                     if (pts.Count > 0 && sampled.Count > 0 && pts[^1].X != sampled[^1].DateTime.ToOADate())
                     {
                         pts.Add(new Point(sampled[^1].DateTime.ToOADate(), sampled[^1].Depth));
+                        pointColors.Add(sampledColors[^1]);
                     }
 
                     Application.Current?.Dispatcher.Invoke(() =>
                     {
                         TrackBarOverviewPoints = pts;
+                        TrackBarOverviewColors = ColorCodeAsRigState ? pointColors : null;
                         TrackBarOverviewChannelName = matchedCol;
                     });
                 }

@@ -34,6 +34,8 @@ public class RigStateDocumentData
     public double? FromDepth { get; set; }
     public double? ToDepth { get; set; }
     public int MaxPoints { get; set; } = 10000;
+    public string SelectedOverviewChannelMnemonic { get; set; } = "BIT_DEPTH";
+    public bool DataSelectorYAxisInverted { get; set; } = true;
 
     // Optional Context Bindings
     public string? SelectedWellId { get; set; }

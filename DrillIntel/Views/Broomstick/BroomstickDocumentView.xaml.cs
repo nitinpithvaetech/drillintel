@@ -91,6 +91,11 @@ public partial class BroomstickDocumentView : UserControl
         ViewModel?.RangeTrackBarChangedCommand.Execute(null);
     }
 
+    private void OnDataSelectorSettingsRequested(object sender, RoutedEventArgs e)
+    {
+        ViewModel?.OpenDataSelector();
+    }
+
     private void OnChartMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (_renderer == null || ViewModel == null) return;

@@ -220,15 +220,6 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Command="{Binding OpenDataSelectorCommand}" 
-                                    Style="{StaticResource MaterialDesignOutlinedButton}" 
-                                    Height="28" Padding="10,0" Margin="8,0,0,0"
-                                    ToolTip="Open Data Selector &amp; Field Mapping Window">
-                                <StackPanel Orientation="Horizontal">
-                                    <materialDesign:PackIcon Kind="TableCog" Width="14" Height="14" VerticalAlignment="Center" Margin="0,0,4,0" />
-                                    <TextBlock Text="DataSelector Settings" FontSize="11" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -241,9 +232,11 @@
                                                SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
                                                IsTimeLog="True"
                                                OverviewPoints="{Binding TrackBarOverviewPoints}"
+                                               OverviewPointColors="{Binding TrackBarOverviewColors}"
                                                OverviewChannelName="{Binding TrackBarOverviewChannelName}"
                                                OverviewStroke="{Binding TrackBarOverviewBrush}"
                                                IsOverviewInverted="{Binding InvertDepth}"
+                                               SettingsRequested="OnDataSelectorSettingsRequested"
                                                RangeChanged="OnRangeTrackBarChanged" />
             </Grid>
 

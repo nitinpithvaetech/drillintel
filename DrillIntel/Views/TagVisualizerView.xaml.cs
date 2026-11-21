@@ -18,5 +18,11 @@ public partial class TagVisualizerView : UserControl
             vm.RangeTrackBarChangedCommand.Execute(null);
         }
     }
+
+    private void OnDataSelectorSettingsRequested(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is TagVisualizerViewModel vm)
+            vm.OpenDataSelector();
+    }
 }
 

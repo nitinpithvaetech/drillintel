@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shapes;
 
 namespace DrillIntel.Controls;
 
@@ -35,6 +38,10 @@ public partial class RangeTrackBarControl : UserControl
 
     public static readonly DependencyProperty OverviewPointsProperty =
         DependencyProperty.Register(nameof(OverviewPoints), typeof(PointCollection), typeof(RangeTrackBarControl),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnOverviewChanged));
+
+    public static readonly DependencyProperty OverviewPointColorsProperty =
+        DependencyProperty.Register(nameof(OverviewPointColors), typeof(IList<int>), typeof(RangeTrackBarControl),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender, OnOverviewChanged));
 
     public static readonly DependencyProperty OverviewStrokeProperty =
@@ -85,10 +92,25 @@ public partial class RangeTrackBarControl : UserControl
         EventManager.RegisterRoutedEvent(nameof(RangeChanged), RoutingStrategy.Bubble,
             typeof(RoutedEventHandler), typeof(RangeTrackBarControl));
 
+    public static readonly RoutedEvent SettingsRequestedEvent =
+        EventManager.RegisterRoutedEvent(nameof(SettingsRequested), RoutingStrategy.Bubble,
+            typeof(RoutedEventHandler), typeof(RangeTrackBarControl));
+
     public event RoutedEventHandler RangeChanged
     {
         add => AddHandler(RangeChangedEvent, value);
         remove => RemoveHandler(RangeChangedEvent, value);
+    }
+
+    public event RoutedEventHandler SettingsRequested
+    {
+        add => AddHandler(SettingsRequestedEvent, value);
+        remove => RemoveHandler(SettingsRequestedEvent, value);
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        RaiseEvent(new RoutedEventArgs(SettingsRequestedEvent, this));
     }
 
     public double Minimum
@@ -133,6 +155,12 @@ public partial class RangeTrackBarControl : UserControl
         set => SetValue(OverviewPointsProperty, value);
     }
 
+    public IList<int>? OverviewPointColors
+    {
+        get => (IList<int>?)GetValue(OverviewPointColorsProperty);
+        set => SetValue(OverviewPointColorsProperty, value);
+    }
+
     public Brush? OverviewStroke
     {
         get => (Brush?)GetValue(OverviewStrokeProperty);
@@ -175,6 +203,7 @@ public partial class RangeTrackBarControl : UserControl
     private double _initialSelectionStart;
     private double _initialSelectionEnd;
     private bool _isInternalUpdate;
+    private readonly List<Polyline> _rigStateColorSegments = new();
 
     public RangeTrackBarControl()
     {
@@ -293,6 +322,11 @@ public partial class RangeTrackBarControl : UserControl
     {
         if (OverviewCanvas == null || OverviewPolyline == null || TrackBarContainer == null) return;
 
+        foreach (var segment in _rigStateColorSegments)
+            OverviewCanvas.Children.Remove(segment);
+        _rigStateColorSegments.Clear();
+        OverviewPolyline.Visibility = Visibility.Visible;
+
         double trackWidth = TrackBarContainer.ActualWidth;
         double trackHeight = TrackBarContainer.ActualHeight;
         if (trackWidth <= 0) trackWidth = 300;
@@ -355,7 +389,21 @@ public partial class RangeTrackBarControl : UserControl
             screenPoints.Add(new Point(xPx, yPx));
         }
 
-        OverviewPolyline.Points = screenPoints;
+        bool hasRigStateColors = OverviewPointColors is { Count: >= 2 } pointColors &&
+            pointColors.Take(pts.Count).Any(color => color != 0);
+        if (hasRigStateColors)
+        {
+            OverviewPolyline.Points = new PointCollection();
+            OverviewPolyline.Visibility = Visibility.Collapsed;
+            if (OverviewPolygon != null)
+                OverviewPolygon.Visibility = Visibility.Collapsed;
+
+            AddRigStateColorSegments(screenPoints, OverviewPointColors!);
+        }
+        else
+        {
+            OverviewPolyline.Points = screenPoints;
+        }
 
         if (OverviewPolygon != null && ShowOverviewFill && screenPoints.Count > 0)
         {
@@ -387,6 +435,54 @@ public partial class RangeTrackBarControl : UserControl
                 TxtOverviewChannel.Visibility = Visibility.Collapsed;
             }
         }
+    }
+
+    private void AddRigStateColorSegments(PointCollection points, IList<int> colors)
+    {
+        if (OverviewCanvas == null || points.Count < 2) return;
+
+        int currentArgb = colors.Count > 0 ? colors[0] : 0;
+        var segmentPoints = new PointCollection { points[0] };
+        for (int i = 1; i < points.Count; i++)
+        {
+            int pointArgb = i - 1 < colors.Count ? colors[i - 1] : currentArgb;
+            if (pointArgb == 0) pointArgb = currentArgb;
+
+            if (pointArgb != currentArgb && segmentPoints.Count > 1)
+            {
+                AddColoredSegment(segmentPoints, currentArgb);
+                segmentPoints = new PointCollection { points[i - 1] };
+                currentArgb = pointArgb;
+            }
+
+            segmentPoints.Add(points[i]);
+        }
+
+        if (segmentPoints.Count > 1)
+            AddColoredSegment(segmentPoints, currentArgb);
+    }
+
+    private void AddColoredSegment(PointCollection points, int argb)
+    {
+        var line = new Polyline
+        {
+            Points = points,
+            Stroke = argb == 0 ? OverviewPolyline.Stroke : CreateBrushFromArgb(argb),
+            StrokeThickness = OverviewPolyline.StrokeThickness,
+            IsHitTestVisible = false
+        };
+        OverviewCanvas.Children.Add(line);
+        _rigStateColorSegments.Add(line);
+    }
+
+    private static Brush CreateBrushFromArgb(int argb)
+    {
+        uint value = unchecked((uint)argb);
+        byte alpha = (byte)(value >> 24);
+        if (alpha == 0 && (value & 0x00FFFFFF) != 0) alpha = 255;
+        var brush = new SolidColorBrush(Color.FromArgb(alpha, (byte)(value >> 16), (byte)(value >> 8), (byte)value));
+        if (brush.CanFreeze) brush.Freeze();
+        return brush;
     }
 
     private void SyncPeriodComboBox()
@@ -468,6 +564,9 @@ public partial class RangeTrackBarControl : UserControl
     {
         if (e.LeftButton == MouseButtonState.Pressed && _currentDragMode == DragMode.None)
         {
+            // Keep the bubbled event from reaching TrackBarContainer, which treats it
+            // as a click-to-reposition and fights with the active drag.
+            e.Handled = true;
             _currentDragMode = DragMode.MoveWindow;
             BeginDrag(e);
         }
@@ -513,6 +612,7 @@ public partial class RangeTrackBarControl : UserControl
         if (trackWidth <= 0) return;
 
         double totalRange = Maximum - Minimum;
+        if (totalRange <= 0) return;
         double deltaUnits = (deltaPx / trackWidth) * totalRange;
         double windowSpan = _initialSelectionEnd - _initialSelectionStart;
 
@@ -541,13 +641,13 @@ public partial class RangeTrackBarControl : UserControl
                     break;
 
                 case DragMode.ResizeLeft:
-                    double minSpanLeft = IsTimeLog ? (5.0 / 1440.0) : Math.Max(1.0, totalRange * 0.001);
+                    double minSpanLeft = GetMinimumSelectionSpan(totalRange, trackWidth);
                     double resStart = Math.Max(Minimum, Math.Min(_initialSelectionEnd - minSpanLeft, _initialSelectionStart + deltaUnits));
                     SelectionStart = resStart;
                     break;
 
                 case DragMode.ResizeRight:
-                    double minSpanRight = IsTimeLog ? (5.0 / 1440.0) : Math.Max(1.0, totalRange * 0.001);
+                    double minSpanRight = GetMinimumSelectionSpan(totalRange, trackWidth);
                     double resEnd = Math.Min(Maximum, Math.Max(_initialSelectionStart + minSpanRight, _initialSelectionEnd + deltaUnits));
                     SelectionEnd = resEnd;
                     break;
@@ -565,12 +665,26 @@ public partial class RangeTrackBarControl : UserControl
     {
         base.OnMouseLeftButtonUp(e);
 
-        if (IsMouseCaptured)
+        if (_currentDragMode != DragMode.None)
         {
-            ReleaseMouseCapture();
+            if (IsMouseCaptured)
+                ReleaseMouseCapture();
             _currentDragMode = DragMode.None;
             NotifyRangeChanged();
         }
+    }
+
+    private double GetMinimumSelectionSpan(double totalRange, double trackWidth)
+    {
+        if (totalRange <= 0) return 0;
+
+        // Keep the data span consistent with the minimum visible hit target. Without
+        // this, the 38px visual minimum can be much wider than the selected range,
+        // making the next drag/resize start from a misleading position.
+        const double minimumHitWidth = 38.0;
+        double pixelSpan = totalRange * Math.Min(1.0, minimumHitWidth / Math.Max(1.0, trackWidth));
+        double domainMinimum = IsTimeLog ? 5.0 / 1440.0 : Math.Max(1.0, totalRange * 0.001);
+        return Math.Min(totalRange, Math.Max(pixelSpan, domainMinimum));
     }
 
     private void NotifyRangeChanged()

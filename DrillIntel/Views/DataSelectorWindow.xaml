@@ -7,8 +7,8 @@
         xmlns:viewmodels="clr-namespace:DrillIntel.ViewModels"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=viewmodels:DataSelectorViewModel}"
-        Title="Data Selector Window"
-        Width="460" Height="415"
+        Title="Data Selector Settings"
+        Width="460" Height="435"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
@@ -63,7 +63,7 @@
                         <ColumnDefinition Width="100" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="X Coordinate:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="0" Text="X Axis:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableXCoordinates}" 
                               SelectedItem="{Binding XCoordinate, Mode=TwoWay}"
                               Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
@@ -75,10 +75,23 @@
                         <ColumnDefinition Width="100" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Y Coordinate:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="0" Text="Y Axis:" FontWeight="SemiBold" FontSize="11.5" Foreground="#475569" VerticalAlignment="Center" />
                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableYCoordinates}" 
                               SelectedItem="{Binding YCoordinate, Mode=TwoWay}"
                               Height="30" FontSize="11.5" VerticalContentAlignment="Center" Background="White" BorderBrush="#CBD5E1" />
+                </Grid>
+
+                <!-- Rig State Color -->
+                <Grid Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <CheckBox Grid.Column="1" Content="Color-code selected channel by Rig State"
+                              IsChecked="{Binding ColorCodeAsRigState, Mode=TwoWay}"
+                              FontWeight="SemiBold" FontSize="11.5" Foreground="#475569"
+                              VerticalAlignment="Center"
+                              ToolTip="Uses the configured Rig State colors when this chart supports channel coloring." />
                 </Grid>
 
                 <!-- Invert Y Axis -->

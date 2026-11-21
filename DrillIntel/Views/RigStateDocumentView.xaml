@@ -114,16 +114,6 @@
                         </StackPanel>
                     </Button>
 
-                                        <Button Command="{Binding OpenDataSelectorCommand}" 
-                            Style="{StaticResource MaterialDesignOutlinedButton}" 
-                            Height="32" Padding="10,0" Margin="0,0,8,0"
-                            ToolTip="Open Data Selector &amp; Field Mapping Window">
-                        <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="TableCog" Width="16" Height="16" VerticalAlignment="Center" Margin="0,0,4,0" />
-                            <TextBlock Text="Data Selector" FontSize="11" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
                     <Button Command="{Binding OpenTrackPropertiesCommand}" 
                             Style="{StaticResource MaterialDesignOutlinedButton}" 
                             Height="32" Padding="10,0" Margin="0,0,8,0"
@@ -282,8 +272,11 @@
                                       SelectionEnd="{Binding TrackBarSelectionEnd, Mode=TwoWay}"
                                       IsTimeLog="{Binding IsTimeLog}"
                                       OverviewPoints="{Binding TrackBarOverviewPoints}"
+                                      OverviewPointColors="{Binding TrackBarOverviewColors}"
+                                      IsOverviewInverted="{Binding DataSelectorYAxisInverted}"
                                       OverviewChannelName="{Binding TrackBarOverviewChannelName}"
                                       OverviewStroke="{Binding TrackBarOverviewBrush}"
+                                      SettingsRequested="OnDataSelectorSettingsRequested"
                                       RangeChanged="OnRangeTrackBarChanged" />
 
         <!-- Bottom Industrial Status & Rig State Bar -->

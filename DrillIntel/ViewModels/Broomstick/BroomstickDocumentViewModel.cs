@@ -725,7 +725,13 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
     [ObservableProperty]
 
-    private string _selectedOverviewChannelMnemonic = "DEPTH";
+    private string _selectedOverviewChannelMnemonic = "BIT_DEPTH";
+
+    partial void OnSelectedOverviewChannelMnemonicChanged(string value)
+    {
+        if (Document?.PlotSettings != null && !string.IsNullOrWhiteSpace(value))
+            Document.PlotSettings.DataSelectorChannelMnemonic = value;
+    }
     private VHTrackConsole? _consoleModel;
 
 
@@ -759,6 +765,20 @@ public partial class BroomstickDocumentViewModel : ObservableObject
     [ObservableProperty]
 
     private PointCollection? _trackBarOverviewPoints;
+
+    [ObservableProperty]
+
+    private List<int>? _trackBarOverviewColors;
+
+    [ObservableProperty]
+
+    private bool _colorCodeAsRigState = true;
+
+    partial void OnColorCodeAsRigStateChanged(bool value)
+    {
+        if (Document?.PlotSettings != null)
+            Document.PlotSettings.DataSelectorColorByRigState = value;
+    }
 
 
 
@@ -1086,6 +1106,8 @@ public partial class BroomstickDocumentViewModel : ObservableObject
         LogId = Document.LogId;
 
         InvertDepthAxis = Document.PlotSettings.InvertDepthAxis;
+        ColorCodeAsRigState = Document.PlotSettings.DataSelectorColorByRigState;
+        SelectedOverviewChannelMnemonic = Document.PlotSettings.DataSelectorChannelMnemonic;
 
         HighlightFormationTop = Document.PlotSettings.HighlightFormationTop;
 
@@ -1204,6 +1226,7 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
     public async Task LoadTrackBarOverviewAsync()
     {
+        TrackBarOverviewColors = null;
         string mnemonic = !string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic)
             ? SelectedOverviewChannelMnemonic
             : "DEPTH";
@@ -1709,7 +1732,39 @@ public partial class BroomstickDocumentViewModel : ObservableObject
         try
         {
             var console = GetOrCreateConsoleModel();
+            if (!string.IsNullOrWhiteSpace(LogId))
+            {
+                try
+                {
+                    var metadata = await _chartDataService.GetAvailableChannelsAsync(
+                        LogId,
+                        IsTimeLog ? enumRTDataSourceType.TimeLog : enumRTDataSourceType.DepthLog);
+                    var track = console.Tracks.FirstOrDefault();
+                    if (track != null)
+                    {
+                        foreach (var channel in metadata)
+                        {
+                            if (string.IsNullOrWhiteSpace(channel.Mnemonic) || track.Channels.Any(c =>
+                                c.Mnemonic.Equals(channel.Mnemonic, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            track.Channels.Add(new VHTrackChannel
+                            {
+                                ID = channel.Mnemonic,
+                                TrackID = track.ID,
+                                Name = channel.Name,
+                                Title = channel.Name,
+                                Mnemonic = channel.Mnemonic,
+                                Unit = channel.Unit
+                            });
+                        }
+                    }
+                }
+                catch { }
+            }
             var vm = new DataSelectorViewModel(console);
+            vm.ColorCodeAsRigState = ColorCodeAsRigState;
+            vm.IsYAxisInverted = InvertDepthAxis;
             if (!string.IsNullOrWhiteSpace(SelectedOverviewChannelMnemonic))
             {
                 if (!vm.AvailableYCoordinates.Contains(SelectedOverviewChannelMnemonic))
@@ -1731,6 +1786,8 @@ public partial class BroomstickDocumentViewModel : ObservableObject
 
             if (result == true)
             {
+                ColorCodeAsRigState = vm.ColorCodeAsRigState;
+                InvertDepthAxis = vm.IsYAxisInverted;
                 if (!string.IsNullOrWhiteSpace(vm.SelectedChannelMnemonic))
                 {
                     SelectedOverviewChannelMnemonic = vm.SelectedChannelMnemonic;
