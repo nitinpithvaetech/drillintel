@@ -150,10 +150,10 @@ public partial class MainWindow : Window
 
         try
         {
-            var expiry = dialog.StartDate.AddMonths(dialog.TermMonths);
+            var expiry = dialog.ExpiryDate;
             await RequireStore().CreateLicenseAsync(
                 dialog.SelectedRig.RigId,
-                $"{dialog.TermMonths}-month",
+                $"{dialog.TermAmount}-{dialog.TermUnit}",
                 AtUtcMidnight(dialog.StartDate),
                 AtUtcMidnight(expiry),
                 dialog.MaxDevices);
@@ -165,6 +165,11 @@ public partial class MainWindow : Window
         {
             ShowSaveError(ex);
         }
+    }
+
+    private void Help_Click(object sender, RoutedEventArgs e)
+    {
+        new LicenseHelpDialog { Owner = this }.ShowDialog();
     }
 
     private async void ImportRequest_Click(object sender, RoutedEventArgs e)

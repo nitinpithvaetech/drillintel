@@ -7,7 +7,8 @@ namespace DrillIntel.Licensing.Admin;
 internal sealed class NewLicenseDialog : Window
 {
     private readonly ComboBox _rigCombo;
-    private readonly ComboBox _planCombo;
+    private readonly TextBox _termAmount;
+    private readonly ComboBox _termUnit;
     private readonly DatePicker _startPicker;
     private readonly TextBox _deviceLimit;
 
@@ -22,7 +23,11 @@ internal sealed class NewLicenseDialog : Window
 
         _rigCombo = new ComboBox { ItemsSource = rigs, DisplayMemberPath = nameof(RigRecord.RigName), SelectedValuePath = nameof(RigRecord.RigId), MinHeight = 34 };
         _rigCombo.SelectedIndex = 0;
-        _planCombo = new ComboBox { ItemsSource = new[] { "4-month", "6-month", "12-month" }, MinHeight = 34, SelectedIndex = 1 };
+        var termPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        _termAmount = new TextBox { Text = "6", MinHeight = 34, Width = 265, Padding = new Thickness(8), VerticalContentAlignment = VerticalAlignment.Center };
+        _termUnit = new ComboBox { ItemsSource = new[] { "Months", "Days" }, MinHeight = 34, Width = 115, SelectedIndex = 0, Margin = new Thickness(8, 0, 0, 0) };
+        termPanel.Children.Add(_termAmount);
+        termPanel.Children.Add(_termUnit);
         _startPicker = new DatePicker { SelectedDate = DateTime.Today, MinHeight = 34 };
         _deviceLimit = new TextBox { Text = "3", MinHeight = 34, Padding = new Thickness(8), VerticalContentAlignment = VerticalAlignment.Center };
 
@@ -36,7 +41,7 @@ internal sealed class NewLicenseDialog : Window
             Margin = new Thickness(0, 0, 0, 12)
         });
         AddField(panel, "Rig", _rigCombo);
-        AddField(panel, "Plan term", _planCombo);
+        AddField(panel, "Plan term", termPanel);
         AddField(panel, "Start date (UTC date)", _startPicker);
         AddField(panel, "Maximum PCs", _deviceLimit);
 
@@ -50,15 +55,17 @@ internal sealed class NewLicenseDialog : Window
     }
 
     public RigRecord? SelectedRig => _rigCombo.SelectedItem as RigRecord;
-    public int TermMonths => _planCombo.SelectedIndex switch { 0 => 4, 1 => 6, 2 => 12, _ => 0 };
+    public int TermAmount => int.TryParse(_termAmount.Text, out var value) ? value : 0;
+    public string TermUnit => _termUnit.SelectedItem?.ToString() == "Days" ? "day" : "month";
+    public DateTime ExpiryDate => TermUnit == "day" ? StartDate.AddDays(TermAmount) : StartDate.AddMonths(TermAmount);
     public DateTime StartDate => _startPicker.SelectedDate?.Date ?? DateTime.Today;
     public int MaxDevices => int.TryParse(_deviceLimit.Text, out var value) ? value : 0;
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (SelectedRig is null || TermMonths == 0 || MaxDevices < 1 || _startPicker.SelectedDate is null)
+        if (SelectedRig is null || TermAmount < 1 || TermAmount > 1200 || MaxDevices < 1 || _startPicker.SelectedDate is null)
         {
-            MessageBox.Show(this, "Choose a rig and plan, then enter a valid start date and positive PC limit.", Title,
+            MessageBox.Show(this, "Choose a rig, enter a positive term up to 1,200 units, select a valid start date, and enter a positive PC limit.", Title,
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }

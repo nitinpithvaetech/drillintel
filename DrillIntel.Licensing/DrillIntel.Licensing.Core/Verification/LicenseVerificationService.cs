@@ -117,7 +117,9 @@ public sealed class LicenseVerificationService(
         if (string.IsNullOrWhiteSpace(entitlement.LicenseId) || entitlement.Revision < 1 ||
             string.IsNullOrWhiteSpace(entitlement.Customer) || string.IsNullOrWhiteSpace(entitlement.Rig))
             throw new CryptographicException("The entitlement is missing required identity or revision fields.");
-        if (entitlement.Plan is not ("4-month" or "6-month" or "12-month") || entitlement.MaxDevices < 1)
+        if (string.IsNullOrWhiteSpace(entitlement.Plan) || entitlement.Plan.Length > 32 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(entitlement.Plan, @"^[1-9][0-9]{0,3}-(day|month)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
+            entitlement.MaxDevices < 1)
             throw new CryptographicException("The entitlement contains an unsupported plan or device limit.");
         if (entitlement.StartUtc.Offset != TimeSpan.Zero || entitlement.ExpiryUtc.Offset != TimeSpan.Zero ||
             entitlement.IssuedAtUtc.Offset != TimeSpan.Zero || entitlement.ExpiryUtc <= entitlement.StartUtc)

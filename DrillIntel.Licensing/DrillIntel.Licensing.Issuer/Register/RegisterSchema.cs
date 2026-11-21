@@ -24,7 +24,7 @@ internal static class RegisterSchema
         CREATE TABLE IF NOT EXISTS Licenses (
             LicenseId TEXT PRIMARY KEY,
             RigId INTEGER NOT NULL REFERENCES Rigs(RigId),
-            Plan TEXT NOT NULL CHECK (Plan IN ('4-month', '6-month', '12-month')),
+            Plan TEXT NOT NULL,
             StartUtc TEXT NOT NULL,
             ExpiryUtc TEXT NOT NULL,
             MaxDevices INTEGER NOT NULL CHECK (MaxDevices > 0),

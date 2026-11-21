@@ -29,6 +29,7 @@
                     <TextBlock Text="Office administration · signed files remain separate from the register" Foreground="#64748B" Margin="0,3,0,0" />
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Help" Click="Help_Click" />
                     <Button Content="Open / Change Register" Click="ChangeRegister_Click" />
                     <Button Content="Refresh" Click="Refresh_Click" />
                     <Button Content="＋  Add Customer" Background="#1976D2" Foreground="White" FontWeight="SemiBold" Click="AddCustomer_Click" />

@@ -204,8 +204,9 @@ public sealed class SqliteLicenseRegisterStore(SqliteRegisterDatabase database)
         int maxDevices = 3,
         CancellationToken cancellationToken = default)
     {
-        if (plan is not ("4-month" or "6-month" or "12-month"))
-            throw new ArgumentOutOfRangeException(nameof(plan));
+        if (string.IsNullOrWhiteSpace(plan) || plan.Length > 32 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(plan, @"^[1-9][0-9]{0,3}-(day|month)$", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            throw new ArgumentOutOfRangeException(nameof(plan), "Plan must be a positive day or month term (for example, 1-day or 6-month).");
         if (expiryUtc <= startUtc || maxDevices < 1)
             throw new ArgumentException("License dates and device limit are invalid.");
 
