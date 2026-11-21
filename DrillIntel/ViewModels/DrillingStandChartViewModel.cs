@@ -20,6 +20,9 @@ public partial class DrillingStandChartViewModel : ObservableObject
     private DrillingStandPlotData _data = new();
     private bool _isApplyingPreset;
     private string _overviewMnemonic = "TIME";
+    private string? _activeWellId;
+    private string? _activeTableName;
+    private CancellationTokenSource? _rangeCts;
 
     [ObservableProperty] private bool _isTimeLog = true;
     [ObservableProperty] private DateTime _logMinDate = DateTime.MinValue;
@@ -106,7 +109,25 @@ public partial class DrillingStandChartViewModel : ObservableObject
         string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
             ? log.__dataTableName
             : log.getDataTableName(_session.GetDataService());
-        await LoadAsync(log.WellID, tableName);
+        _activeWellId = log.WellID;
+        _activeTableName = tableName;
+        await LoadAsync(_activeWellId, _activeTableName);
+    }
+
+    private async Task EnsureActiveLogAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_activeWellId) || string.IsNullOrWhiteSpace(_activeTableName))
+        {
+            var logs = await _repository.GetTimeLogsAsync();
+            var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
+            if (log != null)
+            {
+                _activeWellId = log.WellID;
+                _activeTableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
+                    ? log.__dataTableName
+                    : log.getDataTableName(_session.GetDataService());
+            }
+        }
     }
 
     [RelayCommand]
@@ -126,14 +147,10 @@ public partial class DrillingStandChartViewModel : ObservableObject
         }
         SelectedPreset = "Custom Range";
 
-        var logs = await _repository.GetTimeLogsAsync();
-        var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
-        if (log != null)
+        await EnsureActiveLogAsync();
+        if (!string.IsNullOrWhiteSpace(_activeWellId) && !string.IsNullOrWhiteSpace(_activeTableName))
         {
-            string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
-                ? log.__dataTableName
-                : log.getDataTableName(_session.GetDataService());
-            await LoadAsync(log.WellID, tableName);
+            await LoadAsync(_activeWellId, _activeTableName);
         }
     }
 
@@ -190,14 +207,10 @@ public partial class DrillingStandChartViewModel : ObservableObject
 
             SelectedPreset = presetName;
 
-            var logs = await _repository.GetTimeLogsAsync();
-            var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
-            if (log != null)
+            await EnsureActiveLogAsync();
+            if (!string.IsNullOrWhiteSpace(_activeWellId) && !string.IsNullOrWhiteSpace(_activeTableName))
             {
-                string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
-                    ? log.__dataTableName
-                    : log.getDataTableName(_session.GetDataService());
-                await LoadAsync(log.WellID, tableName);
+                await LoadAsync(_activeWellId, _activeTableName);
             }
         }
         finally
@@ -221,14 +234,29 @@ public partial class DrillingStandChartViewModel : ObservableObject
             ToDateTimeText = endDt.ToString("dd-MM-yyyy HH:mm");
             SelectedPreset = "Custom Range";
 
-            var logs = await _repository.GetTimeLogsAsync();
-            var log = logs.FirstOrDefault(x => x.PrimaryLog) ?? logs.FirstOrDefault();
-            if (log != null)
+            _rangeCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _rangeCts = cts;
+
+            try
             {
-                string tableName = !string.IsNullOrWhiteSpace(log.__dataTableName)
-                    ? log.__dataTableName
-                    : log.getDataTableName(_session.GetDataService());
-                await LoadAsync(log.WellID, tableName);
+                // Debounce 60ms so fast slider scrubbing does not overload database queries
+                await Task.Delay(60, cts.Token);
+                if (cts.Token.IsCancellationRequested) return;
+
+                await EnsureActiveLogAsync();
+                if (!string.IsNullOrWhiteSpace(_activeWellId) && !string.IsNullOrWhiteSpace(_activeTableName))
+                {
+                    await LoadAsync(_activeWellId, _activeTableName);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelled by a newer drag position
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DrillingStandChartViewModel.RangeTrackBarChangedAsync] {ex.Message}");
             }
         }
     }

@@ -192,8 +192,15 @@ public partial class DrillingStandChartWindow : Window
     {
         if (DataContext is DrillingStandChartViewModel vm)
         {
-            await vm.RangeTrackBarChangedAsync();
-            RenderChart();
+            try
+            {
+                await vm.RangeTrackBarChangedAsync();
+                RenderChart();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[DrillingStandChartWindow.OnSelectorRangeChanged] {ex.Message}");
+            }
         }
     }
 
