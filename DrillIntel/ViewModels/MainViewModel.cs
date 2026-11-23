@@ -48,7 +48,9 @@ public partial class MainViewModel : ObservableObject
             Owner = Application.Current?.MainWindow
         };
         window.DevelopmentLicenseVerified += result =>
-            LicenseInformation = FormatLicenseInformation(result);
+            LicenseInformation = FormatLicenseInformation(result, isDevelopment: true);
+        window.ProductionLicenseVerified += result =>
+            LicenseInformation = FormatLicenseInformation(result, isDevelopment: false);
         window.ShowDialog();
     }
 
@@ -235,10 +237,10 @@ public partial class MainViewModel : ObservableObject
             initDb.PropertyChanged += OnDashboardPropertyChanged;
         }
 
-        _ = RestoreDevelopmentLicenseInformationAsync();
+        _ = RestoreLicenseInformationAsync();
     }
 
-    private async Task RestoreDevelopmentLicenseInformationAsync()
+    private async Task RestoreLicenseInformationAsync()
     {
 #if DEBUG
         try
@@ -248,7 +250,7 @@ public partial class MainViewModel : ObservableObject
                 deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
             if (result?.IsValid == true && Application.Current is { } application)
                 await application.Dispatcher.InvokeAsync(() =>
-                    LicenseInformation = FormatLicenseInformation(result));
+                    LicenseInformation = FormatLicenseInformation(result, isDevelopment: true));
             else if (result is { IsValid: false } && Application.Current is { } currentApplication)
                 await currentApplication.Dispatcher.InvokeAsync(() => LicenseInformation = "License: Not activated");
         }
@@ -257,12 +259,28 @@ public partial class MainViewModel : ObservableObject
             // Keep startup non-blocking. The user can inspect/retry activation from Setup.
         }
 #endif
+        if (!ProductionActivationStore.HasStoredPackage)
+            return;
+        try
+        {
+            using var deviceKey = await Task.Run(DeviceKeyStore.OpenOrCreate).ConfigureAwait(false);
+            var result = await ProductionActivationStore.VerifyStoredAsync(
+                deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
+            if (result is not null && Application.Current is { } application)
+                await application.Dispatcher.InvokeAsync(() => LicenseInformation = result.IsValid
+                    ? FormatLicenseInformation(result, isDevelopment: false)
+                    : "License: Not activated");
+        }
+        catch
+        {
+            // Startup stays available when no production key is embedded or the local license is invalid.
+        }
     }
 
-    private static string FormatLicenseInformation(LicenseVerificationResult result)
+    private static string FormatLicenseInformation(LicenseVerificationResult result, bool isDevelopment)
     {
         var expiry = result.LicenseExpiryUtc?.ToLocalTime().ToString("yyyy-MM-dd") ?? "Unknown";
-        return $"License: {result.LicenseId} · Valid until {expiry} · Dev test";
+        return $"License: {result.LicenseId} · Valid until {expiry}" + (isDevelopment ? " · Dev test" : "");
     }
 
     partial void OnCurrentViewModelChanged(ObservableObject? oldValue, ObservableObject newValue)

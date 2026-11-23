@@ -6,5 +6,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\DrillIntel.Licensing.Core\DrillIntel.Licensing.Core.csproj" />
+    <EmbeddedResource Include="ProductionIssuerPublicKey.json"
+                       LogicalName="DrillIntel.Licensing.Client.ProductionIssuerPublicKey.json"
+                       Condition="Exists('ProductionIssuerPublicKey.json')" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 </Project>

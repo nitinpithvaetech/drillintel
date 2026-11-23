@@ -12,6 +12,32 @@
         <Style x:Key="SelectOnRightClickRowStyle" TargetType="DataGridRow">
             <EventSetter Event="PreviewMouseRightButtonDown" Handler="DataGridRow_PreviewMouseRightButtonDown" />
         </Style>
+        <Style x:Key="RequestHistoryRowStyle" TargetType="DataGridRow" BasedOn="{StaticResource SelectOnRightClickRowStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Outcome}" Value="rejected">
+                    <Setter Property="Background" Value="#FEE2E2" />
+                    <Setter Property="Foreground" Value="#991B1B" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Outcome}" Value="duplicate">
+                    <Setter Property="Background" Value="#FEF3C7" />
+                    <Setter Property="Foreground" Value="#92400E" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Outcome}" Value="issued">
+                    <Setter Property="Background" Value="#DCFCE7" />
+                    <Setter Property="Foreground" Value="#166534" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#BFDBFE" />
+                    <Setter Property="Foreground" Value="#1E3A8A" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="GridFilterTextBoxStyle" TargetType="TextBox">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="ToolTip" Value="Type to filter rows. Clear the text to show all rows." />
+        </Style>
     </Window.Resources>
     <Grid Margin="18">
         <Grid.RowDefinitions>
@@ -34,7 +60,6 @@
                     <Button Content="Refresh" Click="Refresh_Click" />
                     <Button Content="＋  Add Customer" Background="#1976D2" Foreground="White" FontWeight="SemiBold" Click="AddCustomer_Click" />
                     <Button Content="Import .jws Request" Click="ImportRequest_Click" />
-                    <Button Content="Issue Dev Test Bundle" Click="IssueDevelopmentBundle_Click" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -66,6 +91,7 @@
                         <TextBlock Text="Customers" FontSize="18" FontWeight="SemiBold" Foreground="#172033" />
                         <TextBlock x:Name="CustomerCountText" Text="Loading register…" Foreground="#64748B" Margin="0,3,0,0" />
                     </StackPanel>
+                    <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="CustomersGrid" TextChanged="GridFilter_TextChanged" ToolTip="Filter customers by name, contact, rig count, or license count" />
                     <DataGrid x:Name="CustomersGrid" SelectionChanged="CustomersGrid_SelectionChanged" SelectionMode="Single" AutoGenerateColumns="False">
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Customer" Binding="{Binding Name}" Width="*" />
@@ -111,7 +137,12 @@
                     </Border>
 
                     <TabControl x:Name="DetailsTabs" Grid.Row="1">
-                        <TabItem Header="Rigs"><DataGrid x:Name="RigsGrid" /></TabItem>
+                        <TabItem Header="Rigs">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="RigsGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="RigsGrid" />
+                            </DockPanel>
+                        </TabItem>
                         <TabItem Header="Licenses">
                             <DockPanel LastChildFill="True">
                                 <Border DockPanel.Dock="Top" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="8,6" Margin="0,0,0,6">
@@ -124,6 +155,7 @@
                                         <TextBlock DockPanel.Dock="Right" Text="Tip: Press Ctrl+C or right-click to copy License ID" Foreground="#94A3B8" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0" />
                                     </DockPanel>
                                 </Border>
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="LicensesGrid" TextChanged="GridFilter_TextChanged" />
                                 <DataGrid x:Name="LicensesGrid" AutoGenerateColumns="False" SelectionMode="Single" SelectionUnit="FullRow"
                                           SelectionChanged="LicensesGrid_SelectionChanged"
                                           PreviewKeyDown="LicensesGrid_PreviewKeyDown" MouseDoubleClick="LicensesGrid_MouseDoubleClick"
@@ -196,13 +228,67 @@
                                 </DataGrid>
                             </DockPanel>
                         </TabItem>
-                        <TabItem Header="Devices"><DataGrid x:Name="DevicesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
-                        <TabItem Header="Entitlement Revisions"><DataGrid x:Name="RevisionsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
-                        <TabItem Header="Activation Files"><DataGrid x:Name="ActivationFilesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
-                        <TabItem Header="Requests"><DataGrid x:Name="RequestsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
-                        <TabItem Header="Request Inbox"><DataGrid x:Name="RequestInboxGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
-                        <TabItem Header="Payments"><DataGrid x:Name="PaymentsGrid" /></TabItem>
-                        <TabItem Header="Audit Log"><DataGrid x:Name="AuditGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" /></TabItem>
+                        <TabItem Header="Devices">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="DevicesGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="DevicesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Entitlement Revisions">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="RevisionsGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="RevisionsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Activation Files">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="ActivationFilesGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="ActivationFilesGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Requests">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="RequestsGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="RequestsGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource RequestHistoryRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Request Inbox">
+                            <DockPanel LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,6">
+                                    <TextBlock Text="Select a pending request to issue a PC activation." VerticalAlignment="Center" Foreground="#64748B" Margin="4,0,12,0" />
+                                    <Button Content="Set Up Production Key" Click="SetupProductionKey_Click" />
+                                    <Button Content="Issue Activation Package" Click="IssueActivationPackage_Click" />
+                                    <Button Content="Reject / Archive Request" Click="RejectActivationRequest_Click" />
+                                    <Button x:Name="IssueDevTestBundleButton" Content="Issue Dev Test Bundle" Click="IssueDevelopmentBundle_Click" />
+                                </StackPanel>
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="RequestInboxGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="RequestInboxGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Payments">
+                            <DockPanel LastChildFill="True">
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,6">
+                                    <Button Content="＋  Record Payment" Click="RecordPayment_Click" />
+                                </StackPanel>
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="PaymentsGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="PaymentsGrid" AutoGenerateColumns="False" IsReadOnly="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Order / Transaction Ref" Binding="{Binding OrderRef}" Width="*" />
+                                        <DataGridTextColumn Header="License ID" Binding="{Binding LicenseId}" Width="230" />
+                                        <DataGridTextColumn Header="Amount" Binding="{Binding AmountDisplay}" Width="110" />
+                                        <DataGridTextColumn Header="Processor / Method" Binding="{Binding Processor}" Width="150" />
+                                        <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                                        <DataGridTextColumn Header="Paid (UTC)" Binding="{Binding PaidAtUtc}" Width="180" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </TabItem>
+                        <TabItem Header="Audit Log">
+                            <DockPanel LastChildFill="True">
+                                <TextBox DockPanel.Dock="Top" Style="{StaticResource GridFilterTextBoxStyle}" Tag="AuditGrid" TextChanged="GridFilter_TextChanged" />
+                                <DataGrid x:Name="AuditGrid" PreviewKeyDown="GenericGrid_PreviewKeyDown" ContextMenu="{StaticResource LicenseRowContextMenu}" RowStyle="{StaticResource SelectOnRightClickRowStyle}" />
+                            </DockPanel>
+                        </TabItem>
                     </TabControl>
                 </Grid>
             </Border>

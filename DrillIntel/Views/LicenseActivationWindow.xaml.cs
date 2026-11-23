@@ -13,11 +13,65 @@ public partial class LicenseActivationWindow : Window
     private DeviceKeySession? _deviceKey;
 
     public event Action<LicenseVerificationResult>? DevelopmentLicenseVerified;
+    public event Action<LicenseVerificationResult>? ProductionLicenseVerified;
 
     public LicenseActivationWindow()
     {
         InitializeComponent();
+#if !DEBUG
+        ImportTestBundleButton.Visibility = Visibility.Collapsed;
+#endif
         Closed += (_, _) => _deviceKey?.Dispose();
+    }
+
+    private async void ImportProductionPackage_Click(object sender, RoutedEventArgs e)
+    {
+        if (_deviceKey is null)
+        {
+            MessageBox.Show(this, "Choose Check / Create Key first so the package can be matched to this PC.",
+                "License Package", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import DrillIntel license activation package",
+            Filter = "DrillIntel license package (*.dillicense)|*.dillicense|ZIP archive (*.zip)|*.zip|All files (*.*)|*.*",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        ImportProductionPackageButton.IsEnabled = false;
+        FooterStatusText.Text = "Verifying license package";
+        try
+        {
+            var result = await ProductionActivationStore.ImportAndVerifyAsync(
+                dialog.FileName, _deviceKey.PublicKeyHash, DateTimeOffset.UtcNow);
+            if (!result.IsValid)
+            {
+                FooterStatusText.Text = "License package rejected";
+                MessageBox.Show(this, result.FailureReason ?? "The license package could not be verified.",
+                    "License Package Rejected", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            LicenseIdTextBox.Text = result.LicenseId;
+            ProductionLicenseVerified?.Invoke(result);
+            FooterStatusText.Text = "Production license activated on this PC";
+            MessageBox.Show(this,
+                $"License activated successfully on this PC.\n\nLicense: {result.LicenseId}\nPlan: {result.Plan}\nValid until: {result.LicenseExpiryUtc?.ToLocalTime():yyyy-MM-dd}\nRevision: {result.AcceptedRevision}\nDevice fingerprint: {_deviceKey.PublicKeyHash}",
+                "License Activated", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            FooterStatusText.Text = "Could not import license package";
+            MessageBox.Show(this, ex.Message, "Could Not Import License Package", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            ImportProductionPackageButton.IsEnabled = true;
+        }
     }
 
     private async void CheckDeviceKey_Click(object sender, RoutedEventArgs e)

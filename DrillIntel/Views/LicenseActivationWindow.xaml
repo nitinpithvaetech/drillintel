@@ -14,7 +14,7 @@
 
         <StackPanel Grid.Row="0" Margin="4,0,4,14">
             <TextBlock Text="PC License Activation" FontSize="24" FontWeight="SemiBold" Foreground="#172033" />
-                <TextBlock Text="Create a device key, export a request, and verify a development activation bundle." Foreground="#64748B" TextWrapping="Wrap" Margin="0,5,0,0" />
+                <TextBlock Text="Create a device key, export a request, or import a license activation package." Foreground="#64748B" TextWrapping="Wrap" Margin="0,5,0,0" />
         </StackPanel>
 
         <Border Grid.Row="1" Background="#FFFFFF" CornerRadius="10" Padding="16" Margin="0,0,0,12">
@@ -49,7 +49,7 @@
                 <TextBlock Text="Device public-key fingerprint (SHA-256)" FontWeight="SemiBold" Foreground="#334155" />
                 <TextBox x:Name="KeyHashTextBox" Grid.Row="1" Margin="0,7,0,12" Padding="9" IsReadOnly="True" TextWrapping="Wrap" Background="#F8FAFC" />
                 <Border Grid.Row="2" Background="#F8FAFC" CornerRadius="8" Padding="12">
-                    <TextBlock Text="After exporting, send the .jws request file to your office administrator. They return a signed activation file for import. This screen only creates the request; it does not activate the license by itself."
+                    <TextBlock Text="After exporting, send the .jws request file to your office administrator. When they return a signed license package, import it here."
                                TextWrapping="Wrap" Foreground="#475569" VerticalAlignment="Top" />
                 </Border>
             </Grid>
@@ -61,6 +61,7 @@
             <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="Close" IsCancel="True" Click="Close_Click" />
                 <Button x:Name="ImportTestBundleButton" Content="Import Dev Test Bundle…" Click="ImportTestBundle_Click" />
+                <Button x:Name="ImportProductionPackageButton" Content="Import License Package…" Click="ImportProductionPackage_Click" />
                 <Button x:Name="ExportRequestButton" Content="Export Activation Request…" IsEnabled="False"
                         Background="#1976D2" Foreground="White" FontWeight="SemiBold" Click="ExportRequest_Click" />
             </StackPanel>

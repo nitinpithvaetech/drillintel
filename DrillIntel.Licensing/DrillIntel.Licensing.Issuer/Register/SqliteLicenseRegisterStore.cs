@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Principal;
 using Microsoft.Data.Sqlite;
+using DrillIntel.Licensing.Core.Models;
 using DrillIntel.Licensing.Issuer.Requests;
 
 namespace DrillIntel.Licensing.Issuer.Register;
@@ -71,16 +72,25 @@ public sealed class SqliteLicenseRegisterStore(SqliteRegisterDatabase database)
 
         var requests = await ReadForCustomerAsync(connection, """
             SELECT q.RequestId, q.LicenseId, q.KeyHash, q.ReceivedAtUtc, q.Outcome, q.OutcomeDetails
-            FROM Requests q JOIN Licenses l ON l.LicenseId = q.LicenseId JOIN Rigs r ON r.RigId = l.RigId
+            FROM (
+                SELECT RequestId, LicenseId, KeyHash, ReceivedAtUtc, Outcome, OutcomeDetails FROM Requests
+                UNION ALL
+                SELECT inbox.RequestId, inbox.LicenseId, inbox.KeyHash, inbox.ReceivedAtUtc, inbox.Status,
+                       CASE WHEN inbox.Status = 'duplicate' THEN 'Duplicate device request' ELSE 'Rejected or archived request' END
+                FROM RequestInbox inbox
+                WHERE inbox.Status IN ('duplicate', 'rejected')
+                  AND NOT EXISTS (SELECT 1 FROM Requests processed WHERE processed.RequestId = inbox.RequestId)
+            ) q JOIN Licenses l ON l.LicenseId = q.LicenseId JOIN Rigs r ON r.RigId = l.RigId
             WHERE r.CustomerId = $customerId ORDER BY q.ReceivedAtUtc DESC;
             """, r => new RequestRecord(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), NullableString(r, 5)),
             customerId, cancellationToken);
 
         var requestInbox = await ReadForCustomerAsync(connection, """
             SELECT q.RequestId, q.LicenseId, q.KeyHash, q.KeyProtection, q.TimestampUtc,
-                   q.ReceivedAtUtc, q.SourceFile, q.Status
+                   q.ReceivedAtUtc, q.SourceFile, COALESCE(processed.Outcome, q.Status)
             FROM RequestInbox q JOIN Licenses l ON l.LicenseId = q.LicenseId JOIN Rigs r ON r.RigId = l.RigId
-            WHERE r.CustomerId = $customerId ORDER BY q.ReceivedAtUtc DESC;
+            LEFT JOIN Requests processed ON processed.RequestId = q.RequestId
+            WHERE r.CustomerId = $customerId AND q.Status = 'pending' ORDER BY q.ReceivedAtUtc DESC;
             """, r => new PendingRequestRecord(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3),
                 r.GetString(4), r.GetString(5), r.GetString(6), r.GetString(7)), customerId, cancellationToken);
 
@@ -155,6 +165,59 @@ public sealed class SqliteLicenseRegisterStore(SqliteRegisterDatabase database)
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new PendingRequestRecord(request.RequestId, request.LicenseId, request.DevicePublicKeyHash, request.KeyProtection,
             request.TimestampUtc.ToString("O", CultureInfo.InvariantCulture), now, Path.GetFullPath(sourceFile), status);
+    }
+
+    public async Task RejectActivationRequestAsync(string requestId, string reason, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        reason = reason.Trim();
+        if (reason.Length > 500)
+            throw new ArgumentOutOfRangeException(nameof(reason), "The reason must be 500 characters or fewer.");
+
+        await using var connection = await database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var now = UtcNow();
+        string licenseId;
+        string keyHash;
+        string receivedAtUtc;
+        await using (var find = connection.CreateCommand())
+        {
+            find.Transaction = (SqliteTransaction)transaction;
+            find.CommandText = "SELECT LicenseId, KeyHash, ReceivedAtUtc FROM RequestInbox WHERE RequestId=$request AND Status='pending';";
+            find.Parameters.AddWithValue("$request", requestId);
+            await using var reader = await find.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("This request is no longer pending. Refresh the register and try again.");
+            licenseId = reader.GetString(0);
+            keyHash = reader.GetString(1);
+            receivedAtUtc = reader.GetString(2);
+        }
+
+        await using (var history = connection.CreateCommand())
+        {
+            history.Transaction = (SqliteTransaction)transaction;
+            history.CommandText = "INSERT INTO Requests(RequestId, LicenseId, KeyHash, ReceivedAtUtc, Outcome, OutcomeDetails) VALUES ($request,$license,$hash,$received,'rejected',$details);";
+            history.Parameters.AddWithValue("$request", requestId);
+            history.Parameters.AddWithValue("$license", licenseId);
+            history.Parameters.AddWithValue("$hash", keyHash);
+            history.Parameters.AddWithValue("$received", receivedAtUtc);
+            history.Parameters.AddWithValue("$details", $"Rejected/archived by admin: {reason}");
+            await history.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var archive = connection.CreateCommand())
+        {
+            archive.Transaction = (SqliteTransaction)transaction;
+            archive.CommandText = "UPDATE RequestInbox SET Status='rejected' WHERE RequestId=$request AND Status='pending';";
+            archive.Parameters.AddWithValue("$request", requestId);
+            if (await archive.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("This request changed while it was being archived. Refresh the register and try again.");
+        }
+
+        await InsertAuditAsync(connection, (SqliteTransaction)transaction, licenseId, "ActivationRequestRejectedArchived",
+            $"requestId={requestId}; keyHash={keyHash}; reason={reason}", now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<long> CreateCustomerAsync(string name, string? contact, string? notes, CancellationToken cancellationToken = default)
@@ -232,6 +295,185 @@ public sealed class SqliteLicenseRegisterStore(SqliteRegisterDatabase database)
             $"rigId={rigId}; plan={plan}; status=suspended; signed entitlement not issued", now, cancellationToken);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return licenseId;
+    }
+
+    public async Task CreatePaymentAsync(
+        string orderRef,
+        string licenseId,
+        long amountMinor,
+        string currency,
+        string processor,
+        string status,
+        DateTimeOffset? paidAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(orderRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(licenseId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(processor);
+        if (orderRef.Trim().Length > 100 || processor.Trim().Length > 80 || amountMinor < 0)
+            throw new ArgumentOutOfRangeException(nameof(amountMinor), "Payment details exceed supported limits.");
+        currency = currency.Trim().ToUpperInvariant();
+        if (currency.Length != 3 || !currency.All(char.IsAsciiLetter))
+            throw new ArgumentException("Currency must be a three-letter ISO code, such as USD or INR.", nameof(currency));
+        if (status is not ("paid" or "refunded" or "chargeback"))
+            throw new ArgumentOutOfRangeException(nameof(status));
+        if (status == "paid" && amountMinor <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amountMinor), "A paid amount must be greater than zero.");
+
+        await using var connection = await database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var now = UtcNow();
+        await using (var command = connection.CreateCommand())
+        {
+            command.Transaction = (SqliteTransaction)transaction;
+            command.CommandText = "INSERT INTO Payments(OrderRef, LicenseId, AmountMinor, Currency, Processor, Status, PaidAtUtc) VALUES ($order, $license, $amount, $currency, $processor, $status, $paidAt);";
+            command.Parameters.AddWithValue("$order", orderRef.Trim());
+            command.Parameters.AddWithValue("$license", licenseId);
+            command.Parameters.AddWithValue("$amount", amountMinor);
+            command.Parameters.AddWithValue("$currency", currency);
+            command.Parameters.AddWithValue("$processor", processor.Trim());
+            command.Parameters.AddWithValue("$status", status);
+            command.Parameters.AddWithValue("$paidAt", status == "paid" && paidAtUtc.HasValue
+                ? paidAtUtc.Value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+                : DBNull.Value);
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        await InsertAuditAsync(connection, (SqliteTransaction)transaction, licenseId, "PaymentRecorded",
+            $"orderRef={orderRef.Trim()}; amountMinor={amountMinor}; currency={currency}; processor={processor.Trim()}; status={status}", now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task RecordProductionIssuanceAsync(
+        ActivationRequest request,
+        long revision,
+        string keyId,
+        DateTimeOffset issuedAtUtc,
+        DateTimeOffset activationExpiryUtc,
+        string archiveRef,
+        string entitlementSha256,
+        string activationSha256,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await using var connection = await database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var now = UtcNow();
+
+        string licenseStatus;
+        int maxDevices;
+        await using (var license = connection.CreateCommand())
+        {
+            license.Transaction = (SqliteTransaction)transaction;
+            license.CommandText = "SELECT Status, MaxDevices FROM Licenses WHERE LicenseId=$license;";
+            license.Parameters.AddWithValue("$license", request.LicenseId);
+            await using var reader = await license.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                throw new InvalidOperationException("The request's license no longer exists in this register.");
+            licenseStatus = reader.GetString(0);
+            maxDevices = reader.GetInt32(1);
+        }
+        if (licenseStatus == "revoked")
+            throw new InvalidOperationException("This license is revoked and cannot activate another PC.");
+
+        await using (var pending = connection.CreateCommand())
+        {
+            pending.Transaction = (SqliteTransaction)transaction;
+            pending.CommandText = "SELECT 1 FROM RequestInbox WHERE RequestId=$request AND LicenseId=$license AND KeyHash=$hash AND Status='pending';";
+            pending.Parameters.AddWithValue("$request", request.RequestId);
+            pending.Parameters.AddWithValue("$license", request.LicenseId);
+            pending.Parameters.AddWithValue("$hash", request.DevicePublicKeyHash);
+            if (await pending.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is null)
+                throw new InvalidOperationException("This request is no longer pending. Refresh the register and select a pending request.");
+        }
+
+        await using (var activeCount = connection.CreateCommand())
+        {
+            activeCount.Transaction = (SqliteTransaction)transaction;
+            activeCount.CommandText = "SELECT COUNT(*) FROM Devices WHERE LicenseId=$license AND Status='active';";
+            activeCount.Parameters.AddWithValue("$license", request.LicenseId);
+            var count = Convert.ToInt32(await activeCount.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+            if (count >= maxDevices)
+                throw new InvalidOperationException("This license has reached its maximum active PC count.");
+        }
+
+        await using (var deviceExists = connection.CreateCommand())
+        {
+            deviceExists.Transaction = (SqliteTransaction)transaction;
+            deviceExists.CommandText = "SELECT 1 FROM Devices WHERE LicenseId=$license AND KeyHash=$hash;";
+            deviceExists.Parameters.AddWithValue("$license", request.LicenseId);
+            deviceExists.Parameters.AddWithValue("$hash", request.DevicePublicKeyHash);
+            if (await deviceExists.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null)
+                throw new InvalidOperationException("This PC is already recorded for this license.");
+        }
+
+        await using (var revisionRecord = connection.CreateCommand())
+        {
+            revisionRecord.Transaction = (SqliteTransaction)transaction;
+            revisionRecord.CommandText = "INSERT INTO EntitlementRevisions(LicenseId, Revision, IssuedAtUtc, Kid, SignedFileRef, FileSha256) VALUES ($license,$revision,$issued,$kid,$file,$hash);";
+            revisionRecord.Parameters.AddWithValue("$license", request.LicenseId);
+            revisionRecord.Parameters.AddWithValue("$revision", revision);
+            revisionRecord.Parameters.AddWithValue("$issued", issuedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            revisionRecord.Parameters.AddWithValue("$kid", keyId);
+            revisionRecord.Parameters.AddWithValue("$file", archiveRef + "#entitlement.jws");
+            revisionRecord.Parameters.AddWithValue("$hash", entitlementSha256);
+            await revisionRecord.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        long deviceId;
+        await using (var device = connection.CreateCommand())
+        {
+            device.Transaction = (SqliteTransaction)transaction;
+            device.CommandText = "INSERT INTO Devices(LicenseId, KeyHash, KeyProtection, Status, ActivatedAtUtc, ActivationExpiryUtc) VALUES ($license,$hash,$protection,'active',$activated,$expiry); SELECT last_insert_rowid();";
+            device.Parameters.AddWithValue("$license", request.LicenseId);
+            device.Parameters.AddWithValue("$hash", request.DevicePublicKeyHash);
+            device.Parameters.AddWithValue("$protection", request.KeyProtection);
+            device.Parameters.AddWithValue("$activated", issuedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            device.Parameters.AddWithValue("$expiry", activationExpiryUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            deviceId = Convert.ToInt64(await device.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
+        }
+
+        var activationFileId = Guid.NewGuid().ToString("D");
+        await using (var processed = connection.CreateCommand())
+        {
+            processed.Transaction = (SqliteTransaction)transaction;
+            processed.CommandText = "INSERT INTO Requests(RequestId, LicenseId, KeyHash, ReceivedAtUtc, Outcome, OutcomeDetails) VALUES ($request,$license,$hash,$received,'issued',$details);";
+            processed.Parameters.AddWithValue("$request", request.RequestId);
+            processed.Parameters.AddWithValue("$license", request.LicenseId);
+            processed.Parameters.AddWithValue("$hash", request.DevicePublicKeyHash);
+            processed.Parameters.AddWithValue("$received", now);
+            processed.Parameters.AddWithValue("$details", $"deviceId={deviceId}; revision={revision}; activationFileId={activationFileId}");
+            await processed.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await using (var activationFile = connection.CreateCommand())
+        {
+            activationFile.Transaction = (SqliteTransaction)transaction;
+            activationFile.CommandText = "INSERT INTO ActivationFiles(ActivationFileId, LicenseId, DeviceId, RequestId, Revision, Kid, IssuedAtUtc, ActivationExpiryUtc, ArchiveRef, FileSha256) VALUES ($id,$license,$device,$request,$revision,$kid,$issued,$expiry,$archive,$hash);";
+            activationFile.Parameters.AddWithValue("$id", activationFileId);
+            activationFile.Parameters.AddWithValue("$license", request.LicenseId);
+            activationFile.Parameters.AddWithValue("$device", deviceId);
+            activationFile.Parameters.AddWithValue("$request", request.RequestId);
+            activationFile.Parameters.AddWithValue("$revision", revision);
+            activationFile.Parameters.AddWithValue("$kid", keyId);
+            activationFile.Parameters.AddWithValue("$issued", issuedAtUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            activationFile.Parameters.AddWithValue("$expiry", activationExpiryUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            activationFile.Parameters.AddWithValue("$archive", archiveRef + "#activation.jws");
+            activationFile.Parameters.AddWithValue("$hash", activationSha256);
+            await activationFile.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (licenseStatus == "suspended")
+        {
+            await using var activate = connection.CreateCommand();
+            activate.Transaction = (SqliteTransaction)transaction;
+            activate.CommandText = "UPDATE Licenses SET Status='active' WHERE LicenseId=$license AND Status='suspended';";
+            activate.Parameters.AddWithValue("$license", request.LicenseId);
+            await activate.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        await InsertAuditAsync(connection, (SqliteTransaction)transaction, request.LicenseId, "ProductionActivationIssued",
+            $"requestId={request.RequestId}; deviceId={deviceId}; keyHash={request.DevicePublicKeyHash}; revision={revision}; keyId={keyId}; archive={archiveRef}", now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<CustomerRecord?> GetCustomerAsync(SqliteConnection connection, long id, CancellationToken ct)

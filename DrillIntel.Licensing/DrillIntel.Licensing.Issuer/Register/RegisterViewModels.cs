@@ -69,7 +69,10 @@ public sealed record PaymentRecord(
     string Currency,
     string Processor,
     string Status,
-    string? PaidAtUtc);
+    string? PaidAtUtc)
+{
+    public string AmountDisplay => $"{Currency} {AmountMinor / 100m:N2}";
+}
 public sealed record AuditRecord(
     string TimestampUtc,
     string Operator,

@@ -5,7 +5,7 @@
 ; =====================================================================
 
 #define MyAppName "DrillIntel License Admin"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "e-Tech International"
 #define MyAppURL "https://etechinter.com"
 #define MyAppSupportURL "https://etechinter.com/products/vumaxpro-real-time-drilling-intelligence/"

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.Win32;
 using DrillIntel.Licensing.Issuer.Register;
@@ -12,6 +13,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using DrillIntel.Licensing.Issuer.Signing;
 
 namespace DrillIntel.Licensing.Admin;
 
@@ -22,10 +24,14 @@ public partial class MainWindow : Window
     private string _registerPath = string.Empty;
     private SqliteLicenseRegisterStore? _store;
     private bool _loadingCustomers;
+    private readonly Dictionary<string, string> _gridFilters = new(StringComparer.Ordinal);
 
     public MainWindow()
     {
         InitializeComponent();
+#if !DEBUG
+        IssueDevTestBundleButton.Visibility = Visibility.Collapsed;
+#endif
         Loaded += Window_Loaded;
     }
 
@@ -167,6 +173,32 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void RecordPayment_Click(object sender, RoutedEventArgs e)
+    {
+        if (CurrentWorkspace is null || CurrentWorkspace.Licenses.Count == 0)
+        {
+            MessageBox.Show(this, "Select a customer with at least one license first.", "Record Payment", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new RecordPaymentDialog(CurrentWorkspace.Licenses) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            await RequireStore().CreatePaymentAsync(dialog.OrderReference, dialog.LicenseId, dialog.AmountMinor,
+                dialog.Currency, dialog.Processor, dialog.Status, dialog.PaidAtUtc);
+            await LoadWorkspaceAsync(SelectedCustomerId!.Value);
+            DetailsTabs.SelectedIndex = 7;
+            StatusText.Text = "Payment recorded";
+        }
+        catch (Exception ex)
+        {
+            ShowSaveError(ex);
+        }
+    }
+
     private void Help_Click(object sender, RoutedEventArgs e)
     {
         new LicenseHelpDialog { Owner = this }.ShowDialog();
@@ -199,12 +231,188 @@ public partial class MainWindow : Window
             DetailsTabs.SelectedIndex = 6;
             StatusText.Text = request.Status == "pending" ? "Signed activation request verified and imported" : "Duplicate request recorded";
             MessageBox.Show(this,
-                $"Request signature verified and imported.\n\nLicense: {request.LicenseId}\nRequest ID: {request.RequestId}\nDevice key hash: {request.KeyHash}\nKey protection: {request.KeyProtection}\nStatus: {request.Status}\n\nSelect this pending row and choose Issue Dev Test Bundle to test signature verification on the PC. This does not issue a production license.",
+                $"Request signature verified and imported.\n\nLicense: {request.LicenseId}\nRequest ID: {request.RequestId}\nDevice key hash: {request.KeyHash}\nKey protection: {request.KeyProtection}\nStatus: {request.Status}\n\nSelect this pending row and choose Issue Activation Package to issue a customer license. The Dev Test Bundle action is for Debug testing only.",
                 "Activation Request Imported", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "Could Not Import Activation Request", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void SetupProductionKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (File.Exists(ProductionIssuerKeyPaths.PrivateKeyPath))
+        {
+            MessageBox.Show(this,
+                $"A production signing key already exists at:\n{ProductionIssuerKeyPaths.PrivateKeyPath}\n\nThe key will not be overwritten.",
+                "Production Signing Key", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var dialog = new ProductionIssuerKeySetupDialog { Owner = this };
+        if (dialog.ShowDialog() == true)
+            StatusText.Text = "Production signing key created; configure its public key in a Release DrillIntel build";
+    }
+
+    private async void RejectActivationRequest_Click(object sender, RoutedEventArgs e)
+    {
+        if (RequestInboxGrid.SelectedItem is not PendingRequestRecord pending || pending.Status != "pending")
+        {
+            MessageBox.Show(this, "Select a pending request in Request Inbox first.", "Reject / Archive Request",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new RejectActivationRequestDialog(pending.RequestId) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            await RequireStore().RejectActivationRequestAsync(pending.RequestId, dialog.Reason);
+            await RefreshCustomersAsync(SelectedCustomerId);
+            DetailsTabs.SelectedIndex = 5;
+            StatusText.Text = "Request rejected and archived in Requests history";
+            MessageBox.Show(this,
+                "The request was removed from the pending inbox and retained in Requests history and the Audit Log.",
+                "Request Archived", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could Not Reject / Archive Request",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void IssueActivationPackage_Click(object sender, RoutedEventArgs e)
+    {
+        if (!File.Exists(ProductionIssuerKeyPaths.PrivateKeyPath))
+        {
+            MessageBox.Show(this, "Set up the production signing key first.", "Issue Activation Package",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (RequestInboxGrid.SelectedItem is not PendingRequestRecord pending || pending.Status != "pending")
+        {
+            MessageBox.Show(this, "Select a pending request in Request Inbox first.", "Issue Activation Package",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (CurrentWorkspace is null)
+            return;
+        var license = CurrentWorkspace.Licenses.FirstOrDefault(x => x.LicenseId == pending.LicenseId);
+        if (license is null)
+        {
+            MessageBox.Show(this, "Select the customer that owns this license before issuing the package.",
+                "Issue Activation Package", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (CurrentWorkspace.Devices.Count(d => d.LicenseId == pending.LicenseId && d.Status == "active") >= license.MaxDevices)
+        {
+            MessageBox.Show(this, "This license has reached its maximum active PC count.", "Issue Activation Package",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var outputDialog = new SaveFileDialog
+        {
+            Title = "Save the activation package to send to the customer",
+            Filter = "DrillIntel license activation package (*.dillicense)|*.dillicense",
+            FileName = $"{pending.LicenseId}-{pending.KeyHash[..8]}.dillicense",
+            DefaultExt = ".dillicense",
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+        if (outputDialog.ShowDialog(this) != true)
+            return;
+
+        var passwordDialog = new IssuerKeyPasswordDialog { Owner = this };
+        if (passwordDialog.ShowDialog() != true)
+            return;
+
+        string? archivePath = null;
+        var issuanceCommitted = false;
+        try
+        {
+            var request = ActivationRequestVerifier.Verify(await File.ReadAllTextAsync(pending.SourceFile));
+            if (request.RequestId != pending.RequestId || request.LicenseId != pending.LicenseId ||
+                !StringComparer.OrdinalIgnoreCase.Equals(request.DevicePublicKeyHash, pending.KeyHash))
+                throw new CryptographicException("The request file no longer matches the selected pending register row.");
+
+            var now = DateTimeOffset.UtcNow;
+            var startUtc = DateTimeOffset.Parse(license.StartUtc, CultureInfo.InvariantCulture).ToUniversalTime();
+            var expiryUtc = DateTimeOffset.Parse(license.ExpiryUtc, CultureInfo.InvariantCulture).ToUniversalTime();
+            if (now < startUtc || now >= expiryUtc)
+                throw new InvalidOperationException("The license is outside its valid start and expiry dates.");
+            if (license.Status == "revoked")
+                throw new InvalidOperationException("This license is revoked and cannot activate another PC.");
+
+            var keyPassword = passwordDialog.Password;
+            passwordDialog.ClearPassword();
+            using var issuerKey = ProductionIssuerKeyFile.Open(ProductionIssuerKeyPaths.PrivateKeyPath, keyPassword);
+            var revision = Math.Max(1, license.CurrentRevision + 1);
+            var entitlement = new Entitlement
+            {
+                LicenseId = license.LicenseId,
+                Revision = revision,
+                IssuedAtUtc = now,
+                Customer = CurrentWorkspace.Customer.Name,
+                Rig = license.RigName,
+                Plan = license.Plan,
+                StartUtc = startUtc,
+                ExpiryUtc = expiryUtc,
+                MaxDevices = license.MaxDevices
+            };
+            var activation = new Activation
+            {
+                LicenseId = license.LicenseId,
+                DevicePublicKeyHash = request.DevicePublicKeyHash,
+                ActivatedAtUtc = now,
+                ActivationExpiryUtc = expiryUtc
+            };
+            var entitlementJws = issuerKey.Sign(entitlement);
+            var activationJws = issuerKey.Sign(activation);
+            var archiveDirectory = Path.Combine(ProductionIssuerKeyPaths.DirectoryPath, "IssuedPackages");
+            Directory.CreateDirectory(archiveDirectory);
+            archivePath = Path.Combine(archiveDirectory,
+                $"{license.LicenseId}-{request.DevicePublicKeyHash[..8]}-{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}.dillicense");
+            using (var file = new FileStream(archivePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var archive = new ZipArchive(file, ZipArchiveMode.Create))
+            {
+                WriteZipEntry(archive, "entitlement.jws", entitlementJws);
+                WriteZipEntry(archive, "activation.jws", activationJws);
+                WriteZipEntry(archive, "package-info.json", System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    schemaVersion = 1,
+                    licenseId = license.LicenseId,
+                    requestId = request.RequestId,
+                    revision,
+                    keyId = issuerKey.KeyId,
+                    issuedAtUtc = now
+                }));
+            }
+
+            var entitlementHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(entitlementJws)));
+            var activationHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(activationJws)));
+            await RequireStore().RecordProductionIssuanceAsync(request, revision, issuerKey.KeyId, now, expiryUtc,
+                archivePath, entitlementHash, activationHash);
+            issuanceCommitted = true;
+
+            var outputPath = Path.GetFullPath(outputDialog.FileName);
+            if (!StringComparer.OrdinalIgnoreCase.Equals(outputPath, archivePath))
+                File.Copy(archivePath, outputPath, overwrite: true);
+            await RefreshCustomersAsync(SelectedCustomerId);
+            DetailsTabs.SelectedIndex = 6;
+            StatusText.Text = "Production activation package issued and register updated";
+            MessageBox.Show(this,
+                $"Activation package created and recorded.\n\nLicense: {license.LicenseId}\nPC fingerprint: {request.DevicePublicKeyHash}\nRevision: {revision}\n\nSend this package to the customer:\n{outputPath}\n\nArchived copy:\n{archivePath}",
+                "Activation Package Issued", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            if (!issuanceCommitted && archivePath is not null && File.Exists(archivePath))
+                File.Delete(archivePath);
+            MessageBox.Show(this, ex.Message, "Could Not Issue Activation Package", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -340,6 +548,7 @@ public partial class MainWindow : Window
         try
         {
             CustomersGrid.ItemsSource = new ObservableCollection<CustomerSummary>(customers);
+            ApplyGridFilter(nameof(CustomersGrid));
             CustomerCountText.Text = customers.Count == 1 ? "1 customer" : $"{customers.Count} customers";
             CustomersGrid.SelectedItem = selectCustomerId is { } id
                 ? customers.FirstOrDefault(c => c.CustomerId == id)
@@ -384,6 +593,7 @@ public partial class MainWindow : Window
         RequestInboxGrid.ItemsSource = workspace.RequestInbox;
         PaymentsGrid.ItemsSource = workspace.Payments;
         AuditGrid.ItemsSource = workspace.AuditLog;
+        ApplyAllGridFilters();
     }
 
     private void ClearWorkspace()
@@ -404,6 +614,56 @@ public partial class MainWindow : Window
         RequestInboxGrid.ItemsSource = null;
         PaymentsGrid.ItemsSource = null;
         AuditGrid.ItemsSource = null;
+    }
+
+    private void GridFilter_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is not TextBox filter || filter.Tag is not string gridName)
+            return;
+        _gridFilters[gridName] = filter.Text.Trim();
+        ApplyGridFilter(gridName);
+    }
+
+    private void ApplyAllGridFilters()
+    {
+        ApplyGridFilter(nameof(CustomersGrid));
+        ApplyGridFilter(nameof(RigsGrid));
+        ApplyGridFilter(nameof(LicensesGrid));
+        ApplyGridFilter(nameof(DevicesGrid));
+        ApplyGridFilter(nameof(RevisionsGrid));
+        ApplyGridFilter(nameof(ActivationFilesGrid));
+        ApplyGridFilter(nameof(RequestsGrid));
+        ApplyGridFilter(nameof(RequestInboxGrid));
+        ApplyGridFilter(nameof(PaymentsGrid));
+        ApplyGridFilter(nameof(AuditGrid));
+    }
+
+    private void ApplyGridFilter(string gridName)
+    {
+        if (FindName(gridName) is not DataGrid grid || grid.ItemsSource is null)
+            return;
+
+        var filterText = _gridFilters.GetValueOrDefault(gridName, string.Empty);
+        var view = CollectionViewSource.GetDefaultView(grid.ItemsSource);
+        if (view is null)
+            return;
+        view.Filter = item => MatchesFilter(item, filterText);
+        view.Refresh();
+    }
+
+    private static bool MatchesFilter(object? item, string filterText)
+    {
+        if (string.IsNullOrWhiteSpace(filterText) || item is null)
+            return true;
+
+        foreach (var property in item.GetType().GetProperties())
+        {
+            var value = property.GetValue(item);
+            if (value is not null && Convert.ToString(value, CultureInfo.CurrentCulture)
+                    ?.Contains(filterText, StringComparison.CurrentCultureIgnoreCase) == true)
+                return true;
+        }
+        return false;
     }
 
     private void LicensesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
