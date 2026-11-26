@@ -86,7 +86,9 @@ public sealed class ProductionIssuerKeyFile : IDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(privateKeyPath);
         ValidatePassword(password);
-        var source = JsonSerializer.Deserialize<ProductionIssuerPrivateFile>(File.ReadAllBytes(privateKeyPath))
+        // Key files are written with camelCase property names. Use the same options when
+        // reading them, otherwise the PascalCase record properties remain at defaults.
+        var source = JsonSerializer.Deserialize<ProductionIssuerPrivateFile>(File.ReadAllBytes(privateKeyPath), JsonOptions)
             ?? throw new InvalidDataException("The signing key file is empty or invalid.");
         if (source.SchemaVersion != 1 || source.Algorithm != "ES256" ||
             string.IsNullOrWhiteSpace(source.KeyId) || source.KeyId.Length > 64)

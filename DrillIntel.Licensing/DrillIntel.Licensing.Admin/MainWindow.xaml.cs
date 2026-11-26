@@ -816,8 +816,8 @@ public partial class MainWindow : Window
     private CustomerWorkspace? CurrentWorkspace { get; set; }
     private SqliteLicenseRegisterStore RequireStore() => _store ?? throw new InvalidOperationException("The license register is not open.");
 
-    private static DateTimeOffset AtUtcMidnight(DateTime date) =>
-        new(DateTime.SpecifyKind(date.Date, DateTimeKind.Unspecified), TimeSpan.Zero);
+    private static DateTimeOffset AtUtcMidnight(DateOnly date) =>
+        new(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
 
     private void ShowSaveError(Exception exception) =>
         MessageBox.Show(this, exception.Message, "Could not save register record", MessageBoxButton.OK, MessageBoxImage.Error);

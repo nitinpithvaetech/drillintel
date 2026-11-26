@@ -57,8 +57,10 @@ internal sealed class NewLicenseDialog : Window
     public RigRecord? SelectedRig => _rigCombo.SelectedItem as RigRecord;
     public int TermAmount => int.TryParse(_termAmount.Text, out var value) ? value : 0;
     public string TermUnit => _termUnit.SelectedItem?.ToString() == "Days" ? "day" : "month";
-    public DateTime ExpiryDate => TermUnit == "day" ? StartDate.AddDays(TermAmount) : StartDate.AddMonths(TermAmount);
-    public DateTime StartDate => _startPicker.SelectedDate?.Date ?? DateTime.Today;
+    // Treat the DatePicker value as a calendar date. DateTime values can carry Local/UTC
+    // kinds, but license start and expiry are date-only values and must not shift by timezone.
+    public DateOnly StartDate => DateOnly.FromDateTime(_startPicker.SelectedDate ?? DateTime.Today);
+    public DateOnly ExpiryDate => TermUnit == "day" ? StartDate.AddDays(TermAmount) : StartDate.AddMonths(TermAmount);
     public int MaxDevices => int.TryParse(_deviceLimit.Text, out var value) ? value : 0;
 
     private void Save_Click(object sender, RoutedEventArgs e)
