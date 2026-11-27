@@ -562,6 +562,7 @@ public partial class MainViewModel : ObservableObject
 
         ProcessDrillingConnectionsCommand.NotifyCanExecuteChanged();
         ProcessDrillingStandsCommand.NotifyCanExecuteChanged();
+        ProcessTripConnectionCommand.NotifyCanExecuteChanged();
         ViewTagGraphCommand.NotifyCanExecuteChanged();
         OpenRigStateMasterCommand.NotifyCanExecuteChanged();
         OpenGlobalRigStateMasterCommand.NotifyCanExecuteChanged();
@@ -574,6 +575,7 @@ public partial class MainViewModel : ObservableObject
         OpenDepthlogEditorCommand.NotifyCanExecuteChanged();
         OpenRigStateDocumentCommand.NotifyCanExecuteChanged();
         OpenDrillingStandChartCommand.NotifyCanExecuteChanged();
+        OpenTripInSummaryCommand.NotifyCanExecuteChanged();
         OpenDQIExplorerCommand.NotifyCanExecuteChanged();
         ManageRigStateDocumentsCommand.NotifyCanExecuteChanged();
         NewRigStateDocumentCommand.NotifyCanExecuteChanged();
@@ -1007,6 +1009,7 @@ public partial class MainViewModel : ObservableObject
     public Func<ProcessDrillingConnectionsViewModel, bool?>? OpenProcessDrillingConnectionsDialogHandler { get; set; }
 
     public Func<ProcessDrillingStandsViewModel, bool?>? OpenProcessDrillingStandsDialogHandler { get; set; }
+    public Func<ProcessTripConnectionViewModel, bool?>? OpenProcessTripConnectionDialogHandler { get; set; }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task ProcessTagCreation()
@@ -1170,6 +1173,57 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task ProcessTripConnection()
+    {
+        if (!_session.IsProjectOpen) return;
+
+        Well? well = null;
+        TimeLog? timeLog = null;
+        if (CurrentViewModel is DashboardViewModel dashVm)
+        {
+            if (dashVm.SelectedNode?.Tag is TimeLog selectedLog)
+                timeLog = selectedLog;
+            else if (dashVm.SelectedNode?.Tag is Well selectedWell)
+                well = selectedWell;
+            else if (dashVm.SelectedWell != null)
+                well = dashVm.SelectedWell;
+        }
+
+        var repository = new WellDataRepository(_session);
+        well ??= await repository.GetProjectWellAsync();
+        if (timeLog == null)
+        {
+            var logs = await repository.GetTimeLogsAsync();
+            timeLog = logs.FirstOrDefault(log => log.PrimaryLog) ?? logs.FirstOrDefault();
+        }
+
+        if (well == null || timeLog == null)
+        {
+            const string message = "No active well or primary timelog found. Please load a well with an imported timelog first.";
+            if (UserAlertHandler != null)
+                UserAlertHandler(message, "Process Trip Connection");
+            else
+                MessageBox.Show(message, "Process Trip Connection", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var vm = new ProcessTripConnectionViewModel(_session, well, timeLog);
+        if (OpenProcessTripConnectionDialogHandler != null)
+        {
+            OpenProcessTripConnectionDialogHandler(vm);
+        }
+        else if (Application.Current != null)
+        {
+            var window = new Views.ProcessTripConnectionWindow
+            {
+                DataContext = vm,
+                Owner = Application.Current.MainWindow
+            };
+            window.ShowDialog();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
     private async Task ProcessDrillingConnections()
     {
         if (!_session.IsProjectOpen) return;
@@ -1296,6 +1350,7 @@ public partial class MainViewModel : ObservableObject
     private Views.RigStateWorkspaceWindow? _activeWorkspaceWindow;
 
     private Views.DrillingStandChartWindow? _activeDrillingStandChartWindow;
+    private Views.TripConnectionChartWindow? _activeTripConnectionChartWindow;
     private Views.DQI.DQIExplorerWindow? _activeDQIExplorerWindow;
 
     [RelayCommand(CanExecute = nameof(IsProjectOpen))]
@@ -1314,6 +1369,26 @@ public partial class MainViewModel : ObservableObject
         var window = new Views.DrillingStandChartWindow(vm) { Owner = Application.Current?.MainWindow };
         _activeDrillingStandChartWindow = window;
         window.Closed += (_, _) => _activeDrillingStandChartWindow = null;
+        window.Show();
+        await Task.CompletedTask;
+    }
+
+    [RelayCommand(CanExecute = nameof(IsProjectOpen))]
+    private async Task OpenTripInSummary()
+    {
+        if (!_session.IsProjectOpen) return;
+        if (_activeTripConnectionChartWindow is { IsLoaded: true })
+        {
+            _activeTripConnectionChartWindow.Activate();
+            if (_activeTripConnectionChartWindow.WindowState == WindowState.Minimized)
+                _activeTripConnectionChartWindow.WindowState = WindowState.Normal;
+            return;
+        }
+
+        var vm = new TripConnectionChartViewModel(_session);
+        var window = new Views.TripConnectionChartWindow(vm) { Owner = Application.Current?.MainWindow };
+        _activeTripConnectionChartWindow = window;
+        window.Closed += (_, _) => _activeTripConnectionChartWindow = null;
         window.Show();
         await Task.CompletedTask;
     }

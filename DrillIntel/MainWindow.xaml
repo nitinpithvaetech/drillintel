@@ -89,14 +89,14 @@
                             <materialDesign:PackIcon Kind="ViewDashboard" Foreground="#2196F3" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Recent Wells">
+                    <Fluent:Button Header="Recent Wells" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="History" Foreground="#607D8B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Status" IsEnabled="{Binding IsProjectOpen}">
-                    <Fluent:Button Header="QC Status">
+                    <Fluent:Button Header="QC Status" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="CheckAll" Foreground="#4CAF50" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
@@ -137,14 +137,14 @@
                             <materialDesign:PackIcon Kind="ChartBoxOutline" Foreground="#10B981" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Run QC">
+                    <Fluent:Button Header="Run QC" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="PlayCircleOutline" Foreground="#F44336" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
                 <Fluent:RibbonGroupBox Header="Reports">
-                    <Fluent:Button Header="QC Reports">
+                    <Fluent:Button Header="QC Reports" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FileDocumentMultipleOutline" Foreground="#9C27B0" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
@@ -183,6 +183,12 @@
                     <Fluent:Button Header="Process DrlgStandProcess" Command="{Binding ProcessDrillingStandsCommand}" ToolTip="Process drilling stand of entire well and save it to the database">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FormatListNumbered" Foreground="#1E88E5" Width="32" Height="32" />
+                        </Fluent:Button.LargeIcon>
+                    </Fluent:Button>
+                    <Fluent:Button Header="Process Trip Connection" Command="{Binding ProcessTripConnectionCommand}"
+                                   ToolTip="Detect trip connections for the active well timelog.">
+                        <Fluent:Button.LargeIcon>
+                            <materialDesign:PackIcon Kind="ArrowDownBoldBoxOutline" Foreground="#00897B" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
                 </Fluent:RibbonGroupBox>
@@ -231,6 +237,13 @@
                                 <materialDesign:PackIcon Kind="FormatListNumbered" Foreground="#1E88E5" Width="16" Height="16" />
                             </Fluent:MenuItem.Icon>
                         </Fluent:MenuItem>
+                        <Fluent:MenuItem Header="Process Trip Connection"
+                                         Command="{Binding ProcessTripConnectionCommand}"
+                                         ToolTip="Detect trip connections for the active well timelog.">
+                            <Fluent:MenuItem.Icon>
+                                <materialDesign:PackIcon Kind="ArrowDownBoldBoxOutline" Foreground="#00897B" Width="16" Height="16" />
+                            </Fluent:MenuItem.Icon>
+                        </Fluent:MenuItem>
                     </Fluent:DropDownButton>
                 </Fluent:RibbonGroupBox>
             </Fluent:RibbonTabItem>
@@ -238,17 +251,18 @@
             <!-- Reports & Charts Tab -->
             <Fluent:RibbonTabItem Header="Reports/Charts" IsEnabled="{Binding IsProjectOpen}">
                 <Fluent:RibbonGroupBox Header="Drilling">
-                    <Fluent:Button Header="Drilling Summary">
+                    <Fluent:Button Header="Drilling Summary" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="FileDocumentOutline" Foreground="#9C27B0" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Trip-In Summary">
+                    <Fluent:Button Header="Trip-In Summary" Command="{Binding OpenTripInSummaryCommand}"
+                                   ToolTip="View detected trip-in time by depth with day/night averages.">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="ArrowDownBoldBoxOutline" Foreground="#9C27B0" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>
                     </Fluent:Button>
-                    <Fluent:Button Header="Connection Summary">
+                    <Fluent:Button Header="Connection Summary" IsEnabled="False" ToolTip="Not available yet">
                         <Fluent:Button.LargeIcon>
                             <materialDesign:PackIcon Kind="LinkVariant" Foreground="#9C27B0" Width="32" Height="32" />
                         </Fluent:Button.LargeIcon>

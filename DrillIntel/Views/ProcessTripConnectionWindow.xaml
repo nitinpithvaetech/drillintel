@@ -1,0 +1,50 @@
+<Window x:Class="DrillIntel.Views.ProcessTripConnectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:converters="clr-namespace:DrillIntel.Converters"
+        Title="Process Trip Connections" Height="390" Width="680" MinHeight="360" MinWidth="620"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" Background="#F8FAFC">
+    <Window.Resources>
+        <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+    </Window.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0" Background="#F4F3F8" CornerRadius="8" Padding="14,12" Margin="0,0,0,14">
+            <StackPanel>
+                <TextBlock Text="Process Trip Connections" FontSize="18" FontWeight="Bold" Foreground="#673AB7"/>
+                <WrapPanel Margin="0,5,0,0">
+                    <TextBlock Text="Well: " FontWeight="SemiBold" Foreground="#616161"/>
+                    <TextBlock Text="{Binding WellName}" FontWeight="Bold" Foreground="#212121" Margin="0,0,16,0"/>
+                    <TextBlock Text="Log: " FontWeight="SemiBold" Foreground="#616161"/>
+                    <TextBlock Text="{Binding LogName}" Foreground="#212121"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+        <Border Grid.Row="1" Background="#F0F9FF" BorderBrush="#BAE6FD" BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,0,0,14">
+            <TextBlock Text="Scans the selected timelog for off-bottom slips-to-slips trip connections. Detected points are reported for this run."
+                       Foreground="#0369A1" FontSize="12" TextWrapping="Wrap"/>
+        </Border>
+        <GroupBox Grid.Row="2" Header="Processing" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="{Binding ProgressStatus}" Foreground="#334155" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Height="14"/>
+                <TextBlock Text="{Binding DetectedCount, StringFormat=Detected trip connections: {0}}" Foreground="#475569" Margin="0,7,0,0"/>
+            </StackPanel>
+        </GroupBox>
+        <Border Grid.Row="3" Background="#FEF2F2" BorderBrush="#FECACA" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,0,0,8"
+                Visibility="{Binding HasError, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="#B91C1C" TextWrapping="Wrap"/>
+        </Border>
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Process" Command="{Binding StartCommand}" IsEnabled="{Binding CanStart}"
+                    Background="#673AB7" Foreground="White" Padding="18,7" Margin="0,0,8,0"/>
+            <Button Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding CanCancel}"
+                    Padding="18,7" Margin="0,0,8,0"/>
+            <Button Content="Close" Command="{Binding CloseCommand}" Padding="18,7"/>
+        </StackPanel>
+    </Grid>
+</Window>

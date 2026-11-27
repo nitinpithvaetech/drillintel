@@ -14,6 +14,7 @@
   <ItemGroup>
     <Folder Include="DataObjects\Models\BroomstickProcessor\" />
     <Folder Include="DataObjects\Models\DrillingConnectionsProcessor\" />
+    <Folder Include="DataObjects\TripConnectionProcessor\" />
     <Folder Include="DataObjects\Services\Common\" />
   </ItemGroup>
 
