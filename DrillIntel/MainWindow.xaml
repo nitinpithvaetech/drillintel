@@ -25,6 +25,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -371,11 +372,17 @@
             </Fluent:RibbonTabItem>
         </Fluent:Ribbon>
 
+        <Border Grid.Row="1" Background="#FFF3CD" BorderBrush="#E3A008" BorderThickness="0,0,0,1"
+                Padding="14,9" Visibility="{Binding IsTrialBannerVisible, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="{Binding TrialBannerText}" FontSize="16" FontWeight="Bold"
+                       Foreground="#7A4B00" HorizontalAlignment="Center" />
+        </Border>
+
         <!-- Main Content Area bounded to CurrentViewModel -->
-        <ContentControl Grid.Row="1" Content="{Binding CurrentViewModel}" />
+        <ContentControl Grid.Row="2" Content="{Binding CurrentViewModel}" />
 
         <!-- Bottom Industrial Status & Branding Bar -->
-        <Border Grid.Row="2" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16,6">
+        <Border Grid.Row="3" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="16,6">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -414,5 +421,21 @@
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="DrillIntel v1.0 • VuMax Architecture" FontSize="11" Foreground="#9E9E9E" VerticalAlignment="Center" />
             </Grid>
         </Border>
+
+        <Grid Grid.Row="0" Grid.RowSpan="4" Panel.ZIndex="1000" Background="#990B1220"
+              Visibility="{Binding IsTrialExpired, Converter={StaticResource BoolToVisibilityConverter}}">
+            <Border Background="White" CornerRadius="12" Padding="32" MaxWidth="560"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock Text="Your 7-day free trial has ended" FontSize="25" FontWeight="Bold"
+                               Foreground="#172033" TextWrapping="Wrap" />
+                    <TextBlock Text="Activate DrillIntel with a license to continue using the application. Your projects remain on this PC."
+                               Margin="0,12,0,22" FontSize="15" Foreground="#475569" TextWrapping="Wrap" />
+                    <Button Content="Open PC Activation" Command="{Binding OpenLicenseActivationCommand}"
+                            HorizontalAlignment="Right" MinWidth="180" Padding="14,9"
+                            Background="#1976D2" Foreground="White" FontWeight="SemiBold" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Fluent:RibbonWindow>

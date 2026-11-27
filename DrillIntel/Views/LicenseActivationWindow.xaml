@@ -58,13 +58,21 @@
         <Grid Grid.Row="4">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock x:Name="FooterStatusText" Text="Ready" Foreground="#64748B" VerticalAlignment="Center" Margin="0,0,0,8" />
-            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Close" IsCancel="True" Click="Close_Click" />
-                <Button x:Name="ImportTestBundleButton" Content="Import Dev Test Bundle…" Click="ImportTestBundle_Click" />
-                <Button x:Name="ImportProductionPackageButton" Content="Import License Package…" Click="ImportProductionPackage_Click" />
-                <Button x:Name="ExportRequestButton" Content="Export Activation Request…" IsEnabled="False"
-                        Background="#1976D2" Foreground="White" FontWeight="SemiBold" Click="ExportRequest_Click" />
-            </StackPanel>
+            <DockPanel Grid.Row="1" LastChildFill="True">
+                <Button DockPanel.Dock="Left" Content="Close" IsCancel="True" Click="Close_Click"
+                        MinWidth="84" Height="40" Margin="0,0,12,0" Padding="14,0" />
+                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="ExportRequestButton" Content="1. Export Request…" IsEnabled="False"
+                            MinWidth="190" Height="40" Margin="4,0,0,0" Padding="14,0"
+                            Background="#1976D2" Foreground="White" FontWeight="SemiBold" Click="ExportRequest_Click" />
+                    <TextBlock Text="→" FontSize="20" FontWeight="SemiBold" Foreground="#64748B"
+                               VerticalAlignment="Center" Margin="8,0" />
+                    <Button x:Name="ImportProductionPackageButton" Content="2. Import License Package…"
+                            Click="ImportProductionPackage_Click" MinWidth="220" Height="40" Margin="4,0,0,0" Padding="14,0" />
+                    <Button x:Name="ImportTestBundleButton" Content="Import Dev Test Bundle…"
+                            Click="ImportTestBundle_Click" MinWidth="190" Height="40" Margin="4,0,0,0" Padding="14,0" />
+                </WrapPanel>
+            </DockPanel>
         </Grid>
     </Grid>
 </Window>

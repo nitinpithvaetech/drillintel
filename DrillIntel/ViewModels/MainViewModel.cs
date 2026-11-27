@@ -22,6 +22,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ProjectSession _session;
     private readonly IProjectService _projectService;
     private readonly IRecentProjectsService _recentProjectsService;
+    private System.Windows.Threading.DispatcherTimer? _trialCountdownTimer;
+    private DateTimeOffset _trialExpiresAtUtc;
 
     public const string AppTagline = "The rig's second brain — drill smarter, not harder";
 
@@ -35,6 +37,15 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _licenseInformation = "License: Not activated";
 
+    [ObservableProperty]
+    private string _trialBannerText = string.Empty;
+
+    [ObservableProperty]
+    private bool _isTrialBannerVisible;
+
+    [ObservableProperty]
+    private bool _isTrialExpired;
+
     public ProjectSession Session => _session;
     public bool IsProjectOpen => _session.IsProjectOpen;
 
@@ -47,11 +58,32 @@ public partial class MainViewModel : ObservableObject
         {
             Owner = Application.Current?.MainWindow
         };
-        window.DevelopmentLicenseVerified += result =>
-            LicenseInformation = FormatLicenseInformation(result, isDevelopment: true);
-        window.ProductionLicenseVerified += result =>
-            LicenseInformation = FormatLicenseInformation(result, isDevelopment: false);
+        window.DevelopmentLicenseVerified += result => ApplyValidLicense(result, isDevelopment: true);
+        window.ProductionLicenseVerified += result => ApplyValidLicense(result, isDevelopment: false);
         window.ShowDialog();
+    }
+
+    private void ApplyValidLicense(LicenseVerificationResult result, bool isDevelopment)
+    {
+        LicenseInformation = FormatLicenseInformation(result, isDevelopment);
+        _trialCountdownTimer?.Stop();
+        IsTrialBannerVisible = false;
+        IsTrialExpired = false;
+    }
+
+    private void RefreshTrialCountdown()
+    {
+        var remaining = _trialExpiresAtUtc - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero)
+        {
+            TrialBannerText = "Free Trial - 7 Days (Trial Ended)";
+            IsTrialExpired = true;
+            _trialCountdownTimer?.Stop();
+            return;
+        }
+
+        var days = (int)Math.Ceiling(remaining.TotalDays);
+        TrialBannerText = $"Free Trial - {days} {(days == 1 ? "day" : "days")} Remaining";
     }
 
     private readonly DrillIntel.Data.IAppDatabaseService? _appDatabaseService;
@@ -224,6 +256,25 @@ public partial class MainViewModel : ObservableObject
         _recentProjectsService = recentProjectsService ?? App.RecentProjectsService;
         _appDatabaseService = appDatabaseService;
 
+#if !DEBUG
+        var trialStatus = FreeTrialStore.StartOrContinue(DateTimeOffset.UtcNow);
+        TrialBannerText = trialStatus.IsExpired
+            ? "Free Trial - 7 Days (Trial Ended)"
+            : $"Free Trial - {trialStatus.DaysRemaining} {(trialStatus.DaysRemaining == 1 ? "day" : "days")} Remaining";
+        IsTrialBannerVisible = true;
+        IsTrialExpired = trialStatus.IsExpired;
+        if (!trialStatus.IsExpired)
+        {
+            _trialExpiresAtUtc = trialStatus.ExpiresAtUtc;
+            _trialCountdownTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(5)
+            };
+            _trialCountdownTimer.Tick += (_, _) => RefreshTrialCountdown();
+            _trialCountdownTimer.Start();
+        }
+#endif
+
         _session.ProjectChanged += OnProjectStateChanged;
         _recentProjectsService.RecentProjectsChanged += OnRecentProjectsChanged;
 
@@ -249,8 +300,7 @@ public partial class MainViewModel : ObservableObject
             var result = await DevelopmentLicenseBundleStore.VerifyStoredAsync(
                 deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
             if (result?.IsValid == true && Application.Current is { } application)
-                await application.Dispatcher.InvokeAsync(() =>
-                    LicenseInformation = FormatLicenseInformation(result, isDevelopment: true));
+                await application.Dispatcher.InvokeAsync(() => ApplyValidLicense(result, isDevelopment: true));
             else if (result is { IsValid: false } && Application.Current is { } currentApplication)
                 await currentApplication.Dispatcher.InvokeAsync(() => LicenseInformation = "License: Not activated");
         }
@@ -267,9 +317,13 @@ public partial class MainViewModel : ObservableObject
             var result = await ProductionActivationStore.VerifyStoredAsync(
                 deviceKey.PublicKeyHash, DateTimeOffset.UtcNow).ConfigureAwait(false);
             if (result is not null && Application.Current is { } application)
-                await application.Dispatcher.InvokeAsync(() => LicenseInformation = result.IsValid
-                    ? FormatLicenseInformation(result, isDevelopment: false)
-                    : "License: Not activated");
+                await application.Dispatcher.InvokeAsync(() =>
+                {
+                    if (result.IsValid)
+                        ApplyValidLicense(result, isDevelopment: false);
+                    else
+                        LicenseInformation = "License: Not activated";
+                });
         }
         catch
         {
